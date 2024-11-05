@@ -154,15 +154,11 @@ include_directories(SYSTEM ${ONNX_DIR})
 
 
 set(PYTORCH_VERSION 2.2.1)
-message(STATUS "Hi 4")
 find_package(Torch ${PYTORCH_VERSION} QUIET)
-message(STATUS "Hi 1")
 if (NOT Torch_FOUND)
-    message(STATUS "Hi 2")
     set(PYTORCH_DIR "${TOOLS_DIR}/libtorch-${PYTORCH_VERSION}")
     list(APPEND CMAKE_PREFIX_PATH ${PYTORCH_DIR})
     if(NOT EXISTS "${PYTORCH_DIR}")
-        message(STATUS "Hi 5")
         execute_process(COMMAND ${TOOLS_DIR}/download_libtorch.sh ${PYTORCH_VERSION})
     endif()
     set(Torch_DIR ${PYTORCH_DIR}/share/cmake/Torch)
@@ -290,14 +286,13 @@ endif()
 
 # We build a static library that is the core of the project, the link it to the
 # API's (executable and python at the moment)
-add_library(${MARABOU_LIB} ${DEPS_ONNX} ${DEPS_CVC4_CONTEXT} ${DEPS_CVC4_BASE} ${SRCS_COMMON_REAL} ${SRCS_ENGINE_REAL}
-        src/engine/QNetwork.cpp)
+add_library(${MARABOU_LIB} ${DEPS_ONNX} ${DEPS_CVC4_CONTEXT} ${DEPS_CVC4_BASE} ${SRCS_COMMON_REAL} ${SRCS_ENGINE_REAL})
 target_include_directories(${MARABOU_LIB} PRIVATE SYSTEM)
 
 set(MARABOU_EXE Marabou${CMAKE_EXECUTABLE_SUFFIX})
 
 add_executable(${MARABOU_EXE} "${ENGINE_DIR}/main.cpp"
-        src/engine/Agent.h)
+        )
 set(MARABOU_EXE_PATH "${BIN_DIR}/${MARABOU_EXE}")
 add_custom_command(TARGET ${MARABOU_EXE} POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:${MARABOU_EXE}> ${MARABOU_EXE_PATH} )
