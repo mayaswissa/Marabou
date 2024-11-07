@@ -5,9 +5,9 @@
 
 class QNetwork final : public torch::nn::Module {
 public:
-    QNetwork(unsigned state_size, unsigned action_size, unsigned fc1_size = 64, unsigned fc2_size = 64);
+    QNetwork(unsigned numVariables, unsigned numPhaseStatuses, unsigned embeddingDim, unsigned numActions);
     torch::Tensor forward( torch::Tensor state );
-    std::vector<torch::Tensor> get_parameters() const;
+    std::vector<torch::Tensor> getParameters() const;
 private:
     torch::nn::Linear fc1{nullptr}, fc2{nullptr}, fc3{nullptr};
 };

@@ -23,6 +23,9 @@
 #include "BlandsRule.h"
 #include "BoundManager.h"
 #include "Checker.h"
+#include "DQNActoin.h"
+#include "DQNAgent.h"
+#include "DQNState.h"
 #include "DantzigsRule.h"
 #include "DegradationChecker.h"
 #include "DivideStrategy.h"
@@ -50,7 +53,9 @@
 
 #include <atomic>
 #include <context/context.h>
-
+#undef Warning
+#include <DQNEnvironment.h>
+#include <torch/torch.h>
 
 #ifdef _WIN32
 #undef ERROR
@@ -83,6 +88,7 @@ public:
       (a timeout of 0 means no time limit). Returns true if found, false if infeasible.
     */
     bool solve( double timeoutInSeconds = 0 );
+    void beforeSplitingLoop();
 
     /*
       Minimize the cost function with respect to the current set of linear constraints.
@@ -895,6 +901,43 @@ private:
       Writes the details of a contradiction to the UNSAT certificate node
     */
     void writeContradictionToCertificate( unsigned infeasibleVar ) const;
+
+    /*
+     * DQN variables
+     */
+    ActionSpace* actionSpace;
+    Agent* _agent;
+    std::unordered_map<PiecewiseLinearConstraint *, int> constraintToIndex;
+    std::vector<PiecewiseLinearConstraint *> indexToConstraint;
+
+    std::unordered_map<PhaseStatus, int> phaseToIndex;
+    /*
+  The representation of the current state of the environment.
+  As a mapping from neuron to its assignment (phase pattern)
+   */
+    State* currentDQNState;
+
+    std::vector<float> scores;
+    std::deque<float> _scoresWindow;
+    unsigned _nEpisodes;
+    std::unordered_map<PhaseStatus, unsigned> _phaseStatusToIndex;
+
+    /*
+      DQN functions
+     */
+    void initializeDQNState();
+    void initializeActionSpace();
+    void initialAgent();
+    unsigned getNumFixedConstraints() const;
+    void assignConstraintIndices( const std::vector<PiecewiseLinearConstraint *> &constraints );
+    void generateActionSpace();
+    int selectActionFromQValues( const torch::Tensor &qValues );
+    Action selectActionFromQValues();
+    void applyAgentAction();
+    List<unsigned> extractStatePhaseIndices( const List<PiecewiseLinearConstraint *> &constraints );
+    void resetDQN( torch::Tensor &initialState );
+    bool solveForTrainingDQN( Agent &agent );
+    void trainDQN();
 };
 
 #endif // __Engine_h__

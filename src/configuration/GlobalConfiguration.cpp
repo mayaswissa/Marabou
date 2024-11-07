@@ -29,6 +29,9 @@ const double GlobalConfiguration::EXPONENTIAL_MOVING_AVERAGE_ALPHA = 0.5;
 // to non-linear constraint.
 bool GlobalConfiguration::USE_DEEPSOI_LOCAL_SEARCH = true;
 
+//Use Deep Q-Network to improve local search for satisfying assignments.
+bool GlobalConfiguration::USE_DQN = false;
+
 const double GlobalConfiguration::SCORE_BUMP_FOR_PL_CONSTRAINTS_NOT_IN_SOI = 5;
 
 // Use the polarity metrics to decide which branch to take first in a case split

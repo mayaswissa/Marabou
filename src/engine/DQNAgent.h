@@ -1,25 +1,38 @@
 #ifndef AGENT_H
 #define AGENT_H
 
-#include "DQNReplayBuffer.h"
+#include "DQNActoin.h"
+#include "DQNActionSpace.h"
 #include "DQNNetwork.h"
-
+#include "DQNReplayBuffer.h"
 #undef Warning
+#include <Engine.h>
 #include <torch/torch.h>
 
-class Agent {
+class Agent
+{
 public:
-    Agent(unsigned stateSize, unsigned actionSize,
-          unsigned hiddenLayer1Size, unsigned hiddenLayer2Size);
-    void step(const torch::Tensor& state, const torch::Tensor &action,
-             unsigned reward, const torch::Tensor& nextState,  bool done);
-    torch::Tensor act(const torch::Tensor &state, float eps = 0.1);
-    void learn(const std::vector<Experience>& experiences, const float gamma);
+    Agent( unsigned numVariables,
+           unsigned numPhaseStatuses,
+           const ActionSpace &actionSpace );
+    void step( const torch::Tensor &state,
+               const torch::Tensor &action,
+               unsigned reward,
+               const torch::Tensor &nextState,
+               bool done );
+    Action act( const torch::Tensor &state, float eps = 0.1 );
+    void learn( const std::vector<Experience> &experiences, float gamma );
     torch::Device getDevice() const;
-private:
-    static void softUpdate( const QNetwork & localModel, const QNetwork & targetModel);
+    Agent( unsigned numVariables,
+           unsigned numPhaseStatuses,
+           unsigned embeddingDim,
+           ActionSpace &actionSpace );
+    static Action tensorToAction( const torch::Tensor &tensor );
 
-    unsigned _stateSize, _actionSize;
+private:
+    static void softUpdate( const QNetwork &localModel, const QNetwork &targetModel );
+    unsigned _numVariables, _numPhaseStatuses, _embeddingDim, _numActions;
+    const ActionSpace &_actionSpace;
     QNetwork _qNetworkLocal, _qNetworkTarget;
     torch::optim::Adam optimizer;
     ReplayBuffer _memory;

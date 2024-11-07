@@ -113,6 +113,85 @@ Engine::~Engine()
         _UNSATCertificateCurrentPointer->deleteSelf();
 }
 
+
+// todo DQN functions:
+void Engine::initializeActionSpace()
+{
+    actionSpace = new ActionSpace( _plConstraints.size(), phaseStatusToIndex.size() );
+}
+void Engine::initializeDQNState()
+{
+    _phaseStatusToIndex = {
+        { PHASE_NOT_FIXED, 0 },     { RELU_PHASE_ACTIVE, 1 },    { RELU_PHASE_INACTIVE, 2 },
+        { ABS_PHASE_POSITIVE, 3 },  { ABS_PHASE_NEGATIVE, 4 },   { SIGN_PHASE_POSITIVE, 5 },
+        { SIGN_PHASE_NEGATIVE, 6 }, { MAX_PHASE_ELIMINATED, 7 }, { CONSTRAINT_INFEASIBLE, 8 },
+    };
+
+    int index = 0;
+    for ( const auto &plConstraint : _plConstraints )
+    {
+        currentDQNState->updateState( index, static_cast<int>( plConstraint->getPhaseStatus() ) );
+    }
+}
+
+void Engine::initialAgent()
+{
+    _agent = new Agent(_plConstraints.size(), _plConstraints.size(), *actionSpace);
+}
+
+unsigned Engine::getNumFixedConstraints() const
+{
+    unsigned numNotFixed = 0;
+    for (auto& plConstraint : _plConstraints)
+    {
+        if (plConstraint->getPhaseStatus() == PHASE_NOT_FIXED)
+            numNotFixed++;
+    }
+}
+
+
+List<unsigned>
+Engine::extractStatePhaseIndices( const List<PiecewiseLinearConstraint *> &constraints )
+{
+    List<unsigned> phaseIndices;
+
+    for ( PiecewiseLinearConstraint *constraint : constraints )
+    {
+        PhaseStatus phaseStatus = constraint->getPhaseStatus();
+        unsigned phaseIndex = static_cast<int64_t>( phaseToIndex[phaseStatus] );
+        phaseIndices.append( phaseIndex );
+    }
+
+    return phaseIndices;
+}
+
+
+void Engine::applyAgentAction( const Action &action )
+{
+    if ( !constraintToIndex.( action.getPlConstraintAction() ) )
+        // Retrieve the selected plConstraint
+        PiecewiseLinearConstraint *selectedConstraint = pl[action.getPlConstraintAction()];
+
+    // Get the phase to split on
+    PhaseStatus selectedPhase = action.assignment;
+
+    if ( selectedConstraint->getValidCaseSplit() )
+
+        // Create a case split based on the selected constraint and phase
+        if ( selectedConstraint->phaseFixed() )
+        {
+            // Handle the case where the constraint's phase is already fixed
+            // Optionally, provide a negative reward or ask the agent to select again
+        }
+        else
+        {
+            // Apply the split
+            _smtCore.recordImpliedValidSplit( selectedConstraint, selectedPhase );
+        }
+}
+}
+
+
 void Engine::setVerbosity( unsigned verbosity )
 {
     _verbosity = verbosity;
@@ -186,7 +265,7 @@ void Engine::exportInputQueryWithError( String errorMessage )
             errorMessage.ascii(),
             ipqFileName.ascii() );
 }
-
+// todo :  train the agent is to call this function many times.
 bool Engine::solve( double timeoutInSeconds )
 {
     SignalHandler::getInstance()->initialize();
@@ -322,6 +401,9 @@ bool Engine::solve( double timeoutInSeconds )
 
                 // The linear portion of the problem has been solved.
                 // Check the status of the PL constraints
+                // todo take reward for the last action and send it to the agent,
+                // todo provide it back to the agent and get action from the agent in the next
+                // function
                 bool solutionFound = adjustAssignmentToSatisfyNonLinearConstraints();
                 if ( solutionFound )
                 {
@@ -455,6 +537,257 @@ bool Engine::solve( double timeoutInSeconds )
     }
 }
 
+void Engine::beforeSplitingLoop()
+{
+    SignalHandler::getInstance()->initialize();
+    SignalHandler::getInstance()->registerClient( this );
+    // Register the boundManager with all the PL constraints
+    for ( auto &plConstraint : _plConstraints )
+        plConstraint->registerBoundManager( &_boundManager );
+    for ( auto &nlConstraint : _nlConstraints )
+        nlConstraint->registerBoundManager( &_boundManager );
+
+    // Before encoding, make sure all valid constraints are applied.
+    applyAllValidConstraintCaseSplits();
+
+    updateDirections();
+    if ( _lpSolverType == LPSolverType::NATIVE )
+        storeInitialEngineState();
+
+    mainLoopStatistics();
+    if ( _verbosity > 0 )
+    {
+        printf( "\nEngine::solve: Initial statistics\n" );
+        _statistics.print();
+        printf( "\n---\n" );
+    }
+}
+
+void Engine::trainDQN()
+{
+    unsigned numConstraints = _plConstraints.size();
+    unsigned numPhases = phaseStatusToIndex.size();
+    auto agent = new Agent( numConstraints, numPhases, 4, numConstraints );
+    for ( unsigned int episode = 1; episode <= _nEpisodes; ++episode )
+    {
+        reset();
+        solveForTrainingDQN( *agent );
+    }
+}
+
+
+bool Engine::solveForTrainingDQN()
+{
+    // initializing variables for DQN:
+    beforeSplitingLoop();
+    initializeActionSpace();
+    initializeDQNState();
+    initialAgent();
+    Action action = NULL;
+    unsigned prevNumFixedConstraints = 0;
+    unsigned numFixedConstraints = 0;
+    float eps = 0.01;
+    bool initialState = true;
+    bool splitJustPerformed = true;
+    struct timespec mainLoopStart = TimeUtils::sampleMicro();
+    while ( true )
+    {
+        struct timespec mainLoopEnd = TimeUtils::sampleMicro();
+        _statistics.incLongAttribute( Statistics::TIME_MAIN_LOOP_MICRO,
+                                      TimeUtils::timePassed( mainLoopStart, mainLoopEnd ) );
+        mainLoopStart = mainLoopEnd;
+
+        try
+        {
+            DEBUG( _tableau->verifyInvariants() );
+
+            mainLoopStatistics();
+            if ( _verbosity > 1 &&
+                 _statistics.getLongAttribute( Statistics::NUM_MAIN_LOOP_ITERATIONS ) %
+                         _statisticsPrintingFrequency ==
+                     0 )
+                _statistics.print();
+
+            if ( _lpSolverType == LPSolverType::NATIVE )
+            {
+                checkOverallProgress();
+                // Check whether progress has been made recently
+
+                if ( performPrecisionRestorationIfNeeded() )
+                    continue;
+
+                if ( _tableau->basisMatrixAvailable() )
+                {
+                    explicitBasisBoundTightening();
+                    _boundManager.propagateTightenings();
+                    applyAllValidConstraintCaseSplits();
+                }
+            }
+
+            // If true, we just entered a new subproblem
+            if ( splitJustPerformed )
+            {
+                performBoundTighteningAfterCaseSplit();
+                informLPSolverOfBounds();
+                splitJustPerformed = false;
+            }
+
+            // Perform any SmtCore-initiated case splits
+            if ( _smtCore.needToSplit() )
+            {
+                _smtCore.performSplit();
+                splitJustPerformed = true;
+                continue;
+            }
+
+            if ( !_tableau->allBoundsValid() )
+            {
+                // Some variable bounds are invalid, so the query is unsat
+                throw InfeasibleQueryException();
+            }
+
+            if ( allVarsWithinBounds() )
+            {
+                applyAllBoundTightenings();
+                if ( applyAllValidConstraintCaseSplits() )
+                    continue;
+
+
+                // The linear portion of the problem has been solved.
+                // Check the status of the PL constraints
+                // todo take reward for the last action and send it to the agent,
+                // todo provide it back to the agent and get action from the agent in the next
+                // function
+                numFixedConstraints = getNumFixedConstraints();
+                if ( initialState )
+                {
+                    bool solutionFound = adjustAssignmentToSatisfyNonLinearConstraints();
+                }
+                else
+                {
+                    initialState = false;
+                    unsigned reward = numFixedConstraints - prevNumFixedConstraints;
+                    prevNumFixedConstraints = numFixedConstraints;
+                    _agent->step(currentDQNState->toTensor(), action)
+                }
+                // todo take reward for the last action and send it to the agent,
+                // todo provide it back to the agent and get action from the agent in the next
+                collectViolatedPlConstraints();
+
+                // apply agent step:
+
+
+                // Finally, take this opporunity to tighten any bounds
+                // and perform any valid case splits.
+                tightenBoundsOnConstraintMatrix();
+                _boundManager.propagateTightenings();
+                // For debugging purposes
+                checkBoundCompliancyWithDebugSolution();
+
+                while ( applyAllValidConstraintCaseSplits() )
+                    performSymbolicBoundTightening();
+
+
+                if ( allNonlinearConstraintsHold() )
+                {
+                    // todo : send done = true to the agent
+                    return true;
+                }
+                else if ( !hasBranchingCandidate() )
+                {
+                    // todo - give bad reward and done?
+                    return false;
+                }
+                else
+                {
+                    while ( !_smtCore.needToSplit() )
+                        _smtCore.reportRejectedPhasePatternProposal();
+                    continue;
+                }
+            }
+
+            // We have out-of-bounds variables.
+            if ( _lpSolverType == LPSolverType::NATIVE )
+                performSimplexStep();
+            else
+            {
+                ENGINE_LOG( "Checking LP feasibility with Gurobi..." );
+                DEBUG( { checkGurobiBoundConsistency(); } );
+                ASSERT( _lpSolverType == LPSolverType::GUROBI );
+                LinearExpression dontCare;
+                minimizeCostWithGurobi( dontCare );
+            }
+            continue;
+        }
+        catch ( const MalformedBasisException & )
+        {
+            _tableau->toggleOptimization( false );
+            if ( !handleMalformedBasisException() )
+            {
+                ASSERT( _lpSolverType == LPSolverType::NATIVE );
+                _exitCode = Engine::ERROR;
+                exportInputQueryWithError( "Cannot restore tableau" );
+                mainLoopEnd = TimeUtils::sampleMicro();
+                _statistics.incLongAttribute( Statistics::TIME_MAIN_LOOP_MICRO,
+                                              TimeUtils::timePassed( mainLoopStart, mainLoopEnd ) );
+                return false;
+            }
+        }
+        catch ( const InfeasibleQueryException & )
+        {
+            _tableau->toggleOptimization( false );
+            // The current query is unsat, and we need to pop.
+            // If we're at level 0, the whole query is unsat.
+            if ( _produceUNSATProofs )
+                explainSimplexFailure();
+
+            if ( !_smtCore.popSplit() )
+            {
+                mainLoopEnd = TimeUtils::sampleMicro();
+                _statistics.incLongAttribute( Statistics::TIME_MAIN_LOOP_MICRO,
+                                              TimeUtils::timePassed( mainLoopStart, mainLoopEnd ) );
+                if ( _verbosity > 0 )
+                {
+                    printf( "\nEngine::solve: unsat query\n" );
+                    _statistics.print();
+                }
+                _exitCode = Engine::UNSAT;
+                return false;
+            }
+            else
+            {
+                splitJustPerformed = true;
+            }
+        }
+        catch ( const VariableOutOfBoundDuringOptimizationException & )
+        {
+            _tableau->toggleOptimization( false );
+            continue;
+        }
+        catch ( MarabouError &e )
+        {
+            String message = Stringf(
+                "Caught a MarabouError. Code: %u. Message: %s ", e.getCode(), e.getUserMessage() );
+            _exitCode = Engine::ERROR;
+            exportInputQueryWithError( message );
+            mainLoopEnd = TimeUtils::sampleMicro();
+            _statistics.incLongAttribute( Statistics::TIME_MAIN_LOOP_MICRO,
+                                          TimeUtils::timePassed( mainLoopStart, mainLoopEnd ) );
+            return false;
+        }
+        catch ( ... )
+        {
+            _exitCode = Engine::ERROR;
+            exportInputQueryWithError( "Unknown error" );
+            mainLoopEnd = TimeUtils::sampleMicro();
+            _statistics.incLongAttribute( Statistics::TIME_MAIN_LOOP_MICRO,
+                                          TimeUtils::timePassed( mainLoopStart, mainLoopEnd ) );
+            return false;
+        }
+    }
+}
+
+
 void Engine::mainLoopStatistics()
 {
     struct timespec start = TimeUtils::sampleMicro();
@@ -499,6 +832,7 @@ bool Engine::adjustAssignmentToSatisfyNonLinearConstraints()
     ENGINE_LOG( "Linear constraints satisfied. Now trying to satisfy non-linear"
                 " constraints..." );
     collectViolatedPlConstraints();
+    // todo calculate reward , state and isDone
 
     // If all constraints are satisfied, we are possibly done
     if ( allPlConstraintsHold() )
@@ -521,6 +855,7 @@ bool Engine::adjustAssignmentToSatisfyNonLinearConstraints()
     else if ( !GlobalConfiguration::USE_DEEPSOI_LOCAL_SEARCH )
     {
         // We have violated piecewise-linear constraints.
+        // todo take next step from agent
         performConstraintFixingStep();
 
         // Finally, take this opporunity to tighten any bounds
@@ -611,7 +946,16 @@ void Engine::performConstraintFixingStep()
     struct timespec start = TimeUtils::sampleMicro();
 
     // Select a violated constraint as the target
-    selectViolatedPlConstraint();
+    if(GlobalConfiguration::USE_DQN)
+    {
+        // take action from agent
+        auto const action = applyAgentAction(  )
+    }
+    else
+    {
+        selectViolatedPlConstraint();
+    }
+
 
     // Report the violated constraint to the SMT engine
     reportPlViolation();

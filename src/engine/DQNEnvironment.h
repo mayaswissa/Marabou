@@ -26,6 +26,13 @@ struct CustomAction
     }
 };
 
+// todo limit to 0 1 or ?
+std::unordered_map<PhaseStatus, unsigned> phaseStatusToIndex = {
+    { PHASE_NOT_FIXED, 0 },     { RELU_PHASE_ACTIVE, 1 },    { RELU_PHASE_INACTIVE, 2 },
+    { ABS_PHASE_POSITIVE, 3 },  { ABS_PHASE_NEGATIVE, 4 },   { SIGN_PHASE_POSITIVE, 5 },
+    { SIGN_PHASE_NEGATIVE, 6 }, { MAX_PHASE_ELIMINATED, 7 }, { CONSTRAINT_INFEASIBLE, 8 },
+};
+
 
 class Environment
 {
@@ -58,7 +65,7 @@ private:
     The representation of the current state of the environment.
     As a mapping from neuron to its assignment (phase pattern)
      */
-    Map<unsigned, PhaseStatus> _currentState;
+    std::vector<unsigned> _currentState;
 
     /*
       The constraints in the current phase pattern (i.e., participating in the
@@ -120,6 +127,9 @@ private:
      Obtain the current variable assignment from the Tableau.
     */
     void obtainCurrentAssignment();
+
+    void convertPhasePatternToState( Map<PiecewiseLinearConstraint *, PhaseStatus> &phasePattern,
+                                     torch::Tensor &state );
 };
 
 #endif

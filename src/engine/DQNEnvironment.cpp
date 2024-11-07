@@ -31,7 +31,7 @@ void Environment::reset(torch::Tensor& initialState)
     _plConstraintsInCurrentPhasePattern.clear();
     _constraintsUpdatedInLastProposal.clear();
     initializePhasePatternWithCurrentInputAssignment();
-    initialState = torch::tensor( _currentPhasePattern );
+    convertPhasePatternToState( _currentPhasePattern, initialState );
 }
 
 void Environment::initializePhasePatternWithCurrentAssignment()
@@ -53,12 +53,6 @@ void Environment::initializePhasePatternWithCurrentAssignment()
 void Environment::initializePhasePatternWithCurrentInputAssignment()
 {
     ASSERT( _networkLevelReasoner );
-    /*
-      First, obtain the variable assignment from the network level reasoner.
-      We should be able to get the assignment of all variables participating
-      in pl constraints because otherwise the NLR would not have been
-      successfully constructed.
-    */
     Map<unsigned, double> assignment;
     _networkLevelReasoner->concretizeInputAssignment( assignment );
 
@@ -73,6 +67,19 @@ void Environment::initializePhasePatternWithCurrentInputAssignment()
         }
     }
 }
+
+void Environment::convertPhasePatternToState(Map<PiecewiseLinearConstraint *, PhaseStatus>& phasePattern, torch::Tensor &state)
+{
+    _currentState.clear();
+    for (const auto &pair : phasePattern )
+    {
+        PhaseStatus phaseStatus = pair.second;
+        unsigned phaseIndex = phaseStatusToIndex[phaseStatus];
+        _currentState.push_back( phaseIndex );
+        state = torch::tensor( &_currentState, torch::dtype(torch::kInt64));
+    }
+}
+
 
 void Environment::obtainCurrentAssignment()
 {
@@ -89,6 +96,8 @@ void Environment::step( const torch::Tensor& actionTensor, torch::Tensor& nextSt
         _plConstraintsInCurrentPhasePattern[action.constraintIndex];
     _currentPhasePattern[plConstraintToUpdate] = action.assignment;
     _constraintsUpdatedInLastProposal.append( plConstraintToUpdate );
+
+    // todo check this part:
     obtainCurrentAssignment();
     for ( const auto &pair : _currentPhasePattern )
     {
@@ -100,19 +109,22 @@ void Environment::step( const torch::Tensor& actionTensor, torch::Tensor& nextSt
         }
     }
 
+    // todo up to this part
+
+    // todo check how to update the state after changing one neuron - line 300 engine
+
+    // calculate reward - minus sum of violated constraints after this action
     collectViolatedPlConstraints();
     if (!_violatedPlConstraints.exists( plConstraintToUpdate ))
-        reward = -_numberOfVariables; // todo check
+        reward = -_numberOfVariables; // todo check - action did not change the state
     else
-        reward = _violatedPlConstraints.size();
+        reward = - _violatedPlConstraints.size();
     done = isDone();
-    // todo check how to update the state after changing one neuron
-    // todo check if need to use _currentPhasePattern or current_state
+
 
     // todo check getCostReduction - to update all other constraints after action
-
-
-    nextState = torch::tensor(&_currentPhasePattern);
+    // next state = current state
+    convertPhasePatternToState( _currentPhasePattern, nextState );
     _constraintsUpdatedInLastProposal.clear();
 
 }

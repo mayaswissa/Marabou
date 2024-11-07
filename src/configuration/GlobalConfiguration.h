@@ -31,6 +31,9 @@ public:
     // to non-linear constraint.
     static bool USE_DEEPSOI_LOCAL_SEARCH;
 
+  // Use Deep Q-Network to improve local search for satisfying assignments.
+    static bool USE_DQN;
+
     // The quantity by which the score is bumped up for PLContraints not
     // participating in the SoI. This promotes those constraints in the branching
     // order.
