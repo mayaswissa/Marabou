@@ -905,27 +905,23 @@ private:
     /*
      * DQN variables
      */
-    ActionSpace* actionSpace;
-    Agent* _agent;
+    std::shared_ptr<ActionSpace> _actionSpace;
+    std::shared_ptr<Agent> _agent;
     std::unordered_map<PiecewiseLinearConstraint *, int> constraintToIndex;
     std::vector<PiecewiseLinearConstraint *> indexToConstraint;
-
-    std::unordered_map<PhaseStatus, int> phaseToIndex;
     /*
   The representation of the current state of the environment.
   As a mapping from neuron to its assignment (phase pattern)
    */
-    State* currentDQNState;
 
     std::vector<float> scores;
     std::deque<float> _scoresWindow;
     unsigned _nEpisodes;
-    std::unordered_map<PhaseStatus, unsigned> _phaseStatusToIndex;
 
     /*
       DQN functions
      */
-    void initializeDQNState();
+    bool updateDQNState(const List<PiecewiseLinearConstraint *>& plConstraints, std::shared_ptr<State> state);
     void initializeActionSpace();
     void initialAgent();
     unsigned getNumFixedConstraints() const;
