@@ -3,17 +3,16 @@
 #include <random>
 #include <utility>
 
-Agent::Agent( unsigned numVariables,
-              unsigned numPhaseStatuses,
-              const ActionSpace &actionSpace )
-    : _numVariables( numVariables )
-    , _numPhaseStatuses( numPhaseStatuses )
+Agent::Agent( const ActionSpace &actionSpace )
+    : _actionSpace( actionSpace )
+    , _numVariables( actionSpace.getNumConstraints() )
+    , _numPhaseStatuses( actionSpace.getNumPhases() )
     , _embeddingDim( 4 )
-    , _actionSpace( actionSpace )
-    , _qNetworkLocal( numVariables, numPhaseStatuses, _embeddingDim, numVariables * numPhaseStatuses )
-    , _qNetworkTarget( numVariables, numPhaseStatuses, _embeddingDim, numVariables * numPhaseStatuses)
+    , _numActions( actionSpace.getSpaceSize() )
+    , _qNetworkLocal( _numVariables, _numPhaseStatuses, _embeddingDim, _numActions )
+    , _qNetworkTarget( _numVariables, _numPhaseStatuses, _embeddingDim, _numActions )
     , optimizer( _qNetworkLocal.parameters(), torch::optim::AdamOptions( LR ) )
-    , _memory( numVariables * numPhaseStatuses, 1e5, BATCH_SIZE )
+    , _memory( _numVariables * _numPhaseStatuses, 1e5, BATCH_SIZE )
     , _tStep( 0 )
     , device( torch::cuda::is_available() ? torch::kCUDA : torch::kCPU )
 {

@@ -98,6 +98,9 @@ public:
         // Global timeout
         TIMEOUT,
 
+        // train DQN agent timeout
+        TRAIN_DQN_TIMEOUT,
+
         CONSTRAINT_VIOLATION_THRESHOLD,
 
         // The number of rejected phase pattern proposal allowed before

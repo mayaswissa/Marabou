@@ -65,6 +65,7 @@ void Options::initializeDefaultValues()
     _intOptions[INITIAL_TIMEOUT] = 5;
     _intOptions[VERBOSITY] = 2;
     _intOptions[TIMEOUT] = 0;
+    _intOptions[TRAIN_DQN_TIMEOUT] = 0,
     _intOptions[CONSTRAINT_VIOLATION_THRESHOLD] = 20;
     _intOptions[DEEP_SOI_REJECTION_THRESHOLD] = 2;
     _intOptions[NUMBER_OF_SIMULATIONS] = 100;

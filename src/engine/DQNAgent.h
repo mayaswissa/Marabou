@@ -1,8 +1,8 @@
 #ifndef AGENT_H
 #define AGENT_H
 
-#include "DQNActoin.h"
 #include "DQNActionSpace.h"
+#include "DQNActoin.h"
 #include "DQNNetwork.h"
 #include "DQNReplayBuffer.h"
 #undef Warning
@@ -12,9 +12,7 @@
 class Agent
 {
 public:
-    Agent( unsigned numVariables,
-           unsigned numPhaseStatuses,
-           const ActionSpace &actionSpace );
+    Agent( const ActionSpace &actionSpace );
     void step( const torch::Tensor &state,
                const torch::Tensor &action,
                unsigned reward,
@@ -31,8 +29,8 @@ public:
 
 private:
     static void softUpdate( const QNetwork &localModel, const QNetwork &targetModel );
-    unsigned _numVariables, _numPhaseStatuses, _embeddingDim, _numActions;
     const ActionSpace &_actionSpace;
+    unsigned _numVariables, _numPhaseStatuses, _embeddingDim, _numActions;
     QNetwork _qNetworkLocal, _qNetworkTarget;
     torch::optim::Adam optimizer;
     ReplayBuffer _memory;

@@ -905,35 +905,30 @@ private:
     /*
      * DQN variables
      */
-    std::shared_ptr<ActionSpace> _actionSpace;
-    std::shared_ptr<Agent> _agent;
-    std::unordered_map<PiecewiseLinearConstraint *, int> constraintToIndex;
-    std::vector<PiecewiseLinearConstraint *> indexToConstraint;
+    std::unique_ptr<ActionSpace> _actionSpace = nullptr;
+    std::unique_ptr<Agent> _agent = nullptr;
+    std::unique_ptr<State> _currentDQNState = nullptr;
+    float _eps;
     /*
   The representation of the current state of the environment.
   As a mapping from neuron to its assignment (phase pattern)
    */
 
-    std::vector<float> scores;
-    std::deque<float> _scoresWindow;
     unsigned _nEpisodes;
 
     /*
       DQN functions
      */
-    bool updateDQNState(const List<PiecewiseLinearConstraint *>& plConstraints, std::shared_ptr<State> state);
+    static void updateDQNState( const List<PiecewiseLinearConstraint *> &plConstraints,
+                                State &state );
     void initializeActionSpace();
     void initialAgent();
     unsigned getNumFixedConstraints() const;
-    void assignConstraintIndices( const std::vector<PiecewiseLinearConstraint *> &constraints );
-    void generateActionSpace();
-    int selectActionFromQValues( const torch::Tensor &qValues );
-    Action selectActionFromQValues();
-    void applyAgentAction();
-    List<unsigned> extractStatePhaseIndices( const List<PiecewiseLinearConstraint *> &constraints );
-    void resetDQN( torch::Tensor &initialState );
-    bool solveForTrainingDQN( Agent &agent );
-    void trainDQN();
+    PiecewiseLinearConstraint *indexToConstraint( unsigned index );
+    PhaseStatus valueToPhase( unsigned index ); // todo this is not really the value but the index
+    void resetDQN( torch::Tensor &initialState ); // todo implement?
+    bool trainDQNAgent( double timeoutInSeconds, Agent &agent );
+    void trainAndSolve();
 };
 
 #endif // __Engine_h__

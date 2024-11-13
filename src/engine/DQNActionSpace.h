@@ -11,11 +11,14 @@ public:
 
     // Example method to decode an action index back to its parts
     std::pair<unsigned, unsigned> decodeActionIndex(unsigned actionIndex) const;
+    unsigned getSpaceSize() const;
+    unsigned getNumPhases() const;
+    unsigned getNumConstraints() const;
 
 private:
-    unsigned int numConstraints;
-    unsigned int numPhases;
-    Vector<int> actionIndices;
+    unsigned int _numConstraints;
+    unsigned int _numPhases;
+    Vector<int> _actionIndices;
 };
 
 #endif //ACTIONSPACE_H

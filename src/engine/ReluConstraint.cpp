@@ -550,6 +550,35 @@ List<PiecewiseLinearConstraint::Fix> ReluConstraint::getSmartFixes( ITableau *ta
 
     return fixes;
 }
+// todo add List<PiecewiseLinearCaseSplit> ReluConstraint::getCaseSplits() const according to Agent Action.
+
+List<PiecewiseLinearCaseSplit> ReluConstraint::getCaseSplitsByAgent(PhaseStatus DQNDirection) const
+{
+
+    if ( _phaseStatus != PHASE_NOT_FIXED )
+        throw MarabouError( MarabouError::REQUESTED_CASE_SPLITS_FROM_FIXED_CONSTRAINT );
+
+    List<PiecewiseLinearCaseSplit> splits;
+
+    if ( DQNDirection == RELU_PHASE_INACTIVE )
+    {
+        splits.append( getInactiveSplit() );
+        return splits;
+    }
+    if ( DQNDirection == RELU_PHASE_ACTIVE )
+    {
+        splits.append( getActiveSplit() );
+        return splits;
+    }
+    // todo : random ?
+    // Default: start with the inactive case, because it doesn't
+        // introduce a new equation and is hence computationally cheaper.
+        splits.append( getInactiveSplit() );
+        splits.append( getActiveSplit() );
+
+
+    return splits;
+}
 
 List<PiecewiseLinearCaseSplit> ReluConstraint::getCaseSplits() const
 {

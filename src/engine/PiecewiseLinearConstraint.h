@@ -196,6 +196,8 @@ public:
     */
     virtual List<PiecewiseLinearCaseSplit> getCaseSplits() const = 0;
 
+    virtual List<PiecewiseLinearCaseSplit> getCaseSplitsByAgent(PhaseStatus DQNDirection) const;
+
     /*
       Check if the constraint's phase has been fixed.
     */

@@ -7,6 +7,7 @@
 class State {
 public:
     State(int numConstraints, int numPhases);
+    State(const State& other);
 
     torch::Tensor toTensor() const;
     void updateState(int constraintIndex, int newPhase);
