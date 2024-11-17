@@ -5,14 +5,14 @@
 
 Agent::Agent( const ActionSpace &actionSpace )
     : _actionSpace( actionSpace )
-    , _numVariables( actionSpace.getNumConstraints() )
+    , _numPlConstraints( actionSpace.getNumConstraints() )
     , _numPhaseStatuses( actionSpace.getNumPhases() )
     , _embeddingDim( 4 )
     , _numActions( actionSpace.getSpaceSize() )
-    , _qNetworkLocal( _numVariables, _numPhaseStatuses, _embeddingDim, _numActions )
-    , _qNetworkTarget( _numVariables, _numPhaseStatuses, _embeddingDim, _numActions )
+    , _qNetworkLocal( _numPlConstraints, _numPhaseStatuses, _embeddingDim, _numActions )
+    , _qNetworkTarget( _numPlConstraints, _numPhaseStatuses, _embeddingDim, _numActions )
     , optimizer( _qNetworkLocal.parameters(), torch::optim::AdamOptions( LR ) )
-    , _memory( _numVariables * _numPhaseStatuses, 1e5, BATCH_SIZE )
+    , _memory( _numPlConstraints * _numPhaseStatuses, 1e5, BATCH_SIZE )
     , _tStep( 0 )
     , device( torch::cuda::is_available() ? torch::kCUDA : torch::kCPU )
 {
@@ -48,16 +48,17 @@ Action Agent::act( const torch::Tensor &state, float eps )
     _qNetworkLocal.eval();
     torch::Tensor Qvalues = _qNetworkLocal.forward( state );
     _qNetworkLocal.train();
-
+    unsigned actionIndex;
     if ( static_cast<float>( rand() ) / RAND_MAX > eps )
     {
-        auto actionIndex = Qvalues.argmax( 1 ).item<int>();
-        auto actionIndices = _actionSpace.decodeActionIndex( actionIndex );
-        return Action( actionIndices.first, actionIndices.second );
+        actionIndex = Qvalues.argmax( 1 ).item<int>();
+
+    }else
+    {
+        // random :
+        actionIndex = rand() % _numActions;
     }
-    // greedy :
-    int randomIndex = rand() % _numActions;
-    auto actionIndices = _actionSpace.decodeActionIndex( randomIndex );
+    auto actionIndices = _actionSpace.decodeActionIndex( actionIndex );
     return Action( actionIndices.first, actionIndices.second );
 }
 

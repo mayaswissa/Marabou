@@ -305,6 +305,10 @@ public:
     */
     void propagateBoundManagerTightenings();
 
+
+    void trainAndSolve();
+
+
 private:
     enum BasisRestorationRequired {
         RESTORATION_NOT_NEEDED = 0,
@@ -917,14 +921,12 @@ private:
     /*
       DQN functions
      */
-    static void updateDQNState( const List<PiecewiseLinearConstraint *> &plConstraints,
-                                State &state );
+    void updateDQNState( State &state );
     unsigned getNumFixedConstraints() const;
     PiecewiseLinearConstraint *indexToConstraint( unsigned index );
     PhaseStatus valueToPhase( unsigned index );   // todo this is not really the value but the index
     void resetDQN( torch::Tensor &initialState ); // todo implement?
     bool trainDQNAgent( double timeoutInSeconds );
-    void trainAndSolve();
 };
 
 #endif // __Engine_h__

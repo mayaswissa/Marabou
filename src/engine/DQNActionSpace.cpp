@@ -1,7 +1,7 @@
 #include "DQNActionSpace.h"
 
 #include <utility>
-
+#include <iostream>
 ActionSpace::ActionSpace(unsigned numConstraints,unsigned numPhases)
 : _numConstraints(numConstraints), _numPhases(numPhases) {
     for (unsigned i = 0; i < numConstraints; ++i) {
@@ -26,7 +26,7 @@ unsigned ActionSpace::getSpaceSize() const
 }
 unsigned ActionSpace::getNumPhases() const
 {
-    return _numConstraints;
+    return _numPhases;
 }
 unsigned ActionSpace::getNumConstraints() const
 {

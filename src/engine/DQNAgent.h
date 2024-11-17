@@ -12,7 +12,6 @@ class Agent
 {
 public:
     Agent( const ActionSpace &actionSpace );
-    ~Agent();
     void step( const torch::Tensor &state,
                const torch::Tensor &action,
                unsigned reward,
@@ -30,7 +29,7 @@ public:
 private:
     static void softUpdate( const QNetwork &localModel, const QNetwork &targetModel );
     const ActionSpace &_actionSpace;
-    unsigned _numVariables, _numPhaseStatuses, _embeddingDim, _numActions;
+    unsigned _numPlConstraints, _numPhaseStatuses, _embeddingDim, _numActions;
     QNetwork _qNetworkLocal, _qNetworkTarget;
     torch::optim::Adam optimizer;
     ReplayBuffer _memory;

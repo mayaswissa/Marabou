@@ -36,7 +36,9 @@ torch::Tensor State::toTensor() const
             flatData.push_back( static_cast<float>( phase ) );
         }
     }
-    return torch::tensor( flatData ).view( { static_cast<long>( _stateData.size() ), _numPhases } );
+    auto tensor = torch::tensor(flatData, torch::kInt64);
+
+    return tensor.view({1, static_cast<long>(flatData.size())});
 }
 
 void State::updateState( int constraintIndex, int newPhase )

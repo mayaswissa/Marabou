@@ -18,7 +18,7 @@ torch::Tensor Action::actionToTensor() const
 {
     return torch::tensor( { static_cast<int>( _plConstraintActionIndex ),
                             static_cast<int>( _assignmentIndex ) },
-                          torch::dtype( torch::kInt32 ) );
+                          torch::dtype( torch::kInt64 ) );
 }
 
 

@@ -198,3 +198,9 @@ void PiecewiseLinearConstraint::setStatistics( Statistics *statistics )
 {
     _statistics = statistics;
 }
+
+List<PiecewiseLinearCaseSplit>
+PiecewiseLinearConstraint::getCaseSplitsByAgent(PhaseStatus /* DQNDirection */) const
+{
+    return List<PiecewiseLinearCaseSplit>();
+}

@@ -550,7 +550,6 @@ List<PiecewiseLinearConstraint::Fix> ReluConstraint::getSmartFixes( ITableau *ta
 
     return fixes;
 }
-// todo add List<PiecewiseLinearCaseSplit> ReluConstraint::getCaseSplits() const according to Agent Action.
 
 List<PiecewiseLinearCaseSplit> ReluConstraint::getCaseSplitsByAgent(PhaseStatus DQNDirection) const
 {
