@@ -93,6 +93,12 @@ Engine::Engine()
         _produceUNSATProofs ? new ( true )
                                   CVC4::context::CDO<UnsatCertificateNode *>( &_context, NULL )
                             : NULL;
+    _actionSpace =
+        std::make_unique<ActionSpace>( _plConstraints.size(), 3 ); // todo change num phases
+    _agent = std::make_unique<Agent>( *_actionSpace );
+    _currentDQNState = std::make_unique<State>( _plConstraints.size(), 3 ); // todo change num
+                                                                            // phases
+    _eps = 0.01; // todo change in run
 }
 
 Engine::~Engine()
@@ -115,11 +121,7 @@ Engine::~Engine()
 
 
 // todo DQN functions:
-void Engine::initializeActionSpace()
-{
-    _actionSpace =
-        std::make_unique<ActionSpace>( _plConstraints.size(), phaseStatusToIndex.size() );
-}
+
 void Engine::updateDQNState( const List<PiecewiseLinearConstraint *> &plConstraints,
                              State &stateToUpdate )
 {
@@ -131,19 +133,15 @@ void Engine::updateDQNState( const List<PiecewiseLinearConstraint *> &plConstrai
     }
 }
 
-void Engine::initialAgent()
-{
-    _agent = std::make_unique<Agent>( *_actionSpace );
-}
-
 unsigned Engine::getNumFixedConstraints() const
 {
-    unsigned numNotFixed = 0;
+    unsigned numFixed = 0;
     for ( auto &plConstraint : _plConstraints )
     {
-        if ( plConstraint->getPhaseStatus() != PHASE_NOT_FIXED )
-            numNotFixed++;
+        if ( plConstraint->getPhaseStatus() == PHASE_NOT_FIXED )
+            numFixed++;
     }
+    return numFixed;
 }
 
 
@@ -222,7 +220,7 @@ void Engine::exportInputQueryWithError( String errorMessage )
 }
 PiecewiseLinearConstraint *Engine::indexToConstraint( unsigned index )
 {
-    if ( index < 0 || index >= _plConstraints.size() )
+    if ( index >= _plConstraints.size() )
     {
         throw std::out_of_range( "Index is out of bounds" ); // todo change to marabou error
     }
@@ -281,13 +279,10 @@ bool Engine::solve( double timeoutInSeconds )
     _currentDQNState =
         std::make_unique<State>( _plConstraints.size(), numPhases ); // todo change to phases size
     updateDQNState( _plConstraints, *_currentDQNState );
-    initializeActionSpace();
-    initialAgent();
     std::unique_ptr<Action> action = nullptr;
-    std::unique_ptr<State> prevState = std::make_unique<State>( _plConstraints.size(), numPhases );
+    std::unique_ptr<State> prevState = std::make_unique<State>(*_currentDQNState);
     unsigned prevNumFixedConstraints = 0;
     unsigned numFixedConstraints = 0;
-    // _eps = 0.01;
     bool firstStep = true;
 
     bool splitJustPerformed = true;
@@ -381,6 +376,7 @@ bool Engine::solve( double timeoutInSeconds )
                                       false ); // todo what to do with check if done = ?
                     }
                     prevNumFixedConstraints = numFixedConstraints;
+                    *prevState = *_currentDQNState;
                     updateDQNState( _plConstraints, *prevState ); // prevState = currentState
                     action = std::make_unique<Action>(
                         _agent->act( _currentDQNState->toTensor(), _eps ) );
@@ -574,22 +570,19 @@ bool Engine::solve( double timeoutInSeconds )
 
 void Engine::trainAndSolve()
 {
+    unsigned _nEpisodes = 100; // todo make argument
     unsigned timeoutInSeconds = Options::get()->getInt( Options::TRAIN_DQN_TIMEOUT );
-    unsigned numConstraints = _plConstraints.size();
-    unsigned numPhases = phaseStatusToIndex.size();
-    initializeActionSpace(); // todo move to constructor?
-    initialAgent(); // todo move to constructor?
     for ( unsigned int episode = 1; episode <= _nEpisodes; ++episode )
     {
         reset();
-        trainDQNAgent( timeoutInSeconds, *_agent );
+        trainDQNAgent( timeoutInSeconds );
     }
     timeoutInSeconds = Options::get()->getInt( Options::TIMEOUT );
     solve( timeoutInSeconds );
 }
 
 
-bool Engine::trainDQNAgent( double timeoutInSeconds, Agent &agent )
+bool Engine::trainDQNAgent( double timeoutInSeconds )
 {
     SignalHandler::getInstance()->initialize();
     SignalHandler::getInstance()->registerClient( this );
@@ -609,16 +602,11 @@ bool Engine::trainDQNAgent( double timeoutInSeconds, Agent &agent )
 
     // DQN CODE:
     unsigned numPhases = 3; // todo change
-    _currentDQNState =
-        std::make_unique<State>( _plConstraints.size(), numPhases ); // todo change to phases size
     updateDQNState( _plConstraints, *_currentDQNState );
-    initializeActionSpace();
-    initialAgent();
     std::unique_ptr<Action> action = nullptr;
     std::unique_ptr<State> prevState = std::make_unique<State>( _plConstraints.size(), numPhases );
     unsigned prevNumFixedConstraints = 0;
     unsigned numFixedConstraints = 0;
-    _eps = 0.01;
     bool firstStep = true;
     bool splitJustPerformed = true;
     struct timespec mainLoopStart = TimeUtils::sampleMicro();
@@ -630,7 +618,6 @@ bool Engine::trainDQNAgent( double timeoutInSeconds, Agent &agent )
         if ( shouldExitDueToTimeout( timeoutInSeconds ) )
         {
             _exitCode = Engine::TIMEOUT;
-            _statistics.timeout();
             return false;
         }
 
@@ -672,6 +659,8 @@ bool Engine::trainDQNAgent( double timeoutInSeconds, Agent &agent )
             {
                 // todo end state
                 // DQN CODE:
+                // need to split = agent not done.
+                // update current state to be current plConstraints.
                 updateDQNState( _plConstraints, *_currentDQNState );
                 numFixedConstraints = getNumFixedConstraints();
                 if ( !firstStep )
@@ -684,16 +673,20 @@ bool Engine::trainDQNAgent( double timeoutInSeconds, Agent &agent )
                                   _currentDQNState->toTensor(),
                                   false ); // todo what to do with check if done = ?
                 }
-                prevNumFixedConstraints = numFixedConstraints;
-                updateDQNState( _plConstraints, *prevState ); // prevState = currentState
+                // agent take an action according to current state:
                 action =
                     std::make_unique<Action>( _agent->act( _currentDQNState->toTensor(), _eps ) );
+                // perform split according to agent's action:
                 PiecewiseLinearConstraint *pl =
                     indexToConstraint( action->getPlConstraintAction() );
                 PhaseStatus phaseStatus = valueToPhase( action->getAssignmentStatus() );
-                _smtCore.performSplit( pl, &phaseStatus ); // todo send phase
+                _smtCore.performSplit( pl, &phaseStatus );
                 firstStep = false;
                 splitJustPerformed = true;
+                // prepare for the next step:
+                prevNumFixedConstraints = numFixedConstraints;
+                updateDQNState( _plConstraints, *prevState ); // prevState = currentState
+
                 continue;
             }
 
@@ -712,12 +705,13 @@ bool Engine::trainDQNAgent( double timeoutInSeconds, Agent &agent )
                 bool solutionFound = adjustAssignmentToSatisfyNonLinearConstraints();
                 if ( solutionFound )
                 {
+                    // solution found = agent done
                     if ( allNonlinearConstraintsHold() )
                     {
                         mainLoopEnd = TimeUtils::sampleMicro();
                         _exitCode = Engine::SAT;
 
-                        // todo done DQN:
+                        // agent done with success - reward is calculated regularly
                         numFixedConstraints = getNumFixedConstraints();
                         updateDQNState( _plConstraints, *_currentDQNState );
                         _agent->step( prevState->toTensor(),
@@ -732,13 +726,13 @@ bool Engine::trainDQNAgent( double timeoutInSeconds, Agent &agent )
                     {
                         mainLoopEnd = TimeUtils::sampleMicro();
                         _exitCode = Engine::UNKNOWN;
-                        // todo agent failed:
                         updateDQNState( _plConstraints, *_currentDQNState );
+                        // agent done with failure - reward is (- num of plConstraints)
                         _agent->step( _currentDQNState->toTensor(),
                                       action->actionToTensor(),
                                       -_plConstraints.size(),
                                       prevState->toTensor(),
-                                      false );
+                                      true );
 
                         return false;
                     }

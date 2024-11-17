@@ -839,6 +839,14 @@ private:
     CVC4::context::CDO<UnsatCertificateNode *> *_UNSATCertificateCurrentPointer;
 
     /*
+     DQN
+     */
+    std::unique_ptr<ActionSpace> _actionSpace;
+    std::unique_ptr<Agent> _agent;
+    std::unique_ptr<State> _currentDQNState;
+    float _eps;
+
+    /*
       Returns true iff there is a variable with bounds that can explain infeasibility of the tableau
     */
     bool certifyInfeasibility( unsigned var ) const;
@@ -903,31 +911,19 @@ private:
     void writeContradictionToCertificate( unsigned infeasibleVar ) const;
 
     /*
-     * DQN variables
-     */
-    std::unique_ptr<ActionSpace> _actionSpace = nullptr;
-    std::unique_ptr<Agent> _agent = nullptr;
-    std::unique_ptr<State> _currentDQNState = nullptr;
-    float _eps;
-    /*
   The representation of the current state of the environment.
   As a mapping from neuron to its assignment (phase pattern)
    */
-
-    unsigned _nEpisodes;
-
     /*
       DQN functions
      */
     static void updateDQNState( const List<PiecewiseLinearConstraint *> &plConstraints,
                                 State &state );
-    void initializeActionSpace();
-    void initialAgent();
     unsigned getNumFixedConstraints() const;
     PiecewiseLinearConstraint *indexToConstraint( unsigned index );
-    PhaseStatus valueToPhase( unsigned index ); // todo this is not really the value but the index
+    PhaseStatus valueToPhase( unsigned index );   // todo this is not really the value but the index
     void resetDQN( torch::Tensor &initialState ); // todo implement?
-    bool trainDQNAgent( double timeoutInSeconds, Agent &agent );
+    bool trainDQNAgent( double timeoutInSeconds );
     void trainAndSolve();
 };
 

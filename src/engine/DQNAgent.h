@@ -13,6 +13,7 @@ class Agent
 {
 public:
     Agent( const ActionSpace &actionSpace );
+    ~Agent();
     void step( const torch::Tensor &state,
                const torch::Tensor &action,
                unsigned reward,

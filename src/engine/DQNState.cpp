@@ -1,18 +1,29 @@
 #include "DQNState.h"
 
 State::State( int numConstraints, int numPhases )
-    : _numPhases( numPhases )
-    , _stateData( numConstraints, std::vector<int>( numPhases, 0 ) )
+    : _stateData( numConstraints, std::vector<int>( numPhases, 0 ) )
+    , _numPhases( numPhases )
 {
     for ( int i = 0; i < numConstraints; ++i )
     {
         _stateData[i][0] = 1;
     }
 }
-State::State( const State &other )
-    : _stateData( other._stateData )
-    , _numPhases( other._numPhases )
+
+State::State(const State& other)
+    : _stateData(other._stateData),
+      _numPhases(other._numPhases)
 {
+}
+State& State::operator=(const State& other) {
+    if (this == &other) {
+        return *this;
+    }
+
+    _stateData = other._stateData;
+    _numPhases = other._numPhases;
+
+    return *this;
 }
 
 torch::Tensor State::toTensor() const
@@ -30,8 +41,9 @@ torch::Tensor State::toTensor() const
 
 void State::updateState( int constraintIndex, int newPhase )
 {
-    if ( constraintIndex < _stateData.size() && newPhase < _numPhases )
+    if ( constraintIndex < static_cast<int>(_stateData.size()) && newPhase < _numPhases )
     {
+        // reset this constraint's vector to zeros and assign 1 to the new phase's enrty
         std::fill( _stateData[constraintIndex].begin(), _stateData[constraintIndex].end(), 0 );
         _stateData[constraintIndex][newPhase] = 1;
     }

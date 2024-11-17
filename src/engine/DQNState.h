@@ -6,8 +6,9 @@
 
 class State {
 public:
-    State(int numConstraints, int numPhases);
+    State( int numConstraints, int numPhases );
     State(const State& other);
+    State &operator=( const State &other );
 
     torch::Tensor toTensor() const;
     void updateState(int constraintIndex, int newPhase);
@@ -15,7 +16,9 @@ public:
     const std::vector<std::vector<int>>& getData() const;
 
 private:
-    std::vector<std::vector<int>> _stateData; // One-hot encoded state data
+    // each inner vector represents a pl-constraint in one-hot encoding:
+    // a single 1 indicating the current phase and 0s elsewhere.
+    std::vector<std::vector<int>> _stateData;
     int _numPhases;
 };
 
