@@ -22,4 +22,4 @@ private:
     int _numPhases;
 };
 
-#endif // DQNSTATE_H
+#endif

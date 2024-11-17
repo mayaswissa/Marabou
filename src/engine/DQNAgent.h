@@ -1,12 +1,11 @@
-#ifndef AGENT_H
-#define AGENT_H
+#ifndef DQNAGENT_H
+#define DQNAGENT_H
 
 #include "DQNActionSpace.h"
 #include "DQNActoin.h"
 #include "DQNNetwork.h"
 #include "DQNReplayBuffer.h"
 #undef Warning
-#include <Engine.h>
 #include <torch/torch.h>
 
 class Agent
