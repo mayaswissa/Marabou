@@ -37,6 +37,7 @@ Marabou::Marabou()
     , _onnxParser( NULL )
     , _cegarSolver( NULL )
     , _engine( std::unique_ptr<Engine>( new Engine() ) )
+    , _training( false )
 {
 }
 
@@ -60,7 +61,12 @@ void Marabou::run()
     struct timespec start = TimeUtils::sampleMicro();
 
     prepareInputQuery();
-    solveQuery();
+
+    if ( GlobalConfiguration::USE_DQN )
+        trainAndSolve();
+
+    else
+        solveQuery();
 
     struct timespec end = TimeUtils::sampleMicro();
 
@@ -211,6 +217,83 @@ void Marabou::exportAssignment() const
     exportFile->close();
 }
 
+// void Marabou::trainAndSolve()
+// {
+//     unsigned _nEpisodes = 100; // todo make argument
+//     unsigned timeoutInSeconds = Options::get()->getInt( Options::TRAIN_DQN_TIMEOUT );
+//     for ( unsigned int episode = 1; episode <= _nEpisodes; ++episode )
+//     {
+//         printf( "Training and Solving\n" );
+//         _engine->reset();
+//         _engine->trainDQNAgent( timeoutInSeconds );
+//     }
+// }
+
+void Marabou::solveQueryWithAgent()
+{
+    enum {
+        MICROSECONDS_IN_SECOND = 1000000
+    };
+
+    struct timespec start = TimeUtils::sampleMicro();
+    unsigned timeoutInSeconds = Options::get()->getInt( Options::TIMEOUT );
+
+    if ( _training )
+    {
+        _engine->trainDQNAgent( timeoutInSeconds );
+        // _engine->reset();
+    }
+    else
+    {
+        _engine->solve( timeoutInSeconds );
+    }
+    if ( _engine->shouldProduceProofs() && _engine->getExitCode() == Engine::UNSAT )
+        _engine->certifyUNSATCertificate();
+
+
+    if ( _engine->getExitCode() == Engine::UNKNOWN )
+    {
+        struct timespec end = TimeUtils::sampleMicro();
+        unsigned long long totalElapsed = TimeUtils::timePassed( start, end );
+        if ( timeoutInSeconds == 0 || totalElapsed < timeoutInSeconds * MICROSECONDS_IN_SECOND )
+        {
+            _cegarSolver = new CEGAR::IncrementalLinearization( _inputQuery, _engine.release() );
+            unsigned long long timeoutInMicroSeconds =
+                ( timeoutInSeconds == 0
+                      ? 0
+                      : timeoutInSeconds * MICROSECONDS_IN_SECOND - totalElapsed );
+            _cegarSolver->setInitialTimeoutInMicroSeconds( timeoutInMicroSeconds );
+            _cegarSolver->solve();
+            _engine = std::unique_ptr<Engine>( _cegarSolver->releaseEngine() );
+        }
+    }
+
+
+    if ( _engine->getExitCode() == Engine::SAT )
+        _engine->extractSolution( _inputQuery );
+}
+
+void Marabou::trainAndSolve()
+{
+    unsigned _nEpisodes = 20; // todo make argument
+    if ( _engine->processInputQuery( _inputQuery ) )
+    {
+        _engine->initDQN(); // set DQN arguments
+        for ( unsigned int episode = 1; episode <= _nEpisodes; ++episode )
+        {
+            printf("line 287 Marabou\n");
+            fflush(stdout);
+            _training = true;
+            solveQueryWithAgent();
+        }
+        _training = false;
+        unsigned timeoutInSeconds = Options::get()->getInt( Options::TRAIN_DQN_TIMEOUT );
+        printf("start solving with trained agent\n");
+        fflush(stdout);
+        _engine->solve( timeoutInSeconds );
+    }
+}
+
 void Marabou::solveQuery()
 {
     enum {
@@ -221,9 +304,7 @@ void Marabou::solveQuery()
     unsigned timeoutInSeconds = Options::get()->getInt( Options::TIMEOUT );
     if ( _engine->processInputQuery( _inputQuery ) )
     {
-        // todo train DQN agent with trainAndSolve, then call solve?
-        _engine->trainAndSolve();
-        // _engine->solve( timeoutInSeconds );
+        _engine->solve( timeoutInSeconds );
         if ( _engine->shouldProduceProofs() && _engine->getExitCode() == Engine::UNSAT )
             _engine->certifyUNSATCertificate();
     }

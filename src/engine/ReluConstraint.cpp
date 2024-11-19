@@ -554,6 +554,7 @@ List<PiecewiseLinearConstraint::Fix> ReluConstraint::getSmartFixes( ITableau *ta
 List<PiecewiseLinearCaseSplit> ReluConstraint::getCaseSplitsByAgent(PhaseStatus DQNDirection) const
 {
 
+    // todo make sure the phaseState is not fixed?
     if ( _phaseStatus != PHASE_NOT_FIXED )
         throw MarabouError( MarabouError::REQUESTED_CASE_SPLITS_FROM_FIXED_CONSTRAINT );
 

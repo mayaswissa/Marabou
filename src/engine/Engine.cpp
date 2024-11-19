@@ -123,7 +123,6 @@ Engine::~Engine()
 void Engine::updateDQNState( State &stateToUpdate )
 {
     int index = 0;
-    std::cout << "number of plConstraints: " << _plConstraints.size() << std::endl;
     for ( const auto &plConstraint : _plConstraints )
     {
         stateToUpdate.updateState( index, static_cast<int>( plConstraint->getPhaseStatus() ) );
@@ -588,17 +587,33 @@ void Engine::trainAndSolve()
     solve( timeoutInSeconds );
 }
 
-
+void Engine::initDQN()
+{
+    ASSERT( _agent == nullptr );
+    _actionSpace = std::make_unique<ActionSpace>( _plConstraints.size(), 3 ); // todo change num
+    _agent = std::make_unique<Agent>( *_actionSpace );
+    // phases
+    _currentDQNState = std::make_unique<State>( _plConstraints.size(), 3 ); // todo change num
+}
 bool Engine::trainDQNAgent( double timeoutInSeconds )
 {
+    printf("trainDQNAgent\n");
+    fflush(stdout);
     SignalHandler::getInstance()->initialize();
     SignalHandler::getInstance()->registerClient( this );
 
     // Register the boundManager with all the PL constraints
     for ( auto &plConstraint : _plConstraints )
+    {
+        // plConstraint->deleteBoundManager();
         plConstraint->registerBoundManager( &_boundManager );
+    }
+
     for ( auto &nlConstraint : _nlConstraints )
+    {
+        // nlConstraint->deleteBoundManager();
         nlConstraint->registerBoundManager( &_boundManager );
+    }
 
     // Before encoding, make sure all valid constraints are applied.
     applyAllValidConstraintCaseSplits();
@@ -608,10 +623,6 @@ bool Engine::trainDQNAgent( double timeoutInSeconds )
         storeInitialEngineState();
 
     // DQN CODE:
-    _actionSpace = std::make_unique<ActionSpace>( _plConstraints.size(), 3 ); // todo change num
-    // phases
-    _agent = std::make_unique<Agent>( *_actionSpace );
-    _currentDQNState = std::make_unique<State>( _plConstraints.size(), 3 ); // todo change num
     // phases
     unsigned numPhases = 3; // todo change
     updateDQNState( *_currentDQNState );
@@ -669,7 +680,6 @@ bool Engine::trainDQNAgent( double timeoutInSeconds )
             // Perform agent case split
             if ( _smtCore.needToSplit() )
             {
-                // todo end state
                 // DQN CODE:
                 // need to split = agent not done.
                 // update current state to be current plConstraints.
@@ -691,6 +701,16 @@ bool Engine::trainDQNAgent( double timeoutInSeconds )
                 // perform split according to agent's action:
                 PiecewiseLinearConstraint *pl =
                     indexToConstraint( action->getPlConstraintAction() );
+                if (pl->getPhaseStatus() != PHASE_NOT_FIXED)
+                {
+                    // todo check reward
+                    _agent->step( _currentDQNState->toTensor(),
+                                         action->actionToTensor(),
+                                         -_plConstraints.size(),
+                                         prevState->toTensor(),
+                                         false );
+                    continue;
+                }
                 PhaseStatus phaseStatus = valueToPhase( action->getAssignmentStatus() );
                 _smtCore.performSplit( pl, &phaseStatus );
                 firstStep = false;

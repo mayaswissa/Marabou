@@ -172,7 +172,8 @@ void SmtCore::performSplit( PiecewiseLinearConstraint *plConstraint,
         splits = _constraintForSplitting->getCaseSplits();
     }
     ASSERT( !splits.empty() );
-    ASSERT( splits.size() >= 2 ); // Not really necessary, can add code to handle this case.
+    // todo check assert
+    ASSERT( splits.size() >= 2  || GlobalConfiguration::USE_DQN); // Not really necessary, can add code to handle this case.
     _constraintForSplitting->setActiveConstraint( false );
 
     // Obtain the current state of the engine

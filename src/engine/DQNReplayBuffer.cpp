@@ -1,15 +1,15 @@
 #include "DQNReplayBuffer.h"
 #include <random>
 
-ReplayBuffer::ReplayBuffer(const unsigned action_size, const unsigned buffer_size, const unsigned batch_size )
-    : action_size_(action_size), buffer_size_(buffer_size), batch_size_(batch_size) {
+ReplayBuffer::ReplayBuffer(const unsigned actionSize, const unsigned bufferSize, const unsigned batchSize )
+    : _actionSize(actionSize), _bufferSize(bufferSize), _batchSize(batchSize) {
 }
 
-void ReplayBuffer::add(const torch::Tensor& state, const torch::Tensor& action, unsigned reward, const torch::Tensor& next_state, bool done) {
-    if (memory_.size() >= buffer_size_) {
-        memory_.pop_front();
+void ReplayBuffer::add(const torch::Tensor& state, const torch::Tensor& action, unsigned reward, const torch::Tensor& nextState, bool done) {
+    if (_memory.size() >= _bufferSize) {
+        _memory.pop_front();
     }
-    memory_.emplace_back(state, action, reward, next_state, done);
+    _memory.emplace_back(state, action, reward, nextState, done);
 }
 
 std::vector<Experience> ReplayBuffer::sample() const
@@ -20,15 +20,16 @@ std::vector<Experience> ReplayBuffer::sample() const
     std::random_device rd;
     std::mt19937 gen(rd());
     std::uniform_int_distribution<> dis(0, size() - 1);
-
     // Sample `batch_size_` experiences randomly
     for (size_t i = 0; i < batch_size_; ++i) {
         experiences.push_back(memory_[dis(gen)]);
+    for (size_t i = 0; i < _batchSize; ++i) {
+        experiences.push_back(_memory[dis(gen)]);
     }
 
     return experiences;
 }
 
 size_t ReplayBuffer::size() const {
-    return memory_.size();
+    return _memory.size();
 }

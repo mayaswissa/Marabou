@@ -1,9 +1,11 @@
 #include "DQNActoin.h"
 
-Action::Action( unsigned plConstraintActionIndex, unsigned assignmentIndex )
-    : _plConstraintActionIndex( plConstraintActionIndex )
+Action::Action( unsigned numPhases, unsigned plConstraintActionIndex, unsigned assignmentIndex )
+    : _numPhases( numPhases )
+    , _plConstraintActionIndex( plConstraintActionIndex )
     , _assignmentIndex( assignmentIndex )
-{}
+{
+}
 
 unsigned Action::getPlConstraintAction() const
 {
@@ -16,9 +18,7 @@ unsigned Action::getAssignmentStatus() const
 }
 torch::Tensor Action::actionToTensor() const
 {
-    return torch::tensor( { static_cast<int>( _plConstraintActionIndex ),
-                            static_cast<int>( _assignmentIndex ) },
-                          torch::dtype( torch::kInt64 ) );
+    int combinedIndex = static_cast<int>(_plConstraintActionIndex) * _numPhases +
+                        static_cast<int>(_assignmentIndex);
+    return torch::tensor({combinedIndex}, torch::dtype(torch::kInt64));
 }
-
-

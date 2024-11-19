@@ -24,7 +24,7 @@ public:
            unsigned numPhaseStatuses,
            unsigned embeddingDim,
            ActionSpace &actionSpace );
-    static Action tensorToAction( const torch::Tensor &tensor );
+    Action tensorToAction( const torch::Tensor &tensor );
 
 private:
     static void softUpdate( const QNetwork &localModel, const QNetwork &targetModel );

@@ -25,7 +25,7 @@ NonlinearConstraint::NonlinearConstraint()
 
 void NonlinearConstraint::registerBoundManager( BoundManager *boundManager )
 {
-    ASSERT( _boundManager == nullptr );
+    // ASSERT( _boundManager == nullptr ); todo
     _boundManager = boundManager;
 }
 

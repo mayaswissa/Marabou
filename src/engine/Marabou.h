@@ -48,6 +48,8 @@ private:
     */
     void solveQuery();
 
+    void solveQueryWithAgent();
+
     /*
       Display the results
     */
@@ -62,6 +64,8 @@ private:
       Import assignment for debugging as per Options
      */
     void importDebuggingSolution();
+
+    void trainAndSolve();
 
     /*
       ACAS network parser
@@ -82,6 +86,8 @@ private:
       The solver
     */
     std::unique_ptr<Engine> _engine;
+
+    bool _training;
 };
 
 #endif // __Marabou_h__

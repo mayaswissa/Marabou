@@ -22,17 +22,17 @@ struct Experience {
 
 class ReplayBuffer {
 public:
-    ReplayBuffer(unsigned action_size, unsigned buffer_size, unsigned batch_size);
-    void add(const torch::Tensor& state, const torch::Tensor& action, unsigned reward, const torch::Tensor& next_state, bool done);
+    ReplayBuffer(unsigned actionSize, unsigned bufferSize, unsigned batchSize);
+    void add(const torch::Tensor& state, const torch::Tensor& action, unsigned reward, const torch::Tensor& nextState, bool done);
 
     std::vector<Experience> sample() const;
     size_t size() const;
 
 private:
-    unsigned action_size_;
-    unsigned buffer_size_;
-    unsigned batch_size_;
-    std::deque<Experience> memory_;
+    unsigned _actionSize;
+    unsigned _bufferSize;
+    unsigned _batchSize;
+    std::deque<Experience> _memory;
 };
 
 #endif

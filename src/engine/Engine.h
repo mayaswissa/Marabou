@@ -308,6 +308,9 @@ public:
 
     void trainAndSolve();
 
+    bool trainDQNAgent( double timeoutInSeconds );
+
+    void initDQN();
 
 private:
     enum BasisRestorationRequired {
@@ -926,7 +929,6 @@ private:
     PiecewiseLinearConstraint *indexToConstraint( unsigned index );
     PhaseStatus valueToPhase( unsigned index );   // todo this is not really the value but the index
     void resetDQN( torch::Tensor &initialState ); // todo implement?
-    bool trainDQNAgent( double timeoutInSeconds );
 };
 
 #endif // __Engine_h__

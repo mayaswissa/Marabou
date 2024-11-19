@@ -23,9 +23,12 @@ Agent::Agent( const ActionSpace &actionSpace )
 
 Action Agent::tensorToAction( const torch::Tensor &tensor )
 {
-    const unsigned int constraintIndex = tensor[0].item<int>();
-    const auto assignment = static_cast<PhaseStatus>( tensor[1].item<int>() );
-    return Action( constraintIndex, assignment );
+    int combinedIndex = tensor.item<int>();
+
+    int plConstraintActionIndex = combinedIndex / _numPhaseStatuses;
+    int assignmentIndex = combinedIndex % _numPhaseStatuses;
+
+    return Action(_numPhaseStatuses, plConstraintActionIndex, assignmentIndex);
 }
 
 void Agent::step( const torch::Tensor &state,
@@ -39,6 +42,7 @@ void Agent::step( const torch::Tensor &state,
     _tStep = ( _tStep + 1 ) % UPDATE_EVERY;
     if ( _tStep == 0 && _memory.size() > BATCH_SIZE )
     {
+
         const auto experiences = _memory.sample();
         learn( experiences, GAMMA );
     }
@@ -52,51 +56,59 @@ Action Agent::act( const torch::Tensor &state, float eps )
     if ( static_cast<float>( rand() ) / RAND_MAX > eps )
     {
         actionIndex = Qvalues.argmax( 1 ).item<int>();
-
-    }else
+    }
+    else
     {
         // random :
         actionIndex = rand() % _numActions;
     }
     auto actionIndices = _actionSpace.decodeActionIndex( actionIndex );
-    return Action( actionIndices.first, actionIndices.second );
+    return Action( _numPhaseStatuses, actionIndices.first, actionIndices.second );
 }
 
 
 void Agent::learn( const std::vector<Experience> &experiences, const float gamma )
 {
-    std::vector<torch::Tensor> states, actions, next_states;
+    std::vector<torch::Tensor> states, actions, nextStates;
     std::vector<float> rewards;
     std::vector<uint8_t> dones;
-
     for ( const Experience &experience : experiences )
     {
         states.push_back( experience.state.to( device ) );
         actions.push_back( experience.action.to( device ) );
         rewards.push_back( experience.reward );
-        next_states.push_back( experience.nextState.to( device ) );
+        nextStates.push_back( experience.nextState.to( device ) );
         dones.push_back( static_cast<uint8_t>( experience.done ) );
     }
-
+    ASSERT( states.size() == actions.size() && actions.size() == nextStates.size() &&
+            nextStates.size() == rewards.size() && rewards.size() == dones.size() );
     // Create tensors from vectors
-    const auto statesTensor = torch::cat( states, 0 );
-    const auto actionsTensor = torch::cat( actions, 0 );
+    const auto statesTensor = torch::cat( states, 0 ).to( device );
+    const auto actionsTensor = torch::cat( actions, 0 ).to( device );
+
     const auto rewardsTensor =
         torch::tensor( rewards, torch::dtype( torch::kFloat32 ) ).to( device );
-    const auto nextStatesTensor = torch::cat( next_states, 0 );
+
+    const auto nextStatesTensor = torch::cat( nextStates, 0 );
     const auto doneTensor = torch::tensor( dones, torch::dtype( torch::kUInt8 ) ).to( device );
 
-    // Network and loss computations
-    const auto currentQValues = _qNetworkLocal.forward( nextStatesTensor ).detach().argmax( 1 );
+    // DDQN : Use local network to select the best action for next states
+    const auto nextActions = _qNetworkLocal.forward( nextStatesTensor ).detach().argmax( 1 );
+
+    // Use target network to calculate the Q-value of these actions
     const auto QTargetsNext = _qNetworkTarget.forward( nextStatesTensor )
                                   .detach()
-                                  .gather( 1, currentQValues.unsqueeze( -1 ) )
+                                  .gather( 1, nextActions.unsqueeze( -1 ) )
                                   .squeeze( -1 );
+
+    // Calculate Q targets for current states
     const auto QTargets =
         rewardsTensor + gamma * QTargetsNext * ( 1 - doneTensor.to( torch::kFloat32 ) );
+
     const auto QExpected = _qNetworkLocal.forward( statesTensor )
                                .gather( 1, actionsTensor.unsqueeze( -1 ) )
                                .squeeze( -1 );
+
     const auto loss = torch::mse_loss( QExpected, QTargets );
 
     // Backpropagation

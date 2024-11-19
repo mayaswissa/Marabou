@@ -7,7 +7,7 @@
 class Action
 {
 public:
-    Action( unsigned plConstraintActionIndex, unsigned assignmentIndex );
+    Action( unsigned numPhases, unsigned plConstraintActionIndex, unsigned assignmentIndex );
 
     unsigned getPlConstraintAction() const;
 
@@ -16,6 +16,7 @@ public:
     torch::Tensor actionToTensor() const;
 
 private:
+    const unsigned _numPhases;
     const unsigned _plConstraintActionIndex;
     const unsigned _assignmentIndex;
 };
