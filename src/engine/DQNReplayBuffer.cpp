@@ -21,8 +21,6 @@ std::vector<Experience> ReplayBuffer::sample() const
     std::mt19937 gen(rd());
     std::uniform_int_distribution<> dis(0, size() - 1);
     // Sample `batch_size_` experiences randomly
-    for (size_t i = 0; i < batch_size_; ++i) {
-        experiences.push_back(memory_[dis(gen)]);
     for (size_t i = 0; i < _batchSize; ++i) {
         experiences.push_back(_memory[dis(gen)]);
     }

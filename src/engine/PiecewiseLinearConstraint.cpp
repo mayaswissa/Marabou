@@ -200,7 +200,7 @@ void PiecewiseLinearConstraint::setStatistics( Statistics *statistics )
 }
 
 List<PiecewiseLinearCaseSplit>
-PiecewiseLinearConstraint::getCaseSplitsByAgent(PhaseStatus /* DQNDirection */) const
+PiecewiseLinearConstraint::getCaseSplitsByAgent( PhaseStatus /* DQNDirection */) const
 {
     return List<PiecewiseLinearCaseSplit>();
 }
