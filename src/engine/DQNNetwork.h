@@ -11,6 +11,8 @@ public:
 private:
     torch::nn::Linear fc1{nullptr}, fc2{nullptr}, fc3{nullptr};
     torch::nn::Embedding _statusEmbedding{nullptr};
+    torch::nn::Dropout dropout;
+    void initWeights();
 };
 
 #endif

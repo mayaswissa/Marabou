@@ -7,20 +7,41 @@ Agent::Agent( const ActionSpace &actionSpace )
     : _actionSpace( actionSpace )
     , _numPlConstraints( actionSpace.getNumConstraints() )
     , _numPhaseStatuses( actionSpace.getNumPhases() )
-    , _embeddingDim( 4 )
+    , _embeddingDim( 4 ) // todo change
     , _numActions( actionSpace.getSpaceSize() )
     , _qNetworkLocal( _numPlConstraints, _numPhaseStatuses, _embeddingDim, _numActions )
     , _qNetworkTarget( _numPlConstraints, _numPhaseStatuses, _embeddingDim, _numActions )
-    , optimizer( _qNetworkLocal.parameters(), torch::optim::AdamOptions( LR ) )
+// todo adaptive learning rate
+    , optimizer( _qNetworkLocal.parameters(), torch::optim::AdamOptions( LR ).weight_decay( 1e-4 ) )
     , _memory( _numPlConstraints * _numPhaseStatuses, 1e5, BATCH_SIZE )
     , _tStep( 0 )
     , device( torch::cuda::is_available() ? torch::kCUDA : torch::kCPU )
 {
     _qNetworkLocal.to( device );
     _qNetworkTarget.to( device );
+    _qNetworkTarget.to( torch::kDouble );
+    _qNetworkTarget.to( torch::kDouble );
 }
 
-
+bool Agent::handle_invalid_gradients()
+{
+    bool invalid = false;
+    for ( auto &group : optimizer.param_groups() )
+    {
+        for ( auto &p : group.params() )
+        {
+            if ( p.grad().defined() && ( torch::isnan( p.grad() ).any().item<bool>() ||
+                                         torch::isinf( p.grad() ).any().item<bool>() ) )
+            {
+                std::cerr << "Invalid gradient detected, resetting gradient..." << std::endl;
+                p.grad().detach_();
+                p.grad().zero_();
+                invalid = true;
+            }
+        }
+    }
+    return invalid;
+}
 Action Agent::tensorToAction( const torch::Tensor &tensor )
 {
     int combinedIndex = tensor.item<int>();
@@ -28,46 +49,46 @@ Action Agent::tensorToAction( const torch::Tensor &tensor )
     int plConstraintActionIndex = combinedIndex / _numPhaseStatuses;
     int assignmentIndex = combinedIndex % _numPhaseStatuses;
 
-    return Action(_numPhaseStatuses, plConstraintActionIndex, assignmentIndex);
+    return Action( _numPhaseStatuses, plConstraintActionIndex, assignmentIndex );
 }
 
 void Agent::step( const torch::Tensor &state,
                   const torch::Tensor &action,
                   const unsigned reward,
                   const torch::Tensor &nextState,
-                  const bool done )
+                  const bool done,
+                  const bool run)
 {
     // save experience in replay memory
-    _memory.add( state, action, reward, nextState, done );
-    _tStep = ( _tStep + 1 ) % UPDATE_EVERY;
+    _memory.add( state, action, static_cast<float>( reward ), nextState, done );
+    _tStep = ( _tStep + 1 ) % UPDATE_EVERY; // todo check
     if ( _tStep == 0 && _memory.size() > BATCH_SIZE )
     {
-
         const auto experiences = _memory.sample();
-        learn( experiences, GAMMA );
+        if (!run)
+            learn( experiences, GAMMA );
+
     }
 }
-Action Agent::act( const torch::Tensor &state, float eps )
+Action Agent::act( const torch::Tensor &state, double eps )
 {
     _qNetworkLocal.eval();
     torch::Tensor Qvalues = _qNetworkLocal.forward( state );
     _qNetworkLocal.train();
     unsigned actionIndex;
-    if ( static_cast<float>( rand() ) / RAND_MAX > eps )
-    {
+    if ( static_cast<double>( rand() ) / RAND_MAX > eps )
+        // maximum Q - value's action :
         actionIndex = Qvalues.argmax( 1 ).item<int>();
-    }
     else
-    {
         // random :
         actionIndex = rand() % _numActions;
-    }
+
     auto actionIndices = _actionSpace.decodeActionIndex( actionIndex );
     return Action( _numPhaseStatuses, actionIndices.first, actionIndices.second );
 }
 
 
-void Agent::learn( const std::vector<Experience> &experiences, const float gamma )
+void Agent::learn( const std::vector<Experience> &experiences, const double gamma )
 {
     std::vector<torch::Tensor> states, actions, nextStates;
     std::vector<float> rewards;
@@ -80,40 +101,84 @@ void Agent::learn( const std::vector<Experience> &experiences, const float gamma
         nextStates.push_back( experience.nextState.to( device ) );
         dones.push_back( static_cast<uint8_t>( experience.done ) );
     }
-    ASSERT( states.size() == actions.size() && actions.size() == nextStates.size() &&
-            nextStates.size() == rewards.size() && rewards.size() == dones.size() );
+
     // Create tensors from vectors
     const auto statesTensor = torch::cat( states, 0 ).to( device );
     const auto actionsTensor = torch::cat( actions, 0 ).to( device );
-
     const auto rewardsTensor =
-        torch::tensor( rewards, torch::dtype( torch::kFloat32 ) ).to( device );
-
+        torch::tensor( rewards, torch::dtype( torch::kFloat64 ) ).to( device );
+    auto clipped_rewards = torch::clamp( rewardsTensor, -1.0, 1.0 );
     const auto nextStatesTensor = torch::cat( nextStates, 0 );
     const auto doneTensor = torch::tensor( dones, torch::dtype( torch::kUInt8 ) ).to( device );
+    for ( const auto &param : _qNetworkLocal.parameters() )
+    {
+        if ( torch::isnan( param ).any().item<bool>() || torch::isinf( param ).any().item<bool>() )
+        {
+            printf("NaN detected in local network parameters. \n");
+            fflush( stdout );
+        }
+    }
+    for ( const auto &param : _qNetworkTarget.parameters() )
+    {
+        if ( torch::isnan( param ).any().item<bool>() || torch::isinf( param ).any().item<bool>() )
+        {
+            printf("NaN detected in target network parameters. \n");
+            fflush( stdout );
+        }
+    }
 
     // DDQN : Use local network to select the best action for next states
-    const auto nextActions = _qNetworkLocal.forward( nextStatesTensor ).detach().argmax( 1 );
+    const auto forwardLocalNet = _qNetworkLocal.forward( nextStatesTensor );
+    if ( torch::isnan( forwardLocalNet ).any().item<bool>() )
+    {
+        printf("NaN detected in Q-values from the local network.\n");
+        fflush( stdout );
+    }
+    const auto localQValuesNextState = forwardLocalNet.detach().argmax( 1 );
+
 
     // Use target network to calculate the Q-value of these actions
-    const auto QTargetsNext = _qNetworkTarget.forward( nextStatesTensor )
-                                  .detach()
-                                  .gather( 1, nextActions.unsqueeze( -1 ) )
-                                  .squeeze( -1 );
+    const auto forwardTargetNet = _qNetworkTarget.forward( nextStatesTensor );
+    if ( torch::isnan( forwardTargetNet ).any().item<bool>() )
+    {
+        printf("NaN detected in Q-values from the target network.\n");
+        fflush( stdout );
+    }
+    const auto taegetQValuesNextState =
+        forwardTargetNet.detach().gather( 1, localQValuesNextState.unsqueeze( -1 ) ).squeeze( -1 );
 
     // Calculate Q targets for current states
     const auto QTargets =
-        rewardsTensor + gamma * QTargetsNext * ( 1 - doneTensor.to( torch::kFloat32 ) );
+        clipped_rewards + gamma * taegetQValuesNextState * ( 1 - doneTensor.to( torch::kFloat64 ) );
 
     const auto QExpected = _qNetworkLocal.forward( statesTensor )
                                .gather( 1, actionsTensor.unsqueeze( -1 ) )
-                               .squeeze( -1 );
+                               .squeeze( -1 )
+                               .to( torch::kDouble );
+
 
     const auto loss = torch::mse_loss( QExpected, QTargets );
+    printf( "loss: %f\n", loss.item<double>() );
+    if ( torch::isnan( loss ).any().item<bool>() || torch::isinf( loss ).any().item<bool>() )
+    {
+        printf("Detected NaN or Inf in loss\n");
+        fflush( stdout );
+    }
 
     // Backpropagation
     optimizer.zero_grad();
     loss.backward();
+    // torch::nn::utils::clip_grad_norm_( _qNetworkLocal.parameters(), 5.0 );
+    // if ( !handle_invalid_gradients() )
+    // {
+    //     optimizer.step();
+    // }
+    // else
+    // {
+    //     printf("Skipped updating weights due to invalid gradients.\n");
+    //     fflush( stdout );
+    // }
+
     optimizer.step();
     softUpdate( _qNetworkLocal, _qNetworkTarget );
 }
