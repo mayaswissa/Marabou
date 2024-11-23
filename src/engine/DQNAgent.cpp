@@ -107,7 +107,12 @@ void Agent::learn( const std::vector<Experience> &experiences, const double gamm
     const auto actionsTensor = torch::cat( actions, 0 ).to( device );
     const auto rewardsTensor =
         torch::tensor( rewards, torch::dtype( torch::kFloat64 ) ).to( device );
-    auto clipped_rewards = torch::clamp( rewardsTensor, -1.0, 1.0 );
+    // Calculate mean and std of rewards
+    auto mean = rewardsTensor.mean();
+    auto std = rewardsTensor.std().clamp_min(1e-5); ;
+    // Normalize rewards
+    auto normalized_rewards = (rewardsTensor - mean) / std;
+
     const auto nextStatesTensor = torch::cat( nextStates, 0 );
     const auto doneTensor = torch::tensor( dones, torch::dtype( torch::kUInt8 ) ).to( device );
     for ( const auto &param : _qNetworkLocal.parameters() )
@@ -149,7 +154,7 @@ void Agent::learn( const std::vector<Experience> &experiences, const double gamm
 
     // Calculate Q targets for current states
     const auto QTargets =
-        clipped_rewards + gamma * taegetQValuesNextState * ( 1 - doneTensor.to( torch::kFloat64 ) );
+        normalized_rewards + gamma * taegetQValuesNextState * ( 1 - doneTensor.to( torch::kFloat64 ) );
 
     const auto QExpected = _qNetworkLocal.forward( statesTensor )
                                .gather( 1, actionsTensor.unsqueeze( -1 ) )
@@ -158,7 +163,7 @@ void Agent::learn( const std::vector<Experience> &experiences, const double gamm
 
 
     const auto loss = torch::mse_loss( QExpected, QTargets );
-    printf( "loss: %f\n", loss.item<double>() );
+    printf( "Loss: %f\n", loss.item<double>() );
     if ( torch::isnan( loss ).any().item<bool>() || torch::isinf( loss ).any().item<bool>() )
     {
         printf("Detected NaN or Inf in loss\n");
