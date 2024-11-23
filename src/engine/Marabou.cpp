@@ -286,6 +286,7 @@ void Marabou::trainAndSolve()
             _training = true;
             solveQueryWithAgent();
         }
+        _engine->updateDQNEpsilon();
         _training = false;
         unsigned timeoutInSeconds = Options::get()->getInt( Options::TRAIN_DQN_TIMEOUT );
         printf("start solving with trained agent\n");

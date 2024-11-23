@@ -27,7 +27,7 @@ const double GlobalConfiguration::EXPONENTIAL_MOVING_AVERAGE_ALPHA = 0.5;
 
 // Whether to use SoI instead of Reluplex for local search for satisfying assignments
 // to non-linear constraint.
-bool GlobalConfiguration::USE_DEEPSOI_LOCAL_SEARCH = true;
+bool GlobalConfiguration::USE_DEEPSOI_LOCAL_SEARCH = false;
 
 //Use Deep Q-Network to improve local search for satisfying assignments.
 bool GlobalConfiguration::USE_DQN = true;
@@ -119,6 +119,10 @@ const bool GlobalConfiguration::WRITE_JSON_PROOF = false;
 
 const unsigned GlobalConfiguration::BACKWARD_BOUND_PROPAGATION_DEPTH = 3;
 const unsigned GlobalConfiguration::MAX_ROUNDS_OF_BACKWARD_ANALYSIS = 10;
+
+const double GlobalConfiguration::DQN_EPSILON_START = 0.9;
+const double GlobalConfiguration::DQN_EPSILON_END = 1.0;
+const double GlobalConfiguration::DQN_EPSILON_DECAY = 0.995;
 
 #ifdef ENABLE_GUROBI
 const unsigned GlobalConfiguration::GUROBI_NUMBER_OF_THREADS = 1;

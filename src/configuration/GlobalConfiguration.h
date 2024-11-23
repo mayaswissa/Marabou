@@ -260,6 +260,11 @@ public:
      */
     static const unsigned MAX_ROUNDS_OF_BACKWARD_ANALYSIS;
 
+  static const double DQN_EPSILON_START;
+  static const double DQN_EPSILON_END;
+  static const double DQN_EPSILON_DECAY;
+
+
 #ifdef ENABLE_GUROBI
     /*
       The number of threads Gurobi spawns

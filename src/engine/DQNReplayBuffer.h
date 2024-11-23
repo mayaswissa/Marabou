@@ -9,12 +9,12 @@
 struct Experience {
     torch::Tensor state;
     torch::Tensor action;
-    unsigned reward;
+    float reward;
     torch::Tensor nextState;
     bool done;
 
     Experience(torch::Tensor  state, const torch::Tensor& action,
-                const unsigned reward, const torch::Tensor& nextState,
+                const float reward, const torch::Tensor& nextState,
                 const bool done)
         : state(std::move(state)), action(action), reward(reward), nextState(nextState), done(done) {}
 };
@@ -23,7 +23,7 @@ struct Experience {
 class ReplayBuffer {
 public:
     ReplayBuffer(unsigned actionSize, unsigned bufferSize, unsigned batchSize);
-    void add(const torch::Tensor& state, const torch::Tensor& action, unsigned reward, const torch::Tensor& nextState, bool done);
+    void add(const torch::Tensor& state, const torch::Tensor& action, float reward, const torch::Tensor& nextState, bool done);
 
     std::vector<Experience> sample() const;
     size_t size() const;

@@ -312,6 +312,8 @@ public:
 
     void initDQN();
 
+    void updateDQNEpsilon();
+
 private:
     enum BasisRestorationRequired {
         RESTORATION_NOT_NEEDED = 0,
@@ -851,7 +853,7 @@ private:
     std::unique_ptr<ActionSpace> _actionSpace;
     std::unique_ptr<Agent> _agent;
     std::unique_ptr<State> _currentDQNState;
-    float _eps;
+    double _eps;
 
     /*
       Returns true iff there is a variable with bounds that can explain infeasibility of the tableau

@@ -5,7 +5,7 @@ ReplayBuffer::ReplayBuffer(const unsigned actionSize, const unsigned bufferSize,
     : _actionSize(actionSize), _bufferSize(bufferSize), _batchSize(batchSize) {
 }
 
-void ReplayBuffer::add(const torch::Tensor& state, const torch::Tensor& action, unsigned reward, const torch::Tensor& nextState, bool done) {
+void ReplayBuffer::add(const torch::Tensor& state, const torch::Tensor& action, float reward, const torch::Tensor& nextState, bool done) {
     if (_memory.size() >= _bufferSize) {
         _memory.pop_front();
     }
