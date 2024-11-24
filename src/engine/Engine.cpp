@@ -724,7 +724,6 @@ bool Engine::trainDQNAgent( double timeoutInSeconds )
                                   action->actionToTensor(),
                                   ( numFixedConstraints - prevNumFixedConstraints ),
                                   _currentDQNState->toTensor(),
-                                  false, false);
                                   false,
                                   false );
                 }
