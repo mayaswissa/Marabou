@@ -282,9 +282,6 @@ bool Engine::solve( double timeoutInSeconds )
 
     std::unique_ptr<Action> action = nullptr;
     std::unique_ptr<State> prevState = nullptr;
-    unsigned prevNumFixedConstraints = 0;
-    unsigned numFixedConstraints = 0;
-    bool firstStep = true;
     if ( GlobalConfiguration::USE_DQN )
     {
         if ( !_agent )
@@ -373,17 +370,6 @@ bool Engine::solve( double timeoutInSeconds )
                 if ( GlobalConfiguration::USE_DQN )
                 {
                     updateDQNState( *_currentDQNState );
-                    numFixedConstraints = getNumFixedConstraints();
-                    if ( !firstStep )
-                    {
-                        const unsigned reward = numFixedConstraints - prevNumFixedConstraints;
-                        // save the last split to replay buffer
-                        _agent->step( prevState->toTensor(),
-                                      action->actionToTensor(),
-                                      reward,
-                                      _currentDQNState->toTensor(),
-                                      false , true);
-                    }
                     // agent take an action according to current state:
                     action = std::make_unique<Action>(
                         _agent->act( _currentDQNState->toTensor(), _eps ) );
@@ -393,39 +379,19 @@ bool Engine::solve( double timeoutInSeconds )
 
                     while ( pl->getPhaseStatus() != PHASE_NOT_FIXED ) // todo check?
                     {
-                        printf("got fixed phase to change\n");
-                        printf("num constraints : %d\n", _plConstraints.size());
+                        printf( "hey I chose a fixed constraint to split\n" );
                         fflush( stdout );
                         action = std::make_unique<Action>(
                             _agent->act( _currentDQNState->toTensor(), _eps ) );
                         pl = indexToConstraint( action->getPlConstraintAction() );
                     }
-                    printf( "he continue\n" );
+                    printf( "hey continue\n" );
                     fflush( stdout );
-
-
-                    //     printf("got fixed phase to change\n");
-                    //     printf("num constraints : %d\n", _plConstraints.size());
-                    //     fflush( stdout );
-                    //     // todo check reward
-                    //     _agent->step( _currentDQNState->toTensor(),
-                    //                   action->actionToTensor(),
-                    //                   0,
-                    //                   prevState->toTensor(),
-                    //                   false , true);
-
-                    // }
-                    // else
-                    // {
                     PhaseStatus phaseStatus =
                         valueToPhase( action->getAssignmentStatus() ); // todo check phase
                     _smtCore.performSplit( pl, &phaseStatus );
                     splitJustPerformed = true;
                     updateDQNState( *prevState ); // prevState = currentState
-
-                    // firstStep = false;
-                    // prepare for the nestepxt step:
-                    // prevNumFixedConstraints = numFixedConstraints;
                     continue;
                 }
                 else
@@ -475,18 +441,6 @@ bool Engine::solve( double timeoutInSeconds )
                             ASSERT( _UNSATCertificateCurrentPointer );
                             ( **_UNSATCertificateCurrentPointer ).setSATSolutionFlag();
                         }
-
-                        if ( GlobalConfiguration::USE_DQN )
-                        {
-                            // agent done with success - reward is calculated regularly
-                            numFixedConstraints = getNumFixedConstraints();
-                            updateDQNState( *_currentDQNState );
-                            _agent->step( prevState->toTensor(),
-                                          action->actionToTensor(),
-                                          5 * (numFixedConstraints - prevNumFixedConstraints),
-                                          _currentDQNState->toTensor(),
-                                          true , true );
-                        }
                         _exitCode = Engine::SAT;
                         return true;
                     }
@@ -500,16 +454,6 @@ bool Engine::solve( double timeoutInSeconds )
                         {
                             printf( "\nEngine::solve: at leaf node but solving inconclusive\n" );
                             _statistics.print();
-                        }
-                        if ( GlobalConfiguration::USE_DQN )
-                        {
-                            updateDQNState( *_currentDQNState );
-                            // agent done with failure - reward is (- num of plConstraints)
-                            _agent->step( _currentDQNState->toTensor(),
-                                          action->actionToTensor(),
-                                          -_plConstraints.size(),
-                                          prevState->toTensor(),
-                                          true , true );
                         }
                         _exitCode = Engine::UNKNOWN;
                         return false;
@@ -858,6 +802,8 @@ bool Engine::trainDQNAgent( double timeoutInSeconds )
                     printf( "\nEngine::solve: unsat query\n" );
                     _statistics.print();
                 }
+                printf("done unsat\n!");
+                fflush( stdout );
                 _exitCode = Engine::UNSAT;
                 return false;
             }
