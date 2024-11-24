@@ -77,7 +77,7 @@ Action Agent::act( const torch::Tensor &state, double eps )
     _qNetworkLocal.train();
     unsigned actionIndex;
     if ( static_cast<double>( rand() ) / RAND_MAX > eps )
-        // maximum Q - value's action :
+        // best action - maximum Q-value :
         actionIndex = Qvalues.argmax( 1 ).item<int>();
     else
         // random :
