@@ -136,6 +136,8 @@ void SmtCore::performSplit( PiecewiseLinearConstraint *plConstraint,
 {
     ASSERT( _needToSplit );
 
+    if (GlobalConfiguration::USE_DQN)
+        _constraintForSplitting = plConstraint;
     _numRejectedPhasePatternProposal = 0;
     // Maybe the constraint has already become inactive - if so, ignore
     if ( !_constraintForSplitting->isActive() )
