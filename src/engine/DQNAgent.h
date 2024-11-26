@@ -11,7 +11,7 @@
 class Agent
 {
 public:
-    Agent( const ActionSpace &actionSpace );
+    Agent( const ActionSpace &actionSpace, const std::string &trainedAgentPath = "" );
     void step( const torch::Tensor &state,
                const torch::Tensor &action,
                double reward,

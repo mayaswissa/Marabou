@@ -275,27 +275,32 @@ void Marabou::solveQueryWithAgent( double *episodeScore )
 
 void Marabou::trainAndSolve()
 {
-    unsigned _nEpisodes = 2000; // todo make argument
+    unsigned _nEpisodes = 400; // todo make argument
     double currEpisodeScore = 0;
     double prevEpisodeScore = 0;
     if ( _engine->processInputQuery( _inputQuery ) )
     {
-        _engine->initDQN(); // set DQN arguments
+        std::string filePath = "trainedAgent";
+        _engine->initDQN();
         for ( unsigned int episode = 0; episode < _nEpisodes; ++episode )
         {
             _training = true;
             solveQueryWithAgent( &currEpisodeScore );
+            printf("score: %f\n", currEpisodeScore );
+            fflush( stdout );
             _engine->updateDQNEpsilon();
             if (currEpisodeScore > prevEpisodeScore)
-                _engine->saveAgentNetworks("agent");
+                _engine->saveAgentNetworks(filePath);
             printf( "done one train\n" );
             fflush( stdout );
         }
+
         _training = false;
         unsigned timeoutInSeconds = Options::get()->getInt( Options::TRAIN_DQN_TIMEOUT );
         printf("start solving with trained agent\n");
         fflush(stdout);
-        _engine->solve( timeoutInSeconds );
+        _engine->initDQN( filePath );
+        _engine->solve( timeoutInSeconds);
     }
     // solveQuery();
 }

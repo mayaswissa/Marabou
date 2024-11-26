@@ -314,7 +314,7 @@ public:
 
     bool trainDQNAgent( double timeoutInSeconds, double *score );
 
-    void initDQN();
+    void initDQN( const std::string &trainedAgentPath = "" );
 
     void updateDQNEpsilon();
 

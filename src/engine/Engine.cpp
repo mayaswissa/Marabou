@@ -75,7 +75,7 @@ Engine::Engine()
     , _actionSpace( nullptr )
     , _agent( nullptr )
     , _currentDQNState( nullptr )
-    , _eps( GlobalConfiguration::DQN_EPSILON_START ) // todo change eps
+    , _eps( GlobalConfiguration::DQN_EPSILON_START )
 {
     _smtCore.setStatistics( &_statistics );
     _tableau->setStatistics( &_statistics );
@@ -566,13 +566,17 @@ bool Engine::solve( double timeoutInSeconds )
 //     solve( timeoutInSeconds );
 // }
 
-void Engine::initDQN()
+void Engine::initDQN( const std::string &trainedAgentPath)
 {
-    ASSERT( _agent == nullptr );
     _actionSpace = std::make_unique<ActionSpace>( _plConstraints.size(), 3 ); // todo change num
-    _agent = std::make_unique<Agent>( *_actionSpace );
-    // phases
+    if (trainedAgentPath.empty())
+        _agent = std::make_unique<Agent>( *_actionSpace );
+    else
+        _agent = std::make_unique<Agent>( *_actionSpace, trainedAgentPath );
+
     _currentDQNState = std::make_unique<State>( _plConstraints.size(), 3 ); // todo change num
+    printf("initDQN start\n");
+    fflush(stdout);
 }
 
 void Engine::saveAgentNetworks(const std::string & filePath ) const
@@ -615,7 +619,7 @@ bool Engine::trainDQNAgent( double timeoutInSeconds , double *score)
     int currNumFixedPlConstraints, prevNumFixedPlConstraints, depth, prevDepth = 0;
     bool firstStep = true;
     unsigned iterationCount = 0;
-    unsigned maxIterations = 1000000;
+    unsigned maxIterations = 10000;
     // depth of tree in reward - unsat nums (pop)
     // dump for the agent todo
     bool splitJustPerformed = true;
@@ -688,6 +692,8 @@ bool Engine::trainDQNAgent( double timeoutInSeconds , double *score)
                     printf( "reward = %f\n", reward );
                     fflush( stdout );
                     *score += reward;
+                    printf("score = %f\n", *score);
+                    fflush( stdout );
                     _agent->step( prevState->toTensor(),
                                   action->actionToTensor(),
                                   reward,
@@ -704,8 +710,8 @@ bool Engine::trainDQNAgent( double timeoutInSeconds , double *score)
                 // bad action - need to split not fixed constraint
                 while ( pl->getPhaseStatus() != PHASE_NOT_FIXED )
                 {
-                    reward = - 10;
-                    *score += reward;
+                    reward = - 5;
+                    // *score += reward;
                     _agent->step( _currentDQNState->toTensor(),
                                   action->actionToTensor(),
                                   reward,

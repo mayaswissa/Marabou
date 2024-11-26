@@ -3,7 +3,7 @@
 #include <random>
 #include <utility>
 
-Agent::Agent( const ActionSpace &actionSpace )
+Agent::Agent( const ActionSpace &actionSpace, const std::string &trainedAgentPath)
     : _actionSpace( actionSpace )
     , _numPlConstraints( actionSpace.getNumConstraints() )
     , _numPhaseStatuses( actionSpace.getNumPhases() )
@@ -16,30 +16,40 @@ Agent::Agent( const ActionSpace &actionSpace )
     , _memory( _numPlConstraints * _numPhaseStatuses, 1e5, BATCH_SIZE )
     , _tStep( 0 )
     , device( torch::cuda::is_available() ? torch::kCUDA : torch::kCPU )
-    , _filePath( "" )
+    , _filePath( trainedAgentPath )
 {
     _qNetworkLocal.to( device );
     _qNetworkTarget.to( device );
     _qNetworkTarget.to( torch::kDouble );
     _qNetworkTarget.to( torch::kDouble );
     // If a load path is provided, load the networks
-    if (!_filePath.empty()) {
+    if (!trainedAgentPath.empty()) {
         loadNetworks();
     }
 }
 
 void Agent::saveNetworks( const std::string &filepath ) const
 {
-    torch::save( _qNetworkLocal, filepath + "_local.pth" );
-    torch::save( _qNetworkTarget, filepath + "_target.pth" );
+    printf("Saving networks...\n");
+    fflush(stdout);
+    torch::serialize::OutputArchive output_archive;
+    _qNetworkLocal.save(output_archive);
+    output_archive.save_to(filepath + "_local.pth");
+    _qNetworkTarget.save(output_archive);
+    output_archive.save_to(filepath + "_target.pth");
 }
 
 void Agent::loadNetworks()
 {
     try
     {
-        torch::load(_qNetworkLocal, _filePath + "_local.pth");
-        torch::load(_qNetworkTarget, _filePath + "_target.pth");
+        printf( "Loading networks..." );
+        fflush(stdout);
+        torch::serialize::InputArchive input_archive;
+        input_archive.load_from(_filePath + "_local.pth");
+        _qNetworkLocal.load(input_archive);
+        input_archive.load_from(_filePath + "_target.pth");
+        _qNetworkTarget.load(input_archive);
 
     }catch (const torch::Error &e)
     {

@@ -75,3 +75,28 @@ std::vector<torch::Tensor> QNetwork::getParameters() const
 std::pair<int, int> QNetwork::getDims() const {
     return {_inputDim, _outputDim};
 }
+
+void QNetwork::save(torch::serialize::OutputArchive& archive) const {
+    // Save weights and biases of the embedding and linear layers
+    archive.write("statusEmbedding_weight", _statusEmbedding->weight);
+
+    // Save weights and biases for each Linear layer
+    archive.write("fc1_weight", fc1->weight);
+    archive.write("fc1_bias", fc1->bias);
+    archive.write("fc2_weight", fc2->weight);
+    archive.write("fc2_bias", fc2->bias);
+    archive.write("fc3_weight", fc3->weight);
+    archive.write("fc3_bias", fc3->bias);
+}
+
+void QNetwork::load(torch::serialize::InputArchive& archive) {
+    // Load weights and biases of the embedding and linear layers
+    archive.read("statusEmbedding_weight", _statusEmbedding->weight);
+    // Load weights and biases for each Linear layer
+    archive.read("fc1_weight", fc1->weight);
+    archive.read("fc1_bias", fc1->bias);
+    archive.read("fc2_weight", fc2->weight);
+    archive.read("fc2_bias", fc2->bias);
+    archive.read("fc3_weight", fc3->weight);
+    archive.read("fc3_bias", fc3->bias);
+}
