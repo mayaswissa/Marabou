@@ -285,12 +285,14 @@ void Marabou::trainAndSolve()
         for ( unsigned int episode = 0; episode < _nEpisodes; ++episode )
         {
             _training = true;
+            currEpisodeScore = 0;
             solveQueryWithAgent( &currEpisodeScore );
             printf("score: %f\n", currEpisodeScore );
             fflush( stdout );
             _engine->updateDQNEpsilon();
             if (currEpisodeScore > prevEpisodeScore)
                 _engine->saveAgentNetworks(filePath);
+            prevEpisodeScore = currEpisodeScore;
             printf( "done one train\n" );
             fflush( stdout );
         }
