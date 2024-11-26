@@ -553,18 +553,18 @@ bool Engine::solve( double timeoutInSeconds )
 }
 
 
-void Engine::trainAndSolve()
-{
-    unsigned _nEpisodes = 10; // todo make argument
-    unsigned timeoutInSeconds = Options::get()->getInt( Options::TRAIN_DQN_TIMEOUT );
-    for ( unsigned int episode = 1; episode <= _nEpisodes; ++episode )
-    {
-        reset();
-        trainDQNAgent( timeoutInSeconds );
-    }
-    timeoutInSeconds = Options::get()->getInt( Options::TIMEOUT );
-    solve( timeoutInSeconds );
-}
+// void Engine::trainAndSolve()
+// {
+//     unsigned _nEpisodes = 10; // todo make argument
+//     unsigned timeoutInSeconds = Options::get()->getInt( Options::TRAIN_DQN_TIMEOUT );
+//     for ( unsigned int episode = 1; episode <= _nEpisodes; ++episode )
+//     {
+//         reset();
+//         trainDQNAgent( timeoutInSeconds );
+//     }
+//     timeoutInSeconds = Options::get()->getInt( Options::TIMEOUT );
+//     solve( timeoutInSeconds );
+// }
 
 void Engine::initDQN()
 {
@@ -574,7 +574,18 @@ void Engine::initDQN()
     // phases
     _currentDQNState = std::make_unique<State>( _plConstraints.size(), 3 ); // todo change num
 }
-bool Engine::trainDQNAgent( double timeoutInSeconds )
+
+void Engine::saveAgentNetworks(const std::string & filePath ) const
+{
+    _agent->saveNetworks( filePath );
+}
+
+void Engine::loadAgentNetworks()
+{
+    _agent->loadNetworks();
+}
+
+bool Engine::trainDQNAgent( double timeoutInSeconds , double *score)
 {
     printf( "trainDQNAgent\n" );
     fflush( stdout );
@@ -600,12 +611,13 @@ bool Engine::trainDQNAgent( double timeoutInSeconds )
     updateDQNState( *_currentDQNState );
     std::unique_ptr<Action> action = nullptr;
     std::unique_ptr<State> prevState = std::make_unique<State>( _plConstraints.size(), numPhases );
-    unsigned prevNumFixedConstraints = 0;
-    unsigned numFixedConstraints = 0;
+    double reward = 0;
+    int currNumFixedPlConstraints, prevNumFixedPlConstraints, depth, prevDepth = 0;
     bool firstStep = true;
     unsigned iterationCount = 0;
-    unsigned maxIterations = 10000;
-
+    unsigned maxIterations = 1000000;
+    // depth of tree in reward - unsat nums (pop)
+    // dump for the agent todo
     bool splitJustPerformed = true;
     struct timespec mainLoopStart = TimeUtils::sampleMicro();
     while ( iterationCount <= maxIterations )
@@ -658,15 +670,27 @@ bool Engine::trainDQNAgent( double timeoutInSeconds )
             {
                 // DQN CODE:
                 // need to split => agent not done.
-                // update current state to be current plConstraints.
                 updateDQNState( *_currentDQNState );
-                numFixedConstraints = getNumFixedConstraints();
+                currNumFixedPlConstraints = getNumFixedConstraints();
+                depth = _smtCore.getStackDepth();
                 if ( !firstStep )
                 {
                     // save the last split to replay buffer
+                    auto diff = currNumFixedPlConstraints - prevNumFixedPlConstraints;
+                    auto numNotFixedPlConstraints = _plConstraints.size() - currNumFixedPlConstraints;
+                    // reward = diff;
+                    reward = diff / static_cast<double>( numNotFixedPlConstraints );
+                    int depthDiff = depth - prevDepth;
+                    if ( depthDiff < 0 )
+                    {
+                        reward = 10;
+                    }
+                    printf( "reward = %f\n", reward );
+                    fflush( stdout );
+                    *score += reward;
                     _agent->step( prevState->toTensor(),
                                   action->actionToTensor(),
-                                  ( numFixedConstraints - prevNumFixedConstraints ),
+                                  reward,
                                   _currentDQNState->toTensor(),
                                   false,
                                   false );
@@ -680,9 +704,11 @@ bool Engine::trainDQNAgent( double timeoutInSeconds )
                 // bad action - need to split not fixed constraint
                 while ( pl->getPhaseStatus() != PHASE_NOT_FIXED )
                 {
+                    reward = - 10;
+                    *score += reward;
                     _agent->step( _currentDQNState->toTensor(),
                                   action->actionToTensor(),
-                                  -10,
+                                  reward,
                                   prevState->toTensor(),
                                   false,
                                   false );
@@ -699,7 +725,8 @@ bool Engine::trainDQNAgent( double timeoutInSeconds )
                 // prepare for the next split:
                 firstStep = false;
                 updateDQNState( *prevState ); // prevState = currentState
-                prevNumFixedConstraints = numFixedConstraints;
+                prevNumFixedPlConstraints = currNumFixedPlConstraints;
+                prevDepth = depth;
                 continue;
             }
 
@@ -721,14 +748,14 @@ bool Engine::trainDQNAgent( double timeoutInSeconds )
                     // solution found = agent done
                     if ( allNonlinearConstraintsHold() )
                     {
+                        currNumFixedPlConstraints = getNumFixedConstraints();
+                        reward = 10;
+                        *score += reward;
                         mainLoopEnd = TimeUtils::sampleMicro();
                         _exitCode = Engine::SAT;
-                        // agent done with success - reward is calculated regularly
-                        numFixedConstraints = getNumFixedConstraints();
-                        updateDQNState( *_currentDQNState );
                         _agent->step( prevState->toTensor(),
                                       action->actionToTensor(),
-                                      10,
+                                      reward,
                                       _currentDQNState->toTensor(),
                                       true,
                                       false );
@@ -737,14 +764,14 @@ bool Engine::trainDQNAgent( double timeoutInSeconds )
                     }
                     else if ( !hasBranchingCandidate() )
                     {
+                        reward = -_plConstraints.size();
+                        *score += reward;
                         mainLoopEnd = TimeUtils::sampleMicro();
                         _exitCode = Engine::UNKNOWN;
-
-                        updateDQNState( *_currentDQNState );
                         // agent done with failure - reward is (- num of plConstraints)
                         _agent->step( _currentDQNState->toTensor(),
                                       action->actionToTensor(),
-                                      -_plConstraints.size(),
+                                      reward,
                                       prevState->toTensor(),
                                       true,
                                       false );
@@ -802,7 +829,7 @@ bool Engine::trainDQNAgent( double timeoutInSeconds )
                     printf( "\nEngine::solve: unsat query\n" );
                     _statistics.print();
                 }
-                printf("done unsat\n!");
+                printf( "done unsat!\n" );
                 fflush( stdout );
                 _exitCode = Engine::UNSAT;
                 return false;

@@ -229,7 +229,7 @@ void Marabou::exportAssignment() const
 //     }
 // }
 
-void Marabou::solveQueryWithAgent()
+void Marabou::solveQueryWithAgent( double *episodeScore )
 {
     enum {
         MICROSECONDS_IN_SECOND = 1000000
@@ -237,14 +237,14 @@ void Marabou::solveQueryWithAgent()
 
     struct timespec start = TimeUtils::sampleMicro();
     unsigned timeoutInSeconds = Options::get()->getInt( Options::TIMEOUT );
-
-    if ( _training )
+    if ( _training ) // todo check
     {
-        _engine->trainDQNAgent( timeoutInSeconds );
+        _engine->trainDQNAgent( timeoutInSeconds, episodeScore );
         // _engine->reset();
     }
     else
     {
+        _engine->loadAgentNetworks();
         _engine->solve( timeoutInSeconds );
     }
     if ( _engine->shouldProduceProofs() && _engine->getExitCode() == Engine::UNSAT )
@@ -275,24 +275,29 @@ void Marabou::solveQueryWithAgent()
 
 void Marabou::trainAndSolve()
 {
-    unsigned _nEpisodes = 20; // todo make argument
+    unsigned _nEpisodes = 2000; // todo make argument
+    double currEpisodeScore = 0;
+    double prevEpisodeScore = 0;
     if ( _engine->processInputQuery( _inputQuery ) )
     {
         _engine->initDQN(); // set DQN arguments
-        for ( unsigned int episode = 1; episode <= _nEpisodes; ++episode )
+        for ( unsigned int episode = 0; episode < _nEpisodes; ++episode )
         {
-            printf("line 287 Marabou\n");
-            fflush(stdout);
             _training = true;
-            solveQueryWithAgent();
+            solveQueryWithAgent( &currEpisodeScore );
+            _engine->updateDQNEpsilon();
+            if (currEpisodeScore > prevEpisodeScore)
+                _engine->saveAgentNetworks("agent");
+            printf( "done one train\n" );
+            fflush( stdout );
         }
-        _engine->updateDQNEpsilon();
         _training = false;
         unsigned timeoutInSeconds = Options::get()->getInt( Options::TRAIN_DQN_TIMEOUT );
         printf("start solving with trained agent\n");
         fflush(stdout);
         _engine->solve( timeoutInSeconds );
     }
+    // solveQuery();
 }
 
 void Marabou::solveQuery()

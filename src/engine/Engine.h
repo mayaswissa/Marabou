@@ -306,9 +306,13 @@ public:
     void propagateBoundManagerTightenings();
 
 
-    void trainAndSolve();
+    // void trainAndSolve();
 
-    bool trainDQNAgent( double timeoutInSeconds );
+    void saveAgentNetworks( const std::string &filePath ) const;
+
+    void loadAgentNetworks();
+
+    bool trainDQNAgent( double timeoutInSeconds, double *score );
 
     void initDQN();
 

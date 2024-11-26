@@ -165,14 +165,10 @@ void SmtCore::performSplit( PiecewiseLinearConstraint *plConstraint,
     // todo choose split agent getCaseSplitsByAgent
     List<PiecewiseLinearCaseSplit> splits;
     if ( GlobalConfiguration::USE_DQN )
-    {
-        _constraintForSplitting = plConstraint;
         splits = _constraintForSplitting->getCaseSplitsByAgent( *directionByAgent );
-    }
     else
-    {
         splits = _constraintForSplitting->getCaseSplits();
-    }
+
     ASSERT( !splits.empty() );
     // todo check assert
     ASSERT( splits.size() >= 2  || GlobalConfiguration::USE_DQN); // Not really necessary, can add code to handle this case.

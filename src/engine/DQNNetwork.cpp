@@ -8,10 +8,11 @@ QNetwork::QNetwork( unsigned numPlConstraints,
                                          torch::nn::Embedding( numPhaseStatuses, embeddingDim ) ) )
     , dropout( register_module( "dropout", torch::nn::Dropout( 0.5 ) ) )
 {
-    unsigned inputDim = numPlConstraints * numPhaseStatuses * embeddingDim;
-    fc1 = register_module( "fc1", torch::nn::Linear( inputDim, 64 ) );
+    _inputDim = numPlConstraints * numPhaseStatuses * embeddingDim;
+    _outputDim = numActions;
+    fc1 = register_module( "fc1", torch::nn::Linear( _inputDim, 64 ) );
     fc2 = register_module( "fc2", torch::nn::Linear( 64, 128 ) );
-    fc3 = register_module( "fc3", torch::nn::Linear( 128, numActions ) );
+    fc3 = register_module( "fc3", torch::nn::Linear( 128, _outputDim ) );
     initWeights();
 }
 
@@ -69,4 +70,8 @@ torch::Tensor QNetwork::forward( const torch::Tensor &state )
 std::vector<torch::Tensor> QNetwork::getParameters() const
 {
     return this->parameters();
+}
+
+std::pair<int, int> QNetwork::getDims() const {
+    return {_inputDim, _outputDim};
 }

@@ -48,7 +48,7 @@ private:
     */
     void solveQuery();
 
-    void solveQueryWithAgent();
+    void solveQueryWithAgent( double *episodeScore );
 
     /*
       Display the results

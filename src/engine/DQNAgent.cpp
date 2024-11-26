@@ -11,16 +11,40 @@ Agent::Agent( const ActionSpace &actionSpace )
     , _numActions( actionSpace.getSpaceSize() )
     , _qNetworkLocal( _numPlConstraints, _numPhaseStatuses, _embeddingDim, _numActions )
     , _qNetworkTarget( _numPlConstraints, _numPhaseStatuses, _embeddingDim, _numActions )
-// todo adaptive learning rate
+    // todo adaptive learning rate
     , optimizer( _qNetworkLocal.parameters(), torch::optim::AdamOptions( LR ).weight_decay( 1e-4 ) )
     , _memory( _numPlConstraints * _numPhaseStatuses, 1e5, BATCH_SIZE )
     , _tStep( 0 )
     , device( torch::cuda::is_available() ? torch::kCUDA : torch::kCPU )
+    , _filePath( "" )
 {
     _qNetworkLocal.to( device );
     _qNetworkTarget.to( device );
     _qNetworkTarget.to( torch::kDouble );
     _qNetworkTarget.to( torch::kDouble );
+    // If a load path is provided, load the networks
+    if (!_filePath.empty()) {
+        loadNetworks();
+    }
+}
+
+void Agent::saveNetworks( const std::string &filepath ) const
+{
+    torch::save( _qNetworkLocal, filepath + "_local.pth" );
+    torch::save( _qNetworkTarget, filepath + "_target.pth" );
+}
+
+void Agent::loadNetworks()
+{
+    try
+    {
+        torch::load(_qNetworkLocal, _filePath + "_local.pth");
+        torch::load(_qNetworkTarget, _filePath + "_target.pth");
+
+    }catch (const torch::Error &e)
+    {
+        std::cerr << "Failed to load networks: " << e.what() << std::endl;
+    }
 }
 
 bool Agent::handle_invalid_gradients()
@@ -54,10 +78,10 @@ Action Agent::tensorToAction( const torch::Tensor &tensor )
 
 void Agent::step( const torch::Tensor &state,
                   const torch::Tensor &action,
-                  const unsigned reward,
+                  const double reward,
                   const torch::Tensor &nextState,
                   const bool done,
-                  const bool run)
+                  const bool run )
 {
     // save experience in replay memory
     _memory.add( state, action, static_cast<float>( reward ), nextState, done );
@@ -65,9 +89,8 @@ void Agent::step( const torch::Tensor &state,
     if ( _tStep == 0 && _memory.size() > BATCH_SIZE )
     {
         const auto experiences = _memory.sample();
-        if (!run)
+        if ( !run )
             learn( experiences, GAMMA );
-
     }
 }
 Action Agent::act( const torch::Tensor &state, double eps )
@@ -109,9 +132,10 @@ void Agent::learn( const std::vector<Experience> &experiences, const double gamm
         torch::tensor( rewards, torch::dtype( torch::kFloat64 ) ).to( device );
     // Calculate mean and std of rewards
     auto mean = rewardsTensor.mean();
-    auto std = rewardsTensor.std().clamp_min(1e-5); ;
+    auto std = rewardsTensor.std().clamp_min( 1e-5 );
+    ;
     // Normalize rewards
-    auto normalized_rewards = (rewardsTensor - mean) / std;
+    auto normalized_rewards = ( rewardsTensor - mean ) / std;
 
     const auto nextStatesTensor = torch::cat( nextStates, 0 );
     const auto doneTensor = torch::tensor( dones, torch::dtype( torch::kUInt8 ) ).to( device );
@@ -119,7 +143,7 @@ void Agent::learn( const std::vector<Experience> &experiences, const double gamm
     {
         if ( torch::isnan( param ).any().item<bool>() || torch::isinf( param ).any().item<bool>() )
         {
-            printf("NaN detected in local network parameters. \n");
+            printf( "NaN detected in local network parameters. \n" );
             fflush( stdout );
         }
     }
@@ -127,7 +151,7 @@ void Agent::learn( const std::vector<Experience> &experiences, const double gamm
     {
         if ( torch::isnan( param ).any().item<bool>() || torch::isinf( param ).any().item<bool>() )
         {
-            printf("NaN detected in target network parameters. \n");
+            printf( "NaN detected in target network parameters. \n" );
             fflush( stdout );
         }
     }
@@ -136,7 +160,7 @@ void Agent::learn( const std::vector<Experience> &experiences, const double gamm
     const auto forwardLocalNet = _qNetworkLocal.forward( nextStatesTensor );
     if ( torch::isnan( forwardLocalNet ).any().item<bool>() )
     {
-        printf("NaN detected in Q-values from the local network.\n");
+        printf( "NaN detected in Q-values from the local network.\n" );
         fflush( stdout );
     }
     const auto localQValuesNextState = forwardLocalNet.detach().argmax( 1 );
@@ -146,15 +170,15 @@ void Agent::learn( const std::vector<Experience> &experiences, const double gamm
     const auto forwardTargetNet = _qNetworkTarget.forward( nextStatesTensor );
     if ( torch::isnan( forwardTargetNet ).any().item<bool>() )
     {
-        printf("NaN detected in Q-values from the target network.\n");
+        printf( "NaN detected in Q-values from the target network.\n" );
         fflush( stdout );
     }
     const auto taegetQValuesNextState =
         forwardTargetNet.detach().gather( 1, localQValuesNextState.unsqueeze( -1 ) ).squeeze( -1 );
 
     // Calculate Q targets for current states
-    const auto QTargets =
-        normalized_rewards + gamma * taegetQValuesNextState * ( 1 - doneTensor.to( torch::kFloat64 ) );
+    const auto QTargets = normalized_rewards +
+                          gamma * taegetQValuesNextState * ( 1 - doneTensor.to( torch::kFloat64 ) );
 
     const auto QExpected = _qNetworkLocal.forward( statesTensor )
                                .gather( 1, actionsTensor.unsqueeze( -1 ) )
@@ -166,7 +190,7 @@ void Agent::learn( const std::vector<Experience> &experiences, const double gamm
     printf( "Loss: %f\n", loss.item<double>() );
     if ( torch::isnan( loss ).any().item<bool>() || torch::isinf( loss ).any().item<bool>() )
     {
-        printf("Detected NaN or Inf in loss\n");
+        printf( "Detected NaN or Inf in loss\n" );
         fflush( stdout );
     }
 

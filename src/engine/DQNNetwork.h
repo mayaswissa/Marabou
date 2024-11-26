@@ -8,11 +8,14 @@ public:
     QNetwork(unsigned numPlConstraints, unsigned numPhaseStatuses, unsigned embeddingDim, unsigned numActions);
     torch::Tensor forward( const torch::Tensor& state );
     std::vector<torch::Tensor> getParameters() const;
+    std::pair<int, int> getDims() const;
 private:
     torch::nn::Linear fc1{nullptr}, fc2{nullptr}, fc3{nullptr};
     torch::nn::Embedding _statusEmbedding{nullptr};
     torch::nn::Dropout dropout;
     void initWeights();
+    unsigned _inputDim;
+    unsigned _outputDim;
 };
 
 #endif
