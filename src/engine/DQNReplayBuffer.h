@@ -2,7 +2,7 @@
 #define DQNREPLAYBUFFER_H
 #include <deque>
 #include <utility>
-#include <vector>
+#include "Vector.h"
 #undef Warning
 #include <torch/torch.h>
 
@@ -13,19 +13,33 @@ struct Experience {
     torch::Tensor nextState;
     bool done;
 
-    Experience(torch::Tensor  state, const torch::Tensor& action,
-                const float reward, const torch::Tensor& nextState,
-                const bool done)
-        : state(std::move(state)), action(action), reward(reward), nextState(nextState), done(done) {}
+    Experience( torch::Tensor state,
+                const torch::Tensor &action,
+                const float reward,
+                const torch::Tensor &nextState,
+                const bool done )
+        : state( std::move( state ) )
+        , action( action )
+        , reward( reward )
+        , nextState( nextState )
+        , done( done )
+    {
+    }
 };
 
 
-class ReplayBuffer {
+class ReplayBuffer
+{
 public:
-    ReplayBuffer(unsigned actionSize, unsigned bufferSize, unsigned batchSize);
-    void add(const torch::Tensor& state, const torch::Tensor& action, float reward, const torch::Tensor& nextState, bool done);
+    ReplayBuffer( unsigned actionSize, unsigned bufferSize, unsigned batchSize );
+    void add( const torch::Tensor &state,
+              const torch::Tensor &action,
+              float reward,
+              const torch::Tensor &nextState,
+              bool done );
+    void add(Experience experience);
 
-    std::vector<Experience> sample() const;
+    Vector<Experience> sample() const;
     size_t size() const;
 
 private:

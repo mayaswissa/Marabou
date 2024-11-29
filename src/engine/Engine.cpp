@@ -566,20 +566,20 @@ bool Engine::solve( double timeoutInSeconds )
 //     solve( timeoutInSeconds );
 // }
 
-void Engine::initDQN( const std::string &trainedAgentPath)
+void Engine::initDQN( const std::string &trainedAgentPath )
 {
     _actionSpace = std::make_unique<ActionSpace>( _plConstraints.size(), 3 ); // todo change num
-    if (trainedAgentPath.empty())
+    if ( trainedAgentPath.empty() )
         _agent = std::make_unique<Agent>( *_actionSpace );
     else
         _agent = std::make_unique<Agent>( *_actionSpace, trainedAgentPath );
 
     _currentDQNState = std::make_unique<State>( _plConstraints.size(), 3 ); // todo change num
-    printf("initDQN start\n");
-    fflush(stdout);
+    printf( "initDQN start\n" );
+    fflush( stdout );
 }
 
-void Engine::saveAgentNetworks(const std::string & filePath ) const
+void Engine::saveAgentNetworks( const std::string &filePath ) const
 {
     _agent->saveNetworks( filePath );
 }
@@ -589,7 +589,7 @@ void Engine::loadAgentNetworks()
     _agent->loadNetworks();
 }
 
-bool Engine::trainDQNAgent( double timeoutInSeconds , double *score)
+bool Engine::trainDQNAgent( double timeoutInSeconds, double *score )
 {
     printf( "trainDQNAgent\n" );
     fflush( stdout );
@@ -632,6 +632,13 @@ bool Engine::trainDQNAgent( double timeoutInSeconds , double *score)
 
         if ( shouldExitDueToTimeout( timeoutInSeconds ) )
         {
+            reward = -_plConstraints.size(); // todo ?
+            _agent->step( prevState->toTensor(),
+              action->actionToTensor(),
+              reward,
+              _currentDQNState->toTensor(),
+              false,
+              false );
             _exitCode = Engine::TIMEOUT;
             return false;
         }
@@ -681,7 +688,8 @@ bool Engine::trainDQNAgent( double timeoutInSeconds , double *score)
                 {
                     // save the last split to replay buffer
                     auto diff = currNumFixedPlConstraints - prevNumFixedPlConstraints;
-                    auto numNotFixedPlConstraints = _plConstraints.size() - currNumFixedPlConstraints;
+                    auto numNotFixedPlConstraints =
+                        _plConstraints.size() - currNumFixedPlConstraints;
                     // reward = diff;
                     reward = diff / static_cast<double>( numNotFixedPlConstraints );
                     int depthDiff = depth - prevDepth;
@@ -692,7 +700,7 @@ bool Engine::trainDQNAgent( double timeoutInSeconds , double *score)
                     printf( "reward = %f\n", reward );
                     fflush( stdout );
                     *score += reward;
-                    printf("score = %f\n", *score);
+                    printf( "score = %f\n", *score );
                     fflush( stdout );
                     _agent->step( prevState->toTensor(),
                                   action->actionToTensor(),
@@ -710,7 +718,7 @@ bool Engine::trainDQNAgent( double timeoutInSeconds , double *score)
                 // bad action - need to split not fixed constraint
                 while ( pl->getPhaseStatus() != PHASE_NOT_FIXED )
                 {
-                    reward = - 5;
+                    reward = -5;
                     // *score += reward;
                     _agent->step( _currentDQNState->toTensor(),
                                   action->actionToTensor(),
@@ -765,6 +773,8 @@ bool Engine::trainDQNAgent( double timeoutInSeconds , double *score)
                                       _currentDQNState->toTensor(),
                                       true,
                                       false );
+                        printf("success!");
+                        fflush( stdout );
 
                         return true;
                     }

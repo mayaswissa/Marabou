@@ -11,10 +11,17 @@ void ReplayBuffer::add(const torch::Tensor& state, const torch::Tensor& action, 
     }
     _memory.emplace_back(state, action, reward, nextState, done);
 }
+void ReplayBuffer::add(Experience experience) {
+    if (_memory.size() >= _bufferSize) {
+        _memory.pop_front();
+    }
+    _memory.emplace_back(experience);
+}
 
-std::vector<Experience> ReplayBuffer::sample() const
+
+Vector<Experience> ReplayBuffer::sample() const
 {
-    std::vector<Experience> experiences;
+    Vector<Experience> experiences;
 
     // Initialize random number generator
     std::random_device rd;
@@ -22,7 +29,7 @@ std::vector<Experience> ReplayBuffer::sample() const
     std::uniform_int_distribution<> dis(0, size() - 1);
     // Sample `batch_size_` experiences randomly
     for (size_t i = 0; i < _batchSize; ++i) {
-        experiences.push_back(_memory[dis(gen)]);
+        experiences.append(_memory[dis(gen)]);
     }
 
     return experiences;
