@@ -87,7 +87,6 @@ private:
     */
     std::unique_ptr<Engine> _engine;
 
-    bool _training;
 };
 
 #endif // __Marabou_h__

@@ -37,7 +37,6 @@ Marabou::Marabou()
     , _onnxParser( NULL )
     , _cegarSolver( NULL )
     , _engine( std::unique_ptr<Engine>( new Engine() ) )
-    , _training( false )
 {
 }
 
@@ -235,74 +234,67 @@ void Marabou::solveQueryWithAgent( double *episodeScore )
         MICROSECONDS_IN_SECOND = 1000000
     };
 
-    struct timespec start = TimeUtils::sampleMicro();
-    unsigned timeoutInSeconds = Options::get()->getInt( Options::TIMEOUT );
-    if ( _training ) // todo check
-    {
-        _engine->trainDQNAgent( timeoutInSeconds, episodeScore );
-        // _engine->reset();
-    }
-    else
-    {
-        _engine->loadAgentNetworks();
-        _engine->solve( timeoutInSeconds );
-    }
-    if ( _engine->shouldProduceProofs() && _engine->getExitCode() == Engine::UNSAT )
-        _engine->certifyUNSATCertificate();
+    // struct timespec start = TimeUtils::sampleMicro();
+    unsigned timeoutInSeconds = Options::get()->getInt( Options::TRAIN_DQN_TIMEOUT );
+    _engine->trainDQNAgent( timeoutInSeconds, episodeScore );
+    // _engine->reset();
 
-
-    if ( _engine->getExitCode() == Engine::UNKNOWN )
-    {
-        struct timespec end = TimeUtils::sampleMicro();
-        unsigned long long totalElapsed = TimeUtils::timePassed( start, end );
-        if ( timeoutInSeconds == 0 || totalElapsed < timeoutInSeconds * MICROSECONDS_IN_SECOND )
-        {
-            _cegarSolver = new CEGAR::IncrementalLinearization( _inputQuery, _engine.release() );
-            unsigned long long timeoutInMicroSeconds =
-                ( timeoutInSeconds == 0
-                      ? 0
-                      : timeoutInSeconds * MICROSECONDS_IN_SECOND - totalElapsed );
-            _cegarSolver->setInitialTimeoutInMicroSeconds( timeoutInMicroSeconds );
-            _cegarSolver->solve();
-            _engine = std::unique_ptr<Engine>( _cegarSolver->releaseEngine() );
-        }
-    }
-
-
-    if ( _engine->getExitCode() == Engine::SAT )
-        _engine->extractSolution( _inputQuery );
+    // if ( _engine->shouldProduceProofs() && _engine->getExitCode() == Engine::UNSAT )
+    //     _engine->certifyUNSATCertificate();
+    //
+    //
+    // if ( _engine->getExitCode() == Engine::UNKNOWN )
+    // {
+    // struct timespec end = TimeUtils::sampleMicro();
+    // unsigned long long totalElapsed = TimeUtils::timePassed( start, end );
+    // if ( timeoutInSeconds == 0 || totalElapsed < timeoutInSeconds * MICROSECONDS_IN_SECOND )
+    // {
+    //     _cegarSolver = new CEGAR::IncrementalLinearization( _inputQuery, _engine.release() );
+    //     unsigned long long timeoutInMicroSeconds =
+    //         ( timeoutInSeconds == 0 ? 0
+    //                                 : timeoutInSeconds * MICROSECONDS_IN_SECOND - totalElapsed );
+    //     _cegarSolver->setInitialTimeoutInMicroSeconds( timeoutInMicroSeconds );
+    //     // _cegarSolver->solve();
+    //     _engine = std::unique_ptr<Engine>( _cegarSolver->releaseEngine() );
+    // }
+    // }
+    //
+    //
+    // if ( _engine->getExitCode() == Engine::SAT )
+    //     _engine->extractSolution( _inputQuery );
 }
 
 void Marabou::trainAndSolve()
 {
-    unsigned _nEpisodes = 400; // todo make argument
+    unsigned _nEpisodes = 50; // todo make argument
     double currEpisodeScore = 0;
-    double prevEpisodeScore = 0;
+    double maxEpisodeScore = 0;
     if ( _engine->processInputQuery( _inputQuery ) )
     {
         std::string filePath = "trainedAgent";
         _engine->initDQN();
         for ( unsigned int episode = 0; episode < _nEpisodes; ++episode )
         {
-            _training = true;
             currEpisodeScore = 0;
             solveQueryWithAgent( &currEpisodeScore );
-            printf("score: %f\n", currEpisodeScore );
+            printf( "score: %f\n", currEpisodeScore );
             fflush( stdout );
             _engine->updateDQNEpsilon();
-            if (currEpisodeScore > prevEpisodeScore)
-                _engine->saveAgentNetworks(filePath);
-            prevEpisodeScore = currEpisodeScore;
+            if ( currEpisodeScore > maxEpisodeScore )
+            {
+                _engine->saveAgentNetworks( filePath );
+                maxEpisodeScore = currEpisodeScore;
+            }
+
             printf( "done one train\n" );
             fflush( stdout );
         }
 
-        _training = false;
-        unsigned timeoutInSeconds = Options::get()->getInt( Options::TRAIN_DQN_TIMEOUT );
-        printf("start solving with trained agent\n");
-        fflush(stdout);
+        printf( "start solving with trained agent\n" );
+        fflush( stdout );
+        unsigned timeoutInSeconds = Options::get()->getInt( Options::TIMEOUT );
         _engine->initDQN( filePath );
-        _engine->solve( timeoutInSeconds);
+        _engine->solve( timeoutInSeconds );
     }
     // solveQuery();
 }
