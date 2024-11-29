@@ -24,7 +24,7 @@ void ReplayBuffer::add( std::unique_ptr<Experience> experience ) {
 }
 
 
-Vector<std::unique_ptr<Experience>> ReplayBuffer::sample() {
+Vector<std::unique_ptr<Experience>> ReplayBuffer::sample() const{
     Vector<std::unique_ptr<Experience>> sampledExperiences;
 
     if (_memory.empty() || _batchSize == 0) {

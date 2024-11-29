@@ -42,7 +42,7 @@ public:
               bool done );
     void add( std::unique_ptr<Experience> experience );
 
-    Vector<std::unique_ptr<Experience>>  sample() const;
+    Vector<std::unique_ptr<Experience>> sample() const;
     size_t size() const;
 
 private:
