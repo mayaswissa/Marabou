@@ -1,12 +1,14 @@
 #ifndef DQNREPLAYBUFFER_H
 #define DQNREPLAYBUFFER_H
+#include "Vector.h"
+
 #include <deque>
 #include <utility>
-#include "Vector.h"
 #undef Warning
 #include <torch/torch.h>
 
-struct Experience {
+struct Experience
+{
     torch::Tensor state;
     torch::Tensor action;
     float reward;
@@ -15,7 +17,7 @@ struct Experience {
 
     Experience( torch::Tensor state,
                 const torch::Tensor &action,
-                const float reward,
+                double reward,
                 const torch::Tensor &nextState,
                 const bool done )
         : state( std::move( state ) )
@@ -25,6 +27,7 @@ struct Experience {
         , done( done )
     {
     }
+    void updateReward( double newReward );
 };
 
 
@@ -37,16 +40,16 @@ public:
               float reward,
               const torch::Tensor &nextState,
               bool done );
-    void add(Experience experience);
+    void add( std::unique_ptr<Experience> experience );
 
-    Vector<Experience> sample() const;
+    Vector<std::unique_ptr<Experience>>  sample() const;
     size_t size() const;
 
 private:
     unsigned _actionSize;
     unsigned _bufferSize;
     unsigned _batchSize;
-    std::deque<Experience> _memory;
+    Vector<std::unique_ptr<Experience>> _memory;
 };
 
 #endif

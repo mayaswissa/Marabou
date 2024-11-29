@@ -1,4 +1,8 @@
-#include "DQNDelayedRewardBuffer.h"
+#include "DQNDelayedReplayBuffer.h"
+
+std::unique_ptr<Experience> DelayedExperience::getExperience() {
+    return std::move(_experience);
+}
 
 void DelayedReplayBuffer::addExperience( const torch::Tensor &state,
                                          const torch::Tensor &action,
@@ -12,4 +16,22 @@ void DelayedReplayBuffer::addExperience( const torch::Tensor &state,
     DelayedExperience( std::move( experience ), depth, delay );
     _actionsMemory.append( DelayedExperience( std::move( experience ), depth, delay ) );
 }
+
+unsigned DelayedReplayBuffer::getDepth() const
+{
+    return _actionsMemory.last()._depth;
+}
+
+DelayedExperience DelayedReplayBuffer::popLast()
+{
+    return _actionsMemory.pop();
+}
+
+unsigned DelayedReplayBuffer::getSize() const
+{
+    return _actionsMemory.size();
+}
+
+
+
 

@@ -1,5 +1,5 @@
-#ifndef DQNDELAYEDREWARDBUFFER_H
-#define DQNDELAYEDREWARDBUFFER_H
+#ifndef DQNDELAYEDREPLAYBUFFER_h
+#define DQNDELAYEDREPLAYBUFFER_h
 #include "DQNReplayBuffer.h"
 #include "Vector.h"
 struct DelayedExperience
@@ -13,6 +13,7 @@ struct DelayedExperience
         , _delay( delay )
     {
     }
+    std::unique_ptr<Experience> getExperience();
 };
 
 class DelayedReplayBuffer
@@ -24,9 +25,11 @@ public:
                         float reward,
                         const torch::Tensor &nextState,
                         bool done, unsigned depth, unsigned delay );
-
+    unsigned getDepth() const;
+    DelayedExperience popLast();
+    unsigned getSize() const;
 private:
     Vector<DelayedExperience> _actionsMemory;
 };
 
-#endif // DQNDELAYEDREWARDBUFFER_H
+#endif

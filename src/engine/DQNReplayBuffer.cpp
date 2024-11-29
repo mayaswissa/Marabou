@@ -1,38 +1,51 @@
 #include "DQNReplayBuffer.h"
 #include <random>
 
+void Experience::updateReward(double newReward)
+{
+    this->reward = newReward;
+}
+
 ReplayBuffer::ReplayBuffer(const unsigned actionSize, const unsigned bufferSize, const unsigned batchSize )
     : _actionSize(actionSize), _bufferSize(bufferSize), _batchSize(batchSize) {
 }
 
 void ReplayBuffer::add(const torch::Tensor& state, const torch::Tensor& action, float reward, const torch::Tensor& nextState, bool done) {
     if (_memory.size() >= _bufferSize) {
-        _memory.pop_front();
+        _memory.popFirst();
     }
-    _memory.emplace_back(state, action, reward, nextState, done);
+    _memory.append(std::make_unique<Experience>(state, action, reward, nextState, done));
 }
-void ReplayBuffer::add(Experience experience) {
+void ReplayBuffer::add( std::unique_ptr<Experience> experience ) {
     if (_memory.size() >= _bufferSize) {
-        _memory.pop_front();
+        _memory.popFirst();
     }
-    _memory.emplace_back(experience);
+    _memory.append(std::move(experience));
 }
 
 
-Vector<Experience> ReplayBuffer::sample() const
-{
-    Vector<Experience> experiences;
+Vector<std::unique_ptr<Experience>> ReplayBuffer::sample() {
+    Vector<std::unique_ptr<Experience>> sampledExperiences;
 
-    // Initialize random number generator
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    std::uniform_int_distribution<> dis(0, size() - 1);
-    // Sample `batch_size_` experiences randomly
-    for (size_t i = 0; i < _batchSize; ++i) {
-        experiences.append(_memory[dis(gen)]);
+    if (_memory.empty() || _batchSize == 0) {
+        return sampledExperiences;
     }
 
-    return experiences;
+    // Determine the number of experiences to sample
+    size_t sampleSize = std::min(_batchSize, _memory.size());
+
+    // Shuffle the deque to randomize selection
+    std::random_device rd;
+    std::mt19937 g(rd());
+    std::shuffle(_memory.begin(), _memory.end(), g);
+
+    // Move selected experiences to the output vector and erase them from the deque
+    for (size_t i = 0; i < sampleSize; ++i) {
+        sampledExperiences.append(std::move(_memory.last()));
+        _memory.pop();
+    }
+
+    return sampledExperiences;
 }
 
 size_t ReplayBuffer::size() const {

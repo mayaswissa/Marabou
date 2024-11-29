@@ -3,7 +3,7 @@
 #include <random>
 #include <utility>
 
-Agent::Agent( const ActionSpace &actionSpace, const std::string &trainedAgentPath)
+Agent::Agent( const ActionSpace &actionSpace, const std::string &trainedAgentPath )
     : _actionSpace( actionSpace )
     , _numPlConstraints( actionSpace.getNumConstraints() )
     , _numPhaseStatuses( actionSpace.getNumPhases() )
@@ -14,6 +14,7 @@ Agent::Agent( const ActionSpace &actionSpace, const std::string &trainedAgentPat
     // todo adaptive learning rate
     , optimizer( _qNetworkLocal.parameters(), torch::optim::AdamOptions( LR ).weight_decay( 1e-4 ) )
     , _memory( _numPlConstraints * _numPhaseStatuses, 1e5, BATCH_SIZE )
+    , _delayedReplayBuffer()
     , _tStep( 0 )
     , device( torch::cuda::is_available() ? torch::kCUDA : torch::kCPU )
     , _filePath( trainedAgentPath )
@@ -23,20 +24,21 @@ Agent::Agent( const ActionSpace &actionSpace, const std::string &trainedAgentPat
     _qNetworkTarget.to( torch::kDouble );
     _qNetworkTarget.to( torch::kDouble );
     // If a load path is provided, load the networks
-    if (!trainedAgentPath.empty()) {
+    if ( !trainedAgentPath.empty() )
+    {
         loadNetworks();
     }
 }
 
 void Agent::saveNetworks( const std::string &filepath ) const
 {
-    printf("Saving networks...\n");
-    fflush(stdout);
+    printf( "Saving networks...\n" );
+    fflush( stdout );
     torch::serialize::OutputArchive output_archive;
-    _qNetworkLocal.save(output_archive);
-    output_archive.save_to(filepath + "_local.pth");
-    _qNetworkTarget.save(output_archive);
-    output_archive.save_to(filepath + "_target.pth");
+    _qNetworkLocal.save( output_archive );
+    output_archive.save_to( filepath + "_local.pth" );
+    _qNetworkTarget.save( output_archive );
+    output_archive.save_to( filepath + "_target.pth" );
 }
 
 void Agent::loadNetworks()
@@ -44,14 +46,14 @@ void Agent::loadNetworks()
     try
     {
         printf( "Loading networks..." );
-        fflush(stdout);
+        fflush( stdout );
         torch::serialize::InputArchive input_archive;
-        input_archive.load_from(_filePath + "_local.pth");
-        _qNetworkLocal.load(input_archive);
-        input_archive.load_from(_filePath + "_target.pth");
-        _qNetworkTarget.load(input_archive);
-
-    }catch (const torch::Error &e)
+        input_archive.load_from( _filePath + "_local.pth" );
+        _qNetworkLocal.load( input_archive );
+        input_archive.load_from( _filePath + "_target.pth" );
+        _qNetworkTarget.load( input_archive );
+    }
+    catch ( const torch::Error &e )
     {
         std::cerr << "Failed to load networks: " << e.what() << std::endl;
     }
@@ -86,21 +88,33 @@ Action Agent::tensorToAction( const torch::Tensor &tensor )
     return Action( _numPhaseStatuses, plConstraintActionIndex, assignmentIndex );
 }
 
-void Agent::step( const torch::Tensor &state,
+void Agent::AddToDelayBuffer( const torch::Tensor &state,
                   const torch::Tensor &action,
                   const double reward,
                   const torch::Tensor &nextState,
                   const bool done,
-                  const bool run )
+                  unsigned depth,
+                  unsigned numSplits )
 {
-    // save experience in replay memory
-    _memory.add( state, action, static_cast<float>( reward ), nextState, done );
+    // save the experience in the delayed replay memory :
+    _delayedReplayBuffer.addExperience( state, action, reward, nextState, done, depth, numSplits );
+}
+void Agent::step( unsigned currentDepth, unsigned numSplits )
+{
+    // go over all steps with depth >=  currentDepth and move to replay memory with reward =  1 / delay in splits
+    while (_delayedReplayBuffer.getSize() >0 &&_delayedReplayBuffer.getDepth() <= currentDepth)
+    {
+        DelayedExperience delayedExperience = _delayedReplayBuffer.popLast();
+        // todo - check if possible to skip the root and go to a higher depth in the second branch
+        double reward = static_cast<double> (numSplits - delayedExperience._delay);
+        delayedExperience._experience->updateReward( reward );
+        _memory.add( delayedExperience.getExperience() );
+    }
     _tStep = ( _tStep + 1 ) % UPDATE_EVERY; // todo check
     if ( _tStep == 0 && _memory.size() > BATCH_SIZE )
     {
         const auto experiences = _memory.sample();
-        if ( !run )
-            learn( experiences, GAMMA );
+        learn( experiences, GAMMA );
     }
 }
 Action Agent::act( const torch::Tensor &state, double eps )
@@ -121,18 +135,18 @@ Action Agent::act( const torch::Tensor &state, double eps )
 }
 
 
-void Agent::learn( const std::vector<Experience> &experiences, const double gamma )
+void Agent::learn( Vector<std::unique_ptr<Experience>> experiences, const double gamma )
 {
     std::vector<torch::Tensor> states, actions, nextStates;
     std::vector<float> rewards;
     std::vector<uint8_t> dones;
-    for ( const Experience &experience : experiences )
+    for ( const std::unique_ptr<Experience> experience : experiences )
     {
-        states.push_back( experience.state.to( device ) );
-        actions.push_back( experience.action.to( device ) );
-        rewards.push_back( experience.reward );
-        nextStates.push_back( experience.nextState.to( device ) );
-        dones.push_back( static_cast<uint8_t>( experience.done ) );
+        states.push_back( experience->state.to( device ) );
+        actions.push_back( experience->action.to( device ) );
+        rewards.push_back( experience->reward );
+        nextStates.push_back( experience->nextState.to( device ) );
+        dones.push_back( static_cast<uint8_t>( experience->done ) );
     }
 
     // Create tensors from vectors
