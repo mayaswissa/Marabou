@@ -620,12 +620,15 @@ bool Engine::trainDQNAgent( double timeoutInSeconds, double *score )
     bool firstStep = true;
     unsigned iterationCount = 0;
     unsigned maxIterations = 10000;
+    unsigned splitsCounter = 0;
     // depth of tree in reward - unsat nums (pop)
     // dump for the agent todo
     bool splitJustPerformed = true;
     struct timespec mainLoopStart = TimeUtils::sampleMicro();
     while ( iterationCount <= maxIterations )
     {
+        unsigned stackDepth = _smtCore.getStackDepth();
+        splitsCounter++;
         iterationCount++;
         struct timespec mainLoopEnd = TimeUtils::sampleMicro();
         mainLoopStart = mainLoopEnd;
@@ -633,12 +636,14 @@ bool Engine::trainDQNAgent( double timeoutInSeconds, double *score )
         if ( shouldExitDueToTimeout( timeoutInSeconds ) )
         {
             reward = -_plConstraints.size(); // todo ?
-            _agent->step( prevState->toTensor(),
-              action->actionToTensor(),
-              reward,
-              _currentDQNState->toTensor(),
-              false,
-              false );
+
+            _agent->AddToDelayBuffer( prevState->toTensor(),
+                                action->actionToTensor(),
+                                reward,
+                                _currentDQNState->toTensor(),
+                                true,
+                                stackDepth,
+                                splitsCounter );
             _exitCode = Engine::TIMEOUT;
             return false;
         }
@@ -683,7 +688,7 @@ bool Engine::trainDQNAgent( double timeoutInSeconds, double *score )
                 // need to split => agent not done.
                 updateDQNState( *_currentDQNState );
                 currNumFixedPlConstraints = getNumFixedConstraints();
-                depth = _smtCore.getStackDepth();
+
                 if ( !firstStep )
                 {
                     // save the last split to replay buffer
@@ -692,7 +697,7 @@ bool Engine::trainDQNAgent( double timeoutInSeconds, double *score )
                         _plConstraints.size() - currNumFixedPlConstraints;
                     // reward = diff;
                     reward = diff / static_cast<double>( numNotFixedPlConstraints );
-                    int depthDiff = depth - prevDepth;
+                    int depthDiff = stackDepth - prevDepth;
                     if ( depthDiff < 0 )
                     {
                         reward = 10;
@@ -702,12 +707,15 @@ bool Engine::trainDQNAgent( double timeoutInSeconds, double *score )
                     *score += reward;
                     printf( "score = %f\n", *score );
                     fflush( stdout );
-                    _agent->step( prevState->toTensor(),
-                                  action->actionToTensor(),
-                                  reward,
-                                  _currentDQNState->toTensor(),
-                                  false,
-                                  false );
+                    _agent->AddToDelayBuffer( prevState->toTensor(),
+                                              action->actionToTensor(),
+                                              reward,
+                                              _currentDQNState->toTensor(),
+                                              false,
+                                              stackDepth,
+                                              splitsCounter );
+
+                    _agent->step( stackDepth, splitsCounter );
                 }
                 // agent take an action according to current state:
                 action =
@@ -720,12 +728,13 @@ bool Engine::trainDQNAgent( double timeoutInSeconds, double *score )
                 {
                     reward = -5;
                     // *score += reward;
-                    _agent->step( _currentDQNState->toTensor(),
-                                  action->actionToTensor(),
-                                  reward,
-                                  prevState->toTensor(),
-                                  false,
-                                  false );
+                    _agent->AddToDelayBuffer( prevState->toTensor(),
+                                              action->actionToTensor(),
+                                              reward,
+                                              _currentDQNState->toTensor(),
+                                              false,
+                                              stackDepth,
+                                              splitsCounter );
                     action = std::make_unique<Action>(
                         _agent->act( _currentDQNState->toTensor(), _eps ) );
                     // perform split according to agent's action:
@@ -740,7 +749,7 @@ bool Engine::trainDQNAgent( double timeoutInSeconds, double *score )
                 firstStep = false;
                 updateDQNState( *prevState ); // prevState = currentState
                 prevNumFixedPlConstraints = currNumFixedPlConstraints;
-                prevDepth = depth;
+                prevDepth = stackDepth;
                 continue;
             }
 
@@ -767,15 +776,15 @@ bool Engine::trainDQNAgent( double timeoutInSeconds, double *score )
                         *score += reward;
                         mainLoopEnd = TimeUtils::sampleMicro();
                         _exitCode = Engine::SAT;
-                        _agent->step( prevState->toTensor(),
-                                      action->actionToTensor(),
-                                      reward,
-                                      _currentDQNState->toTensor(),
-                                      true,
-                                      false );
-                        printf("success!");
+                        _agent->AddToDelayBuffer( prevState->toTensor(),
+                                                  action->actionToTensor(),
+                                                  reward,
+                                                  _currentDQNState->toTensor(),
+                                                  true,
+                                                  stackDepth,
+                                                  splitsCounter );
+                        printf( "success!" );
                         fflush( stdout );
-
                         return true;
                     }
                     else if ( !hasBranchingCandidate() )
@@ -785,12 +794,13 @@ bool Engine::trainDQNAgent( double timeoutInSeconds, double *score )
                         mainLoopEnd = TimeUtils::sampleMicro();
                         _exitCode = Engine::UNKNOWN;
                         // agent done with failure - reward is (- num of plConstraints)
-                        _agent->step( _currentDQNState->toTensor(),
-                                      action->actionToTensor(),
-                                      reward,
-                                      prevState->toTensor(),
-                                      true,
-                                      false );
+                        _agent->AddToDelayBuffer( prevState->toTensor(),
+                                                  action->actionToTensor(),
+                                                  reward,
+                                                  _currentDQNState->toTensor(),
+                                                  true,
+                                                  stackDepth,
+                                                  splitsCounter );
 
                         return false;
                     }

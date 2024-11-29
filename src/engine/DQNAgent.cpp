@@ -96,18 +96,34 @@ void Agent::AddToDelayBuffer( const torch::Tensor &state,
                   unsigned depth,
                   unsigned numSplits )
 {
+
     // save the experience in the delayed replay memory :
     _delayedReplayBuffer.addExperience( state, action, reward, nextState, done, depth, numSplits );
+    if ( done )
+    {
+        // needs to insert all delayed experiences to the replay buffer and learn.
+        for (auto delayedExperience : _delayedReplayBuffer)
+            _memory.add( delayedExperience.getExperience() );
+
+
+        const auto experiences = _memory.sample();
+        learn( experiences, GAMMA );
+    }
 }
-void Agent::step( unsigned currentDepth, unsigned numSplits )
+void Agent::step( unsigned currentDepth, unsigned numSplits  )
 {
     // go over all steps with depth >=  currentDepth and move to replay memory with reward =  1 / delay in splits
     while (_delayedReplayBuffer.getSize() >0 &&_delayedReplayBuffer.getDepth() <= currentDepth)
     {
         DelayedExperience delayedExperience = _delayedReplayBuffer.popLast();
-        // todo - check if possible to skip the root and go to a higher depth in the second branch
-        double reward = static_cast<double> (numSplits - delayedExperience._delay);
-        delayedExperience._experience->updateReward( reward );
+        // todo - check if possible to skip the relu and go to a deeper depth in its other assignment
+        // if no progress in splits - action was invalid - reward stays the same
+        if (numSplits > delayedExperience._delay) // todo change to get delay
+        {
+            double const reward = static_cast<double> (numSplits - delayedExperience._delay);
+            delayedExperience._experience->updateReward( reward );
+        }
+
         _memory.add( delayedExperience.getExperience() );
     }
     _tStep = ( _tStep + 1 ) % UPDATE_EVERY; // todo check
