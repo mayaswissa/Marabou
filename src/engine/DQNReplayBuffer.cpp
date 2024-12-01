@@ -6,6 +6,7 @@
 void Experience::updateReward( double newReward )
 {
     this->reward = newReward;
+    this->returned = true; // todo ?
 }
 
 ReplayBuffer::ReplayBuffer( const unsigned actionSize,
@@ -14,6 +15,8 @@ ReplayBuffer::ReplayBuffer( const unsigned actionSize,
     : _actionSize( actionSize )
     , _bufferSize( bufferSize )
     , _batchSize( batchSize )
+    , _numExperiences( 0 )
+    , _numReturnedExperiences( 0 )
 {
 }
 
@@ -21,52 +24,78 @@ void ReplayBuffer::add( const torch::Tensor &state,
                         const torch::Tensor &action,
                         float reward,
                         const torch::Tensor &nextState,
-                        bool done )
+                        bool done,
+                        unsigned depth,
+                        unsigned numSplits )
 {
     if ( _experiences.size() >= _bufferSize )
-        _experiences.eraseAt(0);
+    {
+        _experiences.popFirst();
+        _numExperiences--;
+        _numReturnedExperiences --;
+    }
 
 
-    auto experience =
-        Experience( state, action, reward, nextState, done );
+    auto experience = Experience( state, action, reward, nextState, done, depth, numSplits );
+    printf("adding experience!\n");
+    fflush(stdout);
     _experiences.append( experience );
+    _numExperiences++;
 }
-Experience ReplayBuffer::getExperienceAt( const unsigned index ) const
+
+Experience &ReplayBuffer::getExperienceAt( const unsigned index )
 {
-    return _experiences.get( index );
-}
-void ReplayBuffer::add( const Experience &experience )
-{
-    if ( _experiences.size() >= _bufferSize )
-        _experiences.eraseAt(0);
-    _experiences.append(experience);
+    printf("buffer 46\n");
+    fflush(stdout);
+    return _experiences[index];
 }
 
 
 Vector<unsigned> ReplayBuffer::sample() const
 {
+    printf("sample:\n _numReturnedExperiences %d\n", _numReturnedExperiences );
+    fflush(stdout);
     Vector<unsigned> sampledIndices;
 
     if ( _experiences.empty() || _batchSize == 0 )
     {
+        printf("experiences empty\n");
+        fflush(stdout);
         return sampledIndices;
     }
 
-    int sampleSize = static_cast<int>(std::min( _batchSize, _experiences.size() ));
-    Vector<unsigned> indices(_experiences.size());
-    std::iota(indices.begin(), indices.end(), 0);
+    // todo sample from range of valid experiences
+    int sampleSize = static_cast<int>( std::min( _batchSize, _numReturnedExperiences ) );
+    Vector<unsigned> indices( _experiences.size() );
+    std::iota( indices.begin(), indices.end(), 0 );
     std::random_device rd;
     std::mt19937 g( rd() );
     std::shuffle( indices.begin(), indices.end(), g );
 
-    for (int i = 0; i < sampleSize; ++i) {
+    for ( int i = 0; i < sampleSize; ++i )
+    {
         auto it = sampledIndices.end();
-        sampledIndices.insert(it, indices[i]);
+        sampledIndices.insert( it, indices[i] );
     }
     return sampledIndices;
 }
 
 unsigned ReplayBuffer::size() const
 {
-    return _experiences.size();
+    return _numExperiences;
+}
+
+unsigned ReplayBuffer::getNumReturnedExperiences() const
+{
+    return _numReturnedExperiences;
+}
+
+void ReplayBuffer::updateReturnedWhenDoneSuccess()
+{
+    _numReturnedExperiences = _numExperiences;
+}
+
+void ReplayBuffer::increaseNumReturned()
+{
+    _numReturnedExperiences++;
 }

@@ -5,7 +5,6 @@
 #include "DQNActoin.h"
 #include "DQNNetwork.h"
 #include "DQNReplayBuffer.h"
-#include "DQNDelayedReplayBuffer.h"
 #undef Warning
 #include <torch/torch.h>
 
@@ -17,16 +16,17 @@ public:
            unsigned numPhaseStatuses,
            unsigned embeddingDim,
            ActionSpace &actionSpace );
-    void step( int currentDepth, unsigned numSplits );
-    void AddToDelayBuffer( const torch::Tensor &state,
+    void step( unsigned currentDepth, unsigned currentNumSplits );
+    void addToExperiences( torch::Tensor state,
                            const torch::Tensor &action,
-                           const double reward,
+                           double reward,
                            const torch::Tensor &nextState,
                            const bool done,
                            unsigned depth,
                            unsigned numSplits );
     void saveNetworks( const std::string &filepath ) const;
     void loadNetworks();
+    void handleDone( bool success );
     Action act( const torch::Tensor &state, double eps = 0.1 );
     void learn( const double gamma );
     torch::Device getDevice() const;
@@ -39,8 +39,7 @@ private:
     unsigned _numPlConstraints, _numPhaseStatuses, _embeddingDim, _numActions;
     QNetwork _qNetworkLocal, _qNetworkTarget;
     torch::optim::Adam optimizer;
-    ReplayBuffer  _experiences;
-    DelayedReplayBuffer _delayedExperiences;
+    ReplayBuffer _experiences;
     unsigned _tStep;
     static constexpr double GAMMA = 0.99;
     static constexpr double TAU = 1e-3;

@@ -1,5 +1,4 @@
 #include "DQNAgent.h"
-
 #include <random>
 #include <utility>
 
@@ -14,7 +13,6 @@ Agent::Agent( const ActionSpace &actionSpace, const std::string &trainedAgentPat
     // todo adaptive learning rate
     , optimizer( _qNetworkLocal.parameters(), torch::optim::AdamOptions( LR ).weight_decay( 1e-4 ) )
     , _experiences( _numPlConstraints * _numPhaseStatuses, 1e5, BATCH_SIZE )
-    , _delayedExperiences()
     , _tStep( 0 )
     , device( torch::cuda::is_available() ? torch::kCUDA : torch::kCPU )
     , _filePath( trainedAgentPath )
@@ -33,8 +31,6 @@ Agent::Agent( const ActionSpace &actionSpace, const std::string &trainedAgentPat
 
 void Agent::saveNetworks( const std::string &filepath ) const
 {
-    printf( "Saving networks...\n" );
-    fflush( stdout );
     torch::serialize::OutputArchive output_archive;
     _qNetworkLocal.save( output_archive );
     output_archive.save_to( filepath + "_local.pth" );
@@ -46,8 +42,6 @@ void Agent::loadNetworks()
 {
     try
     {
-        printf( "Loading networks..." );
-        fflush( stdout );
         torch::serialize::InputArchive input_archive;
         input_archive.load_from( _filePath + "_local.pth" );
         _qNetworkLocal.load( input_archive );
@@ -89,48 +83,74 @@ Action Agent::tensorToAction( const torch::Tensor &tensor )
     return Action( _numPhaseStatuses, plConstraintActionIndex, assignmentIndex );
 }
 
-void Agent::AddToDelayBuffer( const torch::Tensor &state,
-                              const torch::Tensor &action,
-                              const double reward,
-                              const torch::Tensor &nextState,
-                              const bool done,
-                              unsigned depth,
-                              unsigned numSplits )
+
+void Agent::handleDone( bool success)
 {
-    // save the experience in the delayed replay memory :
-    _delayedExperiences.addExperience( state, action, reward, nextState, done, depth, numSplits );
-    if ( done )
+    // needs to insert all delayed experiences to the replay buffer and learn:
+    // if done with success - the rewards of all steps in this branch remain the same.
+    if ( success )
     {
-        // needs to insert all delayed experiences to the replay buffer and learn.
-        for ( auto delayedExperience : _delayedExperiences )
-            _experiences.add( delayedExperience.getExperience() );
-
-
+        _experiences.updateReturnedWhenDoneSuccess();
         const auto experiences = _experiences.sample();
         learn( GAMMA );
+        return;
     }
+    // if not success - the steps not returned to where bad todo?
+    unsigned numReturned = _experiences.getNumReturnedExperiences();
+    for ( unsigned index = numReturned + 1; index < _experiences.size(); index++ )
+    {
+        _experiences.getExperienceAt( index ).updateReward( -1 );
+        _experiences.increaseNumReturned();
+    }
+    const auto experiences = _experiences.sample();
+    learn( GAMMA );
 }
-void Agent::step( int currentDepth, unsigned numSplits )
+
+void Agent::addToExperiences( torch::Tensor state,
+                           const torch::Tensor &action,
+                           double reward,
+                           const torch::Tensor &nextState,
+                           const bool done,
+                           unsigned depth,
+                           unsigned numSplits )
+{
+    _experiences.add( state, action, static_cast<float>( reward ), nextState, done, depth, numSplits );
+}
+
+void Agent::step( unsigned currentDepth, unsigned currentNumSplits )
 {
     // go over all steps with depth >=  currentDepth and move to replay memory with reward =  1 /
     // delay in splits
-    while ( _delayedExperiences.getSize() > 0 && _delayedExperiences.getDepth() <= currentDepth )
+
+    // starting from the first not yes revisit split:
+    unsigned numReturned = _experiences.getNumReturnedExperiences();
+    for ( unsigned index = numReturned + 1; index < _experiences.size(); index++ )
     {
-        DelayedExperience delayedExperience = _delayedExperiences.popLast();
+        Experience &experience = _experiences.getExperienceAt( index );
+        // if not revisit yet - break.
+        if ( currentDepth > experience.depth )
+            break;
+
         // todo - check if possible to skip the relu and go to a deeper depth in its other
-        // assignment if no progress in splits - action was invalid - reward stays the same
-        if ( numSplits > delayedExperience._delay ) // todo change to get delay fucntion
+        // if no progress in splits, reward stays the same
+        if ( currentNumSplits > experience.numSplits )
         {
-            double const reward = static_cast<double>( numSplits - delayedExperience._delay );
-            delayedExperience._experience.updateReward( reward );
+            // encourage the agent to quickly prune branches
+            auto progress = currentNumSplits - experience.numSplits;
+            double reward = 0.0;
+            if (progress > 0)
+                reward = 1.0 / static_cast<double>(progress);
+
+            experience.updateReward( reward );
+            _experiences.increaseNumReturned();
         }
-        Experience experience = delayedExperience.getExperience();
-        _experiences.add( experience );
     }
-    _tStep = ( _tStep + 1 ) % UPDATE_EVERY; // todo check
+    printf("agent 148");
+    fflush(stdout);
+    _tStep = ( _tStep + 1 ) % UPDATE_EVERY;
     if ( _tStep == 0 && _experiences.size() > BATCH_SIZE )
     {
-        const auto experiences = _experiences.sample();
+        // const auto experiences = _experiences.sample();
         learn( GAMMA ); // todo Gamma should change?
     }
 }
@@ -152,26 +172,31 @@ Action Agent::act( const torch::Tensor &state, double eps )
 }
 
 
-void Agent::learn(  const double gamma )
+void Agent::learn( const double gamma )
 {
-    Vector<unsigned> indices  = _experiences.sample();
+    printf("agent 177\n");
+    fflush(stdout);
+    Vector<unsigned> indices = _experiences.sample();
+    if ( indices.empty() )
+        return;
     std::vector<torch::Tensor> states, actions, nextStates;
     std::vector<float> rewards;
     std::vector<uint8_t> dones;
     // for index in indices - get the specific experience from memory .
     // then one more loop - to delete them ? no need, maybe.
-    for ( unsigned index : indices )
+    for ( const unsigned index : indices )
     {
-        if (index <  _experiences.size())
+        if ( index < _experiences.size() )
         {
-            Experience experience = _experiences.getExperienceAt( index);
+            printf("index < _experiences.size()\n");
+            fflush(stdout);
+            Experience& experience = _experiences.getExperienceAt( index );
             states.push_back( experience.state.to( device ) );
             actions.push_back( experience.action.to( device ) );
             rewards.push_back( experience.reward );
             nextStates.push_back( experience.nextState.to( device ) );
             dones.push_back( static_cast<uint8_t>( experience.done ) );
         }
-
     }
     // Create tensors from vectors
     const auto statesTensor = torch::cat( states, 0 ).to( device );
@@ -180,7 +205,8 @@ void Agent::learn(  const double gamma )
         torch::tensor( rewards, torch::dtype( torch::kFloat64 ) ).to( device );
     const auto nextStatesTensor = torch::cat( nextStates, 0 );
     const auto doneTensor = torch::tensor( dones, torch::dtype( torch::kUInt8 ) ).to( device );
-
+    printf("agent 204");
+    fflush(stdout);
     auto mean = rewardsTensor.mean();
     auto std = rewardsTensor.std().clamp_min( 1e-5 );
     // Normalize rewards
