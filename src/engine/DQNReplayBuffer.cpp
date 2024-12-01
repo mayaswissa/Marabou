@@ -30,7 +30,7 @@ void ReplayBuffer::add( const torch::Tensor &state,
 {
     if ( _experiences.size() >= _bufferSize )
     {
-        _experiences.popFirst();
+        _experiences.pop(); // last action is the
         _numExperiences--;
         _numReturnedExperiences --;
     }

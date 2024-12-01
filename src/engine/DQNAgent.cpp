@@ -123,8 +123,10 @@ void Agent::step( unsigned currentDepth, unsigned currentNumSplits )
     // delay in splits
 
     // starting from the first not yes revisit split:
-    unsigned numReturned = _experiences.getNumReturnedExperiences();
-    for ( unsigned index = numReturned + 1; index < _experiences.size(); index++ )
+    unsigned numRevisit = _experiences.getNumReturnedExperiences();
+    unsigned numNotRevisit = _experiences.size() - numRevisit;
+    // todo : problem : the last inserted is the deepest and first one needed to change to revisit
+    for ( unsigned index = numNotRevisit; index > 0; index-- ) // from the latest entered marked as not revisit
     {
         Experience &experience = _experiences.getExperienceAt( index );
         // if not revisit yet - break.
