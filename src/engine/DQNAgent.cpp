@@ -13,8 +13,8 @@ Agent::Agent( const ActionSpace &actionSpace, const std::string &trainedAgentPat
     , _qNetworkTarget( _numPlConstraints, _numPhaseStatuses, _embeddingDim, _numActions )
     // todo adaptive learning rate
     , optimizer( _qNetworkLocal.parameters(), torch::optim::AdamOptions( LR ).weight_decay( 1e-4 ) )
-    , _memory( _numPlConstraints * _numPhaseStatuses, 1e5, BATCH_SIZE )
-    , _delayedReplayBuffer()
+    , _experiences( _numPlConstraints * _numPhaseStatuses, 1e5, BATCH_SIZE )
+    , _delayedExperiences()
     , _tStep( 0 )
     , device( torch::cuda::is_available() ? torch::kCUDA : torch::kCPU )
     , _filePath( trainedAgentPath )
@@ -23,6 +23,7 @@ Agent::Agent( const ActionSpace &actionSpace, const std::string &trainedAgentPat
     _qNetworkTarget.to( device );
     _qNetworkTarget.to( torch::kDouble );
     _qNetworkTarget.to( torch::kDouble );
+    // _delayedReplayBuffer = DelayedReplayBuffer();
     // If a load path is provided, load the networks
     if ( !trainedAgentPath.empty() )
     {
@@ -89,48 +90,48 @@ Action Agent::tensorToAction( const torch::Tensor &tensor )
 }
 
 void Agent::AddToDelayBuffer( const torch::Tensor &state,
-                  const torch::Tensor &action,
-                  const double reward,
-                  const torch::Tensor &nextState,
-                  const bool done,
-                  unsigned depth,
-                  unsigned numSplits )
+                              const torch::Tensor &action,
+                              const double reward,
+                              const torch::Tensor &nextState,
+                              const bool done,
+                              unsigned depth,
+                              unsigned numSplits )
 {
-
     // save the experience in the delayed replay memory :
-    _delayedReplayBuffer.addExperience( state, action, reward, nextState, done, depth, numSplits );
+    _delayedExperiences.addExperience( state, action, reward, nextState, done, depth, numSplits );
     if ( done )
     {
         // needs to insert all delayed experiences to the replay buffer and learn.
-        for (auto delayedExperience : _delayedReplayBuffer)
-            _memory.add( delayedExperience.getExperience() );
+        for ( auto delayedExperience : _delayedExperiences )
+            _experiences.add( delayedExperience.getExperience() );
 
 
-        const auto experiences = _memory.sample();
-        learn( experiences, GAMMA );
+        const auto experiences = _experiences.sample();
+        learn( GAMMA );
     }
 }
-void Agent::step( unsigned currentDepth, unsigned numSplits  )
+void Agent::step( int currentDepth, unsigned numSplits )
 {
-    // go over all steps with depth >=  currentDepth and move to replay memory with reward =  1 / delay in splits
-    while (_delayedReplayBuffer.getSize() >0 &&_delayedReplayBuffer.getDepth() <= currentDepth)
+    // go over all steps with depth >=  currentDepth and move to replay memory with reward =  1 /
+    // delay in splits
+    while ( _delayedExperiences.getSize() > 0 && _delayedExperiences.getDepth() <= currentDepth )
     {
-        DelayedExperience delayedExperience = _delayedReplayBuffer.popLast();
-        // todo - check if possible to skip the relu and go to a deeper depth in its other assignment
-        // if no progress in splits - action was invalid - reward stays the same
-        if (numSplits > delayedExperience._delay) // todo change to get delay
+        DelayedExperience delayedExperience = _delayedExperiences.popLast();
+        // todo - check if possible to skip the relu and go to a deeper depth in its other
+        // assignment if no progress in splits - action was invalid - reward stays the same
+        if ( numSplits > delayedExperience._delay ) // todo change to get delay fucntion
         {
-            double const reward = static_cast<double> (numSplits - delayedExperience._delay);
-            delayedExperience._experience->updateReward( reward );
+            double const reward = static_cast<double>( numSplits - delayedExperience._delay );
+            delayedExperience._experience.updateReward( reward );
         }
-
-        _memory.add( delayedExperience.getExperience() );
+        Experience experience = delayedExperience.getExperience();
+        _experiences.add( experience );
     }
     _tStep = ( _tStep + 1 ) % UPDATE_EVERY; // todo check
-    if ( _tStep == 0 && _memory.size() > BATCH_SIZE )
+    if ( _tStep == 0 && _experiences.size() > BATCH_SIZE )
     {
-        const auto experiences = _memory.sample();
-        learn( experiences, GAMMA );
+        const auto experiences = _experiences.sample();
+        learn( GAMMA ); // todo Gamma should change?
     }
 }
 Action Agent::act( const torch::Tensor &state, double eps )
@@ -151,74 +152,51 @@ Action Agent::act( const torch::Tensor &state, double eps )
 }
 
 
-void Agent::learn( Vector<std::unique_ptr<Experience>> experiences, const double gamma )
+void Agent::learn(  const double gamma )
 {
+    Vector<unsigned> indices  = _experiences.sample();
     std::vector<torch::Tensor> states, actions, nextStates;
     std::vector<float> rewards;
     std::vector<uint8_t> dones;
-    for ( const std::unique_ptr<Experience> experience : experiences )
+    // for index in indices - get the specific experience from memory .
+    // then one more loop - to delete them ? no need, maybe.
+    for ( unsigned index : indices )
     {
-        states.push_back( experience->state.to( device ) );
-        actions.push_back( experience->action.to( device ) );
-        rewards.push_back( experience->reward );
-        nextStates.push_back( experience->nextState.to( device ) );
-        dones.push_back( static_cast<uint8_t>( experience->done ) );
-    }
+        if (index <  _experiences.size())
+        {
+            Experience experience = _experiences.getExperienceAt( index);
+            states.push_back( experience.state.to( device ) );
+            actions.push_back( experience.action.to( device ) );
+            rewards.push_back( experience.reward );
+            nextStates.push_back( experience.nextState.to( device ) );
+            dones.push_back( static_cast<uint8_t>( experience.done ) );
+        }
 
+    }
     // Create tensors from vectors
     const auto statesTensor = torch::cat( states, 0 ).to( device );
     const auto actionsTensor = torch::cat( actions, 0 ).to( device );
     const auto rewardsTensor =
         torch::tensor( rewards, torch::dtype( torch::kFloat64 ) ).to( device );
-    // Calculate mean and std of rewards
+    const auto nextStatesTensor = torch::cat( nextStates, 0 );
+    const auto doneTensor = torch::tensor( dones, torch::dtype( torch::kUInt8 ) ).to( device );
+
     auto mean = rewardsTensor.mean();
     auto std = rewardsTensor.std().clamp_min( 1e-5 );
-    ;
     // Normalize rewards
     auto normalized_rewards = ( rewardsTensor - mean ) / std;
 
-    const auto nextStatesTensor = torch::cat( nextStates, 0 );
-    const auto doneTensor = torch::tensor( dones, torch::dtype( torch::kUInt8 ) ).to( device );
-    for ( const auto &param : _qNetworkLocal.parameters() )
-    {
-        if ( torch::isnan( param ).any().item<bool>() || torch::isinf( param ).any().item<bool>() )
-        {
-            printf( "NaN detected in local network parameters. \n" );
-            fflush( stdout );
-        }
-    }
-    for ( const auto &param : _qNetworkTarget.parameters() )
-    {
-        if ( torch::isnan( param ).any().item<bool>() || torch::isinf( param ).any().item<bool>() )
-        {
-            printf( "NaN detected in target network parameters. \n" );
-            fflush( stdout );
-        }
-    }
-
     // DDQN : Use local network to select the best action for next states
     const auto forwardLocalNet = _qNetworkLocal.forward( nextStatesTensor );
-    if ( torch::isnan( forwardLocalNet ).any().item<bool>() )
-    {
-        printf( "NaN detected in Q-values from the local network.\n" );
-        fflush( stdout );
-    }
     const auto localQValuesNextState = forwardLocalNet.detach().argmax( 1 );
-
 
     // Use target network to calculate the Q-value of these actions
     const auto forwardTargetNet = _qNetworkTarget.forward( nextStatesTensor );
-    if ( torch::isnan( forwardTargetNet ).any().item<bool>() )
-    {
-        printf( "NaN detected in Q-values from the target network.\n" );
-        fflush( stdout );
-    }
-    const auto taegetQValuesNextState =
+    const auto targetQValuesNextState =
         forwardTargetNet.detach().gather( 1, localQValuesNextState.unsqueeze( -1 ) ).squeeze( -1 );
-
     // Calculate Q targets for current states
     const auto QTargets = normalized_rewards +
-                          gamma * taegetQValuesNextState * ( 1 - doneTensor.to( torch::kFloat64 ) );
+                          gamma * targetQValuesNextState * ( 1 - doneTensor.to( torch::kFloat64 ) );
 
     const auto QExpected = _qNetworkLocal.forward( statesTensor )
                                .gather( 1, actionsTensor.unsqueeze( -1 ) )
@@ -228,26 +206,10 @@ void Agent::learn( Vector<std::unique_ptr<Experience>> experiences, const double
 
     const auto loss = torch::mse_loss( QExpected, QTargets );
     printf( "Loss: %f\n", loss.item<double>() );
-    if ( torch::isnan( loss ).any().item<bool>() || torch::isinf( loss ).any().item<bool>() )
-    {
-        printf( "Detected NaN or Inf in loss\n" );
-        fflush( stdout );
-    }
 
     // Backpropagation
     optimizer.zero_grad();
     loss.backward();
-    // torch::nn::utils::clip_grad_norm_( _qNetworkLocal.parameters(), 5.0 );
-    // if ( !handle_invalid_gradients() )
-    // {
-    //     optimizer.step();
-    // }
-    // else
-    // {
-    //     printf("Skipped updating weights due to invalid gradients.\n");
-    //     fflush( stdout );
-    // }
-
     optimizer.step();
     softUpdate( _qNetworkLocal, _qNetworkTarget );
 }

@@ -1,7 +1,10 @@
 #include "DQNDelayedReplayBuffer.h"
+DelayedReplayBuffer::DelayedReplayBuffer()
+{
+}
 
-std::unique_ptr<Experience> DelayedExperience::getExperience() {
-    return std::move(_experience);
+Experience& DelayedExperience::getExperience(){
+    return _experience;
 }
 
 void DelayedReplayBuffer::addExperience( const torch::Tensor &state,
@@ -12,24 +15,26 @@ void DelayedReplayBuffer::addExperience( const torch::Tensor &state,
                                          unsigned depth,
                                          unsigned delay )
 {
-    auto experience = std::make_unique<Experience>( state, action, reward, nextState, done );
-    DelayedExperience( std::move( experience ), depth, delay );
-    _actionsMemory.append( DelayedExperience( std::move( experience ), depth, delay ) );
+    auto experience = Experience( state, action, reward, nextState, done );
+    auto delayExperience = DelayedExperience(  experience , depth, delay );
+    _delayedExperience.append( delayExperience );
 }
 
-unsigned DelayedReplayBuffer::getDepth() const
+int DelayedReplayBuffer::getDepth() const
 {
-    return _actionsMemory.last()._depth;
+    if ( _delayedExperience.empty() )
+        return -1;
+    return _delayedExperience.last()._depth;
 }
 
 DelayedExperience DelayedReplayBuffer::popLast()
 {
-    return _actionsMemory.pop();
+    return _delayedExperience.pop();
 }
 
 unsigned DelayedReplayBuffer::getSize() const
 {
-    return _actionsMemory.size();
+    return _delayedExperience.size();
 }
 
 

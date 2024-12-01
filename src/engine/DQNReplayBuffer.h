@@ -21,9 +21,9 @@ struct Experience
                 const torch::Tensor &nextState,
                 const bool done )
         : state( std::move( state ) )
-        , action( action )
+        , action( std::move(action) )
         , reward( reward )
-        , nextState( nextState )
+        , nextState( std::move(nextState) )
         , done( done )
     {
     }
@@ -40,16 +40,16 @@ public:
               float reward,
               const torch::Tensor &nextState,
               bool done );
-    void add( std::unique_ptr<Experience> experience );
-
-    Vector<std::unique_ptr<Experience>> sample() const;
-    size_t size() const;
+    void add( const Experience &experience );
+    Experience getExperienceAt(unsigned index ) const;
+    Vector<unsigned> sample() const;
+    unsigned size() const;
 
 private:
     unsigned _actionSize;
     unsigned _bufferSize;
     unsigned _batchSize;
-    Vector<std::unique_ptr<Experience>> _memory;
+    Vector<Experience> _experiences;
 };
 
 #endif

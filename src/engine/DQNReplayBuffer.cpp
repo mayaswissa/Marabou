@@ -1,53 +1,72 @@
 #include "DQNReplayBuffer.h"
+
+#include <Debug.h>
 #include <random>
 
-void Experience::updateReward(double newReward)
+void Experience::updateReward( double newReward )
 {
     this->reward = newReward;
 }
 
-ReplayBuffer::ReplayBuffer(const unsigned actionSize, const unsigned bufferSize, const unsigned batchSize )
-    : _actionSize(actionSize), _bufferSize(bufferSize), _batchSize(batchSize) {
+ReplayBuffer::ReplayBuffer( const unsigned actionSize,
+                            const unsigned bufferSize,
+                            const unsigned batchSize )
+    : _actionSize( actionSize )
+    , _bufferSize( bufferSize )
+    , _batchSize( batchSize )
+{
 }
 
-void ReplayBuffer::add(const torch::Tensor& state, const torch::Tensor& action, float reward, const torch::Tensor& nextState, bool done) {
-    if (_memory.size() >= _bufferSize) {
-        _memory.popFirst();
-    }
-    _memory.append(std::make_unique<Experience>(state, action, reward, nextState, done));
+void ReplayBuffer::add( const torch::Tensor &state,
+                        const torch::Tensor &action,
+                        float reward,
+                        const torch::Tensor &nextState,
+                        bool done )
+{
+    if ( _experiences.size() >= _bufferSize )
+        _experiences.eraseAt(0);
+
+
+    auto experience =
+        Experience( state, action, reward, nextState, done );
+    _experiences.append( experience );
 }
-void ReplayBuffer::add( std::unique_ptr<Experience> experience ) {
-    if (_memory.size() >= _bufferSize) {
-        _memory.popFirst();
-    }
-    _memory.append(std::move(experience));
+Experience ReplayBuffer::getExperienceAt( const unsigned index ) const
+{
+    return _experiences.get( index );
+}
+void ReplayBuffer::add( const Experience &experience )
+{
+    if ( _experiences.size() >= _bufferSize )
+        _experiences.eraseAt(0);
+    _experiences.append(experience);
 }
 
 
-Vector<std::unique_ptr<Experience>> ReplayBuffer::sample() const{
-    Vector<std::unique_ptr<Experience>> sampledExperiences;
+Vector<unsigned> ReplayBuffer::sample() const
+{
+    Vector<unsigned> sampledIndices;
 
-    if (_memory.empty() || _batchSize == 0) {
-        return sampledExperiences;
+    if ( _experiences.empty() || _batchSize == 0 )
+    {
+        return sampledIndices;
     }
 
-    // Determine the number of experiences to sample
-    size_t sampleSize = std::min(_batchSize, _memory.size());
-
-    // Shuffle the deque to randomize selection
+    int sampleSize = static_cast<int>(std::min( _batchSize, _experiences.size() ));
+    Vector<unsigned> indices(_experiences.size());
+    std::iota(indices.begin(), indices.end(), 0);
     std::random_device rd;
-    std::mt19937 g(rd());
-    std::shuffle(_memory.begin(), _memory.end(), g);
+    std::mt19937 g( rd() );
+    std::shuffle( indices.begin(), indices.end(), g );
 
-    // Move selected experiences to the output vector and erase them from the deque
-    for (size_t i = 0; i < sampleSize; ++i) {
-        sampledExperiences.append(std::move(_memory.last()));
-        _memory.pop();
+    for (int i = 0; i < sampleSize; ++i) {
+        auto it = sampledIndices.end();
+        sampledIndices.insert(it, indices[i]);
     }
-
-    return sampledExperiences;
+    return sampledIndices;
 }
 
-size_t ReplayBuffer::size() const {
-    return _memory.size();
+unsigned ReplayBuffer::size() const
+{
+    return _experiences.size();
 }
