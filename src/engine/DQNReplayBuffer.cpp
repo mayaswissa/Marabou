@@ -4,8 +4,10 @@
 #include <random>
 
 
-Experience& Experience::operator=(const Experience& other) {
-    if (this != &other) {
+Experience &Experience::operator=( const Experience &other )
+{
+    if ( this != &other )
+    {
         state = other.state;
         action = other.action;
         reward = other.reward;
@@ -13,7 +15,6 @@ Experience& Experience::operator=(const Experience& other) {
         done = other.done;
         depth = other.depth;
         numSplits = other.numSplits;
-        revisit = other.revisit;
         changeReward = other.changeReward;
     }
     return *this;
@@ -22,7 +23,6 @@ Experience& Experience::operator=(const Experience& other) {
 void Experience::updateReward( double newReward )
 {
     this->reward = newReward;
-    this->revisit = true; // todo ?
 }
 
 ReplayBuffer::ReplayBuffer( const unsigned actionSize,
@@ -49,8 +49,6 @@ void ReplayBuffer::add( State state,
     {
         auto experience = _experiences.pop();
         _numExperiences--;
-        if ( experience.revisit )
-            _numRevisitExperiences--;
     }
 
     auto experience =
@@ -78,8 +76,8 @@ Vector<unsigned> ReplayBuffer::sample() const
         return sampledIndices;
     }
 
-    unsigned startIndex = _experiences.size() - _numRevisitExperiences - 1;
-    unsigned endIndex = _experiences.size() - 1;
+    unsigned startIndex =  0;
+    unsigned endIndex = numRevisitExperiences() - 1;
 
     unsigned rangeSize = endIndex - startIndex;
     unsigned sampleSize = std::min( _batchSize, rangeSize );
@@ -100,10 +98,21 @@ Vector<unsigned> ReplayBuffer::sample() const
 }
 
 
-unsigned ReplayBuffer::size() const
+unsigned ReplayBuffer::numExperiences() const
 {
     return _numExperiences;
 }
+
+unsigned ReplayBuffer::numRevisitExperiences() const
+{
+    return _numRevisitExperiences;
+}
+
+void ReplayBuffer::decreaseNumRevisitExperiences()
+{
+    _numRevisitExperiences--;
+}
+
 
 int ReplayBuffer::getNumRevisitExperiences() const
 {
@@ -118,4 +127,24 @@ void ReplayBuffer::updateReturnedWhenDoneSuccess()
 void ReplayBuffer::increaseNumReturned()
 {
     _numRevisitExperiences++;
+}
+
+void ReplayBuffer::moveToRevisitExperiences( const unsigned index )
+{
+    if ( _numRevisitExperiences >= _bufferSize )
+    {
+        auto experience = _revisitExperiences.popFirst();
+        decreaseNumRevisitExperiences();
+    }
+    auto it = std::find_if( _experiences.begin(),
+                            _experiences.end(),
+                            [index]( const Experience &e ) { return e.depth == index; } );
+
+    if ( it != _experiences.end() )
+    {
+        _revisitExperiences.append( std::move( *it ) );
+        _numRevisitExperiences ++;
+        _experiences.erase( it );
+        _numExperiences--;
+    }
 }

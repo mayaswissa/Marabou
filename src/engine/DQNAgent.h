@@ -17,8 +17,8 @@ public:
            unsigned numPhaseStatuses,
            unsigned embeddingDim,
            ActionSpace &actionSpace );
-    void step( unsigned currentDepth, unsigned currentNumSplits );
-    void addToExperiences( State state,
+    void step();
+    void addToExperiences( unsigned currentNumSplits, State state,
                            Action action,
                            double reward,
                            State nextState,
@@ -41,8 +41,9 @@ private:
     unsigned _numPlConstraints, _numPhaseStatuses, _embeddingDim, _numActions;
     QNetwork _qNetworkLocal, _qNetworkTarget;
     torch::optim::Adam optimizer;
-    ReplayBuffer _experiences;
+    ReplayBuffer _replayedBuffer;
     unsigned _tStep;
+    unsigned _currentDepth;
     static constexpr double GAMMA = 0.99;
     static constexpr double TAU = 1e-3;
     static constexpr double LR = 5e-4;

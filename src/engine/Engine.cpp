@@ -128,7 +128,7 @@ void Engine::updateDQNState( State &stateToUpdate )
 }
 ActionSpace Engine::constructActionSpace()
 {
-    return ActionSpace(_plConstraints.size(), 3); // todo
+    return ActionSpace( _plConstraints.size(), 3 ); // todo
 }
 unsigned Engine::getNumFixedConstraints() const
 {
@@ -238,7 +238,7 @@ void Engine::updateDQNEpsilon()
                      _eps * GlobalConfiguration::DQN_EPSILON_DECAY );
 }
 
-bool Engine::solve( double timeoutInSeconds, const std::string &trainedAgentPath)
+bool Engine::solve( double timeoutInSeconds, const std::string &trainedAgentPath )
 {
     SignalHandler::getInstance()->initialize();
     SignalHandler::getInstance()->registerClient( this );
@@ -284,7 +284,7 @@ bool Engine::solve( double timeoutInSeconds, const std::string &trainedAgentPath
             throw std::runtime_error( "Agent is not set" ); // todo
 
     unsigned numPhases = 3; // todo change
-    State currentDQNState = State(_plConstraints.size(), numPhases);
+    State currentDQNState = State( _plConstraints.size(), numPhases );
     updateDQNState( currentDQNState );
     const auto actionSpace = ActionSpace( _plConstraints.size(), 3 ); // todo change num
     auto agent = Agent( actionSpace, trainedAgentPath );
@@ -566,7 +566,7 @@ void Engine::saveAgentNetworks( const Agent &agent, const std::string &filePath 
     agent.saveNetworks( filePath );
 }
 
-void Engine::loadAgentNetworks( Agent &agent)
+void Engine::loadAgentNetworks( Agent &agent )
 {
     agent.loadNetworks();
 }
@@ -594,7 +594,7 @@ bool Engine::trainDQNAgent( Agent &agent, double timeoutInSeconds, double *score
     // DQN CODE:
     // phases
     unsigned numPhases = 3; // todo change
-    State currentDQNState = State(_plConstraints.size(), numPhases);
+    State currentDQNState = State( _plConstraints.size(), numPhases );
     updateDQNState( currentDQNState );
     auto previousState = State( _plConstraints.size(), numPhases );
     double reward = 0;
@@ -672,15 +672,16 @@ bool Engine::trainDQNAgent( Agent &agent, double timeoutInSeconds, double *score
                     printf( "depth = %d\n", stackDepth );
                     fflush( stdout );
                     *score += reward;
-                    agent.step( splitsCounter, splitsCounter );
-                    agent.addToExperiences( previousState,
-                                              action,
-                                              reward,
-                                              currentDQNState,
-                                              false,
-                                              stackDepth,
-                                              splitsCounter,
-                                              true );
+                    agent.step();
+                    agent.addToExperiences( splitsCounter,
+                                            previousState,
+                                            action,
+                                            reward,
+                                            currentDQNState,
+                                            false,
+                                            stackDepth,
+                                            splitsCounter,
+                                            true );
                 }
                 // agent take an action according to current state:
                 action = agent.act( currentDQNState.toTensor(), _eps );
@@ -690,14 +691,15 @@ bool Engine::trainDQNAgent( Agent &agent, double timeoutInSeconds, double *score
                 // can not split fixed constraint
                 if ( pl->getPhaseStatus() != PHASE_NOT_FIXED )
                 {
-                    agent.addToExperiences( previousState,
-                                              action,
-                                              -1,
-                                              currentDQNState,
-                                              false,
-                                              stackDepth,
-                                              splitsCounter,
-                                              false );
+                    agent.addToExperiences( splitsCounter,
+                                            previousState,
+                                            action,
+                                            -1,
+                                            currentDQNState,
+                                            false,
+                                            stackDepth,
+                                            splitsCounter,
+                                            false );
                 }
 
                 while ( pl->getPhaseStatus() != PHASE_NOT_FIXED )
@@ -740,14 +742,14 @@ bool Engine::trainDQNAgent( Agent &agent, double timeoutInSeconds, double *score
                         *score += reward;
                         mainLoopEnd = TimeUtils::sampleMicro();
                         _exitCode = Engine::SAT;
-                        agent.addToExperiences( previousState,
-                                                  action,
-                                                  reward,
-                                                  currentDQNState,
-                                                  true,
-                                                  stackDepth,
-                                                  splitsCounter,
-                                                  true );
+                        agent.addToExperiences( splitsCounter, previousState,
+                                                action,
+                                                reward,
+                                                currentDQNState,
+                                                true,
+                                                stackDepth,
+                                                splitsCounter,
+                                                true );
                         agent.handleDone( true );
                         printf( "success!" );
                         fflush( stdout );
@@ -760,14 +762,14 @@ bool Engine::trainDQNAgent( Agent &agent, double timeoutInSeconds, double *score
                         mainLoopEnd = TimeUtils::sampleMicro();
                         _exitCode = Engine::UNKNOWN;
                         // agent done with failure - reward is (- num of plConstraints)
-                        agent.addToExperiences( previousState,
-                                                  action,
-                                                  reward,
-                                                  currentDQNState,
-                                                  true,
-                                                  stackDepth,
-                                                  splitsCounter,
-                                                  false );
+                        agent.addToExperiences(splitsCounter, previousState,
+                                                action,
+                                                reward,
+                                                currentDQNState,
+                                                true,
+                                                stackDepth,
+                                                splitsCounter,
+                                                false );
                         agent.handleDone( false );
                         printf( "fail!" );
                         fflush( stdout );

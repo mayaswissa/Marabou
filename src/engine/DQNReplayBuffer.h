@@ -18,7 +18,6 @@ struct Experience
     bool done;
     unsigned depth;
     unsigned numSplits;
-    bool revisit;
     bool changeReward;
 
     // Existing constructor
@@ -37,7 +36,6 @@ struct Experience
         , done( done )
         , depth( depth )
         , numSplits( numSplits )
-        , revisit( false )
         , changeReward( changeReward )
     {
     }
@@ -50,7 +48,6 @@ struct Experience
         , done( other.done )
         , depth( other.depth )
         , numSplits( other.numSplits )
-        , revisit( other.revisit )
         , changeReward( other.changeReward )
     {
     }
@@ -63,7 +60,6 @@ struct Experience
         , done( other.done )
         , depth( other.depth )
         , numSplits( other.numSplits )
-        , revisit( other.revisit )
         , changeReward( other.changeReward )
     {
     }
@@ -87,10 +83,13 @@ public:
               bool changeReward = true );
     Experience &getExperienceAt( unsigned index );
     Vector<unsigned> sample() const;
-    unsigned size() const;
+    unsigned numExperiences() const;
+    unsigned numRevisitExperiences() const;
     int getNumRevisitExperiences() const;
     void updateReturnedWhenDoneSuccess();
     void increaseNumReturned();
+    void decreaseNumRevisitExperiences();
+    void moveToRevisitExperiences(const unsigned index);
 
 private:
     unsigned _actionSize;
@@ -99,7 +98,7 @@ private:
     // number of experiences in the buffer
     int _numExperiences;
     // The number of experiences we revisited after completing a branch search in the search tree.
-    int _numRevisitExperiences;
+    unsigned _numRevisitExperiences;
     Vector<Experience> _experiences;
     Vector<Experience> _revisitExperiences;
 };

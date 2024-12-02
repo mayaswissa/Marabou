@@ -13,8 +13,9 @@ Agent::Agent( const ActionSpace &actionSpace, const std::string &trainedAgentPat
     , _qNetworkTarget( _numPlConstraints, _numPhaseStatuses, _embeddingDim, _numActions )
     // todo adaptive learning rate
     , optimizer( _qNetworkLocal.parameters(), torch::optim::AdamOptions( LR ).weight_decay( 1e-4 ) )
-    , _experiences( _numPlConstraints * _numPhaseStatuses, 1e5, BATCH_SIZE )
+    , _replayedBuffer( _numPlConstraints * _numPhaseStatuses, 1e5, BATCH_SIZE )
     , _tStep( 0 )
+    , _currentDepth( 0 )
     , device( torch::cuda::is_available() ? torch::kCUDA : torch::kCPU )
     , _filePath( trainedAgentPath )
 {
@@ -91,22 +92,23 @@ void Agent::handleDone( bool success )
     // if done with success - the rewards of all steps in this branch remain the same.
     if ( success )
     {
-        _experiences.updateReturnedWhenDoneSuccess();
+        _replayedBuffer.updateReturnedWhenDoneSuccess();
         learn( GAMMA );
         return;
     }
     // if not success - the steps not returned to where bad todo?
-    unsigned numReturned = _experiences.getNumRevisitExperiences();
-    for ( unsigned index = numReturned + 1; index < _experiences.size(); index++ )
+    unsigned numReturned = _replayedBuffer.getNumRevisitExperiences();
+    for ( unsigned index = numReturned + 1; index < _replayedBuffer.numExperiences(); index++ )
     {
-        _experiences.getExperienceAt( index ).updateReward( -1 );
-        _experiences.increaseNumReturned();
+        _replayedBuffer.getExperienceAt( index ).updateReward( -1 );
+        _replayedBuffer.increaseNumReturned();
     }
-    const auto experiences = _experiences.sample();
+    const auto experiences = _replayedBuffer.sample();
     learn( GAMMA );
 }
 
-void Agent::addToExperiences( State state,
+void Agent::addToExperiences( unsigned currentNumSplits,
+                              State state,
                               Action action,
                               double reward,
                               State nextState,
@@ -115,54 +117,34 @@ void Agent::addToExperiences( State state,
                               unsigned numSplits,
                               bool changeReward )
 {
-    if (depth > )
-
-
-    _experiences.add( state,
-                      action,
-                      static_cast<float>( reward ),
-                      nextState,
-                      done,
-                      depth,
-                      numSplits,
-                      changeReward );
-}
-
-void Agent::step( unsigned currentDepth, unsigned currentNumSplits )
-{
-    // go over all steps with depth >=  currentDepth and move to replay memory with reward =  1 /
-    // delay in splits
-    printf( "NumRevisitExperiences : %d\n", _experiences.getNumRevisitExperiences() );
-    fflush( stdout );
-    // starting from the first not yes revisit split:
-    int numRevisit = _experiences.getNumRevisitExperiences();
-    int numNotRevisit = _experiences.size() - numRevisit;
-    // todo : problem : the last inserted is the deepest and first one needed to change to revisit
-    // todo : if depth != experienceDepth || plConstraint phase != experience's -> reward = 0 ?
-    for ( int index = numNotRevisit - 1; index >= 0; index-- ) // from the latest entered marked as
-                                                               // not revisit
+    _currentDepth = depth;
+    unsigned lastNotVisitedDepth = 0;
+    if ( _replayedBuffer.numExperiences() > 0 )
     {
-        Experience &experience = _experiences.getExperienceAt( index );
-        // if not revisit yet - break.
-        if ( currentDepth > experience.depth )
-            break;
-        experience.revisit = true;
-        _experiences.increaseNumReturned();
-        if ( !experience.changeReward )
-            continue;
+        lastNotVisitedDepth =
+            _replayedBuffer.getExperienceAt( _replayedBuffer.numExperiences() - 1 ).depth;
+    }
+
+    bool revisited = lastNotVisitedDepth >= _currentDepth;
+    while ( _replayedBuffer.numExperiences() && lastNotVisitedDepth >= _currentDepth )
+    {
+        Experience &experience =
+            _replayedBuffer.getExperienceAt( _replayedBuffer.numExperiences() - 1 );
+
+        ASSERT ( _currentDepth >= experience.depth );
+
         // todo - check if possible to skip the relu and go to a deeper depth in its other
         // if no progress in splits, reward stays the same
-        if ( currentNumSplits > experience.numSplits )
+        if ( currentNumSplits > experience.numSplits && experience.changeReward )
         {
             // encourage the agent to quickly prune branches
             printf( "this experience's depth: %d, current depth: %d\n",
                     experience.depth,
-                    currentDepth );
-            auto splitsSkipped = static_cast<double>( experience.depth - currentDepth );
+                    _currentDepth );
+            auto splitsSkipped = static_cast<double>( experience.depth - _currentDepth ); // todo?
             printf( "new reward : %f, prev reward : %f\n", splitsSkipped, experience.reward );
             fflush( stdout );
             experience.updateReward( splitsSkipped );
-
 
             // auto progress = currentNumSplits - experience.numSplits;
             // double reward = 0.0;
@@ -171,10 +153,30 @@ void Agent::step( unsigned currentDepth, unsigned currentNumSplits )
 
             // experience.updateReward( reward );
         }
+        _replayedBuffer.moveToRevisitExperiences( _replayedBuffer.numExperiences() - 1 );
+        lastNotVisitedDepth =
+            _replayedBuffer.getExperienceAt( _replayedBuffer.numExperiences() - 1 ).depth;
     }
+    if ( !revisited )
+        _replayedBuffer.add( state,
+                             action,
+                             static_cast<float>( reward ),
+                             nextState,
+                             done,
+                             depth,
+                             numSplits,
+                             changeReward );
+    if ( _replayedBuffer.numExperiences() > 0 )
+    {
+        _currentDepth =
+            _replayedBuffer.getExperienceAt( _replayedBuffer.numExperiences() - 1 ).depth;
+    }
+}
 
+void Agent::step()
+{
     _tStep = ( _tStep + 1 ) % UPDATE_EVERY;
-    if ( _tStep == 0 && _experiences.size() > BATCH_SIZE )
+    if ( _tStep == 0 && _replayedBuffer.numRevisitExperiences() > BATCH_SIZE )
     {
         learn( GAMMA ); // todo Gamma should change?
     }
@@ -199,7 +201,7 @@ Action Agent::act( const torch::Tensor &state, double eps )
 
 void Agent::learn( const double gamma )
 {
-    Vector<unsigned> indices = _experiences.sample();
+    Vector<unsigned> indices = _replayedBuffer.sample();
     if ( indices.empty() )
         return;
     std::vector<torch::Tensor> states, actions, nextStates;
@@ -209,9 +211,9 @@ void Agent::learn( const double gamma )
     // then one more loop - to delete them ? no need, maybe.
     for ( const unsigned index : indices )
     {
-        if ( index < _experiences.size() )
+        if ( index < _replayedBuffer.numRevisitExperiences() )
         {
-            Experience &experience = _experiences.getExperienceAt( index );
+            Experience &experience = _replayedBuffer.getExperienceAt( index );
             states.push_back( experience.state.toTensor().to( device ) );
             actions.push_back( experience.action.actionToTensor().to( device ) );
             rewards.push_back( experience.reward );
