@@ -1,4 +1,5 @@
 #include "DQNAgent.h"
+
 #include <random>
 #include <utility>
 
@@ -84,19 +85,18 @@ Action Agent::tensorToAction( const torch::Tensor &tensor )
 }
 
 
-void Agent::handleDone( bool success)
+void Agent::handleDone( bool success )
 {
     // needs to insert all delayed experiences to the replay buffer and learn:
     // if done with success - the rewards of all steps in this branch remain the same.
     if ( success )
     {
         _experiences.updateReturnedWhenDoneSuccess();
-        const auto experiences = _experiences.sample();
         learn( GAMMA );
         return;
     }
     // if not success - the steps not returned to where bad todo?
-    unsigned numReturned = _experiences.getNumReturnedExperiences();
+    unsigned numReturned = _experiences.getNumRevisitExperiences();
     for ( unsigned index = numReturned + 1; index < _experiences.size(); index++ )
     {
         _experiences.getExperienceAt( index ).updateReward( -1 );
@@ -106,53 +106,76 @@ void Agent::handleDone( bool success)
     learn( GAMMA );
 }
 
-void Agent::addToExperiences( torch::Tensor state,
-                           const torch::Tensor &action,
-                           double reward,
-                           const torch::Tensor &nextState,
-                           const bool done,
-                           unsigned depth,
-                           unsigned numSplits )
+void Agent::addToExperiences( State state,
+                              Action action,
+                              double reward,
+                              State nextState,
+                              const bool done,
+                              unsigned depth,
+                              unsigned numSplits,
+                              bool changeReward )
 {
-    _experiences.add( state, action, static_cast<float>( reward ), nextState, done, depth, numSplits );
+    if (depth > )
+
+
+    _experiences.add( state,
+                      action,
+                      static_cast<float>( reward ),
+                      nextState,
+                      done,
+                      depth,
+                      numSplits,
+                      changeReward );
 }
 
 void Agent::step( unsigned currentDepth, unsigned currentNumSplits )
 {
     // go over all steps with depth >=  currentDepth and move to replay memory with reward =  1 /
     // delay in splits
-
+    printf( "NumRevisitExperiences : %d\n", _experiences.getNumRevisitExperiences() );
+    fflush( stdout );
     // starting from the first not yes revisit split:
-    unsigned numRevisit = _experiences.getNumReturnedExperiences();
-    unsigned numNotRevisit = _experiences.size() - numRevisit;
+    int numRevisit = _experiences.getNumRevisitExperiences();
+    int numNotRevisit = _experiences.size() - numRevisit;
     // todo : problem : the last inserted is the deepest and first one needed to change to revisit
-    for ( unsigned index = numNotRevisit; index > 0; index-- ) // from the latest entered marked as not revisit
+    // todo : if depth != experienceDepth || plConstraint phase != experience's -> reward = 0 ?
+    for ( int index = numNotRevisit - 1; index >= 0; index-- ) // from the latest entered marked as
+                                                               // not revisit
     {
         Experience &experience = _experiences.getExperienceAt( index );
         // if not revisit yet - break.
         if ( currentDepth > experience.depth )
             break;
-
+        experience.revisit = true;
+        _experiences.increaseNumReturned();
+        if ( !experience.changeReward )
+            continue;
         // todo - check if possible to skip the relu and go to a deeper depth in its other
         // if no progress in splits, reward stays the same
         if ( currentNumSplits > experience.numSplits )
         {
             // encourage the agent to quickly prune branches
-            auto progress = currentNumSplits - experience.numSplits;
-            double reward = 0.0;
-            if (progress > 0)
-                reward = 1.0 / static_cast<double>(progress);
+            printf( "this experience's depth: %d, current depth: %d\n",
+                    experience.depth,
+                    currentDepth );
+            auto splitsSkipped = static_cast<double>( experience.depth - currentDepth );
+            printf( "new reward : %f, prev reward : %f\n", splitsSkipped, experience.reward );
+            fflush( stdout );
+            experience.updateReward( splitsSkipped );
 
-            experience.updateReward( reward );
-            _experiences.increaseNumReturned();
+
+            // auto progress = currentNumSplits - experience.numSplits;
+            // double reward = 0.0;
+            // if (progress > 0)
+            //     reward = 1.0 / static_cast<double>(progress);
+
+            // experience.updateReward( reward );
         }
     }
-    printf("agent 148");
-    fflush(stdout);
+
     _tStep = ( _tStep + 1 ) % UPDATE_EVERY;
     if ( _tStep == 0 && _experiences.size() > BATCH_SIZE )
     {
-        // const auto experiences = _experiences.sample();
         learn( GAMMA ); // todo Gamma should change?
     }
 }
@@ -176,8 +199,6 @@ Action Agent::act( const torch::Tensor &state, double eps )
 
 void Agent::learn( const double gamma )
 {
-    printf("agent 177\n");
-    fflush(stdout);
     Vector<unsigned> indices = _experiences.sample();
     if ( indices.empty() )
         return;
@@ -190,13 +211,11 @@ void Agent::learn( const double gamma )
     {
         if ( index < _experiences.size() )
         {
-            printf("index < _experiences.size()\n");
-            fflush(stdout);
-            Experience& experience = _experiences.getExperienceAt( index );
-            states.push_back( experience.state.to( device ) );
-            actions.push_back( experience.action.to( device ) );
+            Experience &experience = _experiences.getExperienceAt( index );
+            states.push_back( experience.state.toTensor().to( device ) );
+            actions.push_back( experience.action.actionToTensor().to( device ) );
             rewards.push_back( experience.reward );
-            nextStates.push_back( experience.nextState.to( device ) );
+            nextStates.push_back( experience.nextState.toTensor().to( device ) );
             dones.push_back( static_cast<uint8_t>( experience.done ) );
         }
     }
@@ -207,12 +226,6 @@ void Agent::learn( const double gamma )
         torch::tensor( rewards, torch::dtype( torch::kFloat64 ) ).to( device );
     const auto nextStatesTensor = torch::cat( nextStates, 0 );
     const auto doneTensor = torch::tensor( dones, torch::dtype( torch::kUInt8 ) ).to( device );
-    printf("agent 204");
-    fflush(stdout);
-    auto mean = rewardsTensor.mean();
-    auto std = rewardsTensor.std().clamp_min( 1e-5 );
-    // Normalize rewards
-    auto normalized_rewards = ( rewardsTensor - mean ) / std;
 
     // DDQN : Use local network to select the best action for next states
     const auto forwardLocalNet = _qNetworkLocal.forward( nextStatesTensor );
@@ -223,8 +236,8 @@ void Agent::learn( const double gamma )
     const auto targetQValuesNextState =
         forwardTargetNet.detach().gather( 1, localQValuesNextState.unsqueeze( -1 ) ).squeeze( -1 );
     // Calculate Q targets for current states
-    const auto QTargets = normalized_rewards +
-                          gamma * targetQValuesNextState * ( 1 - doneTensor.to( torch::kFloat64 ) );
+    const auto QTargets =
+        rewardsTensor + gamma * targetQValuesNextState * ( 1 - doneTensor.to( torch::kFloat64 ) );
 
     const auto QExpected = _qNetworkLocal.forward( statesTensor )
                                .gather( 1, actionsTensor.unsqueeze( -1 ) )

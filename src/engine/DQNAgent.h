@@ -5,6 +5,7 @@
 #include "DQNActoin.h"
 #include "DQNNetwork.h"
 #include "DQNReplayBuffer.h"
+#include "DQNState.h"
 #undef Warning
 #include <torch/torch.h>
 
@@ -17,13 +18,14 @@ public:
            unsigned embeddingDim,
            ActionSpace &actionSpace );
     void step( unsigned currentDepth, unsigned currentNumSplits );
-    void addToExperiences( torch::Tensor state,
-                           const torch::Tensor &action,
+    void addToExperiences( State state,
+                           Action action,
                            double reward,
-                           const torch::Tensor &nextState,
+                           State nextState,
                            const bool done,
                            unsigned depth,
-                           unsigned numSplits );
+                           unsigned numSplits,
+                           bool changeReward );
     void saveNetworks( const std::string &filepath ) const;
     void loadNetworks();
     void handleDone( bool success );

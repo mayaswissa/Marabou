@@ -90,7 +90,7 @@ public:
     /*
       Solve the encoded query.
     */
-    virtual bool solve( double timeoutInSeconds ) = 0;
+    virtual bool solve( double timeoutInSeconds, const std::string &trainedAgentPath = nullptr ) = 0;
 
     /*
       Retrieve the exit code.

@@ -1,5 +1,7 @@
 #ifndef DQNREPLAYBUFFER_H
 #define DQNREPLAYBUFFER_H
+#include "DQNActoin.h"
+#include "DQNState.h"
 #include "Vector.h"
 
 #include <deque>
@@ -9,34 +11,65 @@
 
 struct Experience
 {
-    torch::Tensor state;
-    torch::Tensor action;
+    State state;
+    Action action;
     float reward;
-    torch::Tensor nextState;
+    State nextState;
     bool done;
     unsigned depth;
     unsigned numSplits;
-    bool returned;
+    bool revisit;
+    bool changeReward;
 
-    Experience( torch::Tensor state,
-                const torch::Tensor &action,
+    // Existing constructor
+    Experience( State state,
+                Action action,
                 double reward,
-                const torch::Tensor &nextState,
+                State nextState,
                 const bool done,
                 unsigned depth,
-                unsigned numSplits = 0 )
-        : state( std::move( state ) )
-        , action( std::move( action ) )
+                unsigned numSplits = 0,
+                bool changeReward = true )
+        : state( state )
+        , action( action )
         , reward( reward )
-        , nextState( std::move( nextState ) )
+        , nextState( nextState )
         , done( done )
         , depth( depth )
         , numSplits( numSplits )
-        , returned( false )
+        , revisit( false )
+        , changeReward( changeReward )
     {
     }
+
+    Experience( const Experience &other )
+        : state( other.state )
+        , action( other.action )
+        , reward( other.reward )
+        , nextState( other.nextState )
+        , done( other.done )
+        , depth( other.depth )
+        , numSplits( other.numSplits )
+        , revisit( other.revisit )
+        , changeReward( other.changeReward )
+    {
+    }
+
+    Experience( Experience &&other ) noexcept
+        : state( std::move( other.state ) )
+        , action( std::move( other.action ) )
+        , reward( other.reward )
+        , nextState( std::move( other.nextState ) )
+        , done( other.done )
+        , depth( other.depth )
+        , numSplits( other.numSplits )
+        , revisit( other.revisit )
+        , changeReward( other.changeReward )
+    {
+    }
+
+    Experience &operator=( const Experience &other );
     void updateReward( double newReward );
-    // unsigned getDepth() const;
 };
 
 
@@ -44,17 +77,18 @@ class ReplayBuffer
 {
 public:
     ReplayBuffer( unsigned actionSize, unsigned bufferSize, unsigned batchSize );
-    void add( const torch::Tensor &state,
-              const torch::Tensor &action,
-              float reward,
-              const torch::Tensor &nextState,
-              bool done,
+    void add( State state,
+              Action action,
+              double reward,
+              State nextState,
+              const bool done,
               unsigned depth,
-              unsigned numSplits = 0 );
+              unsigned numSplits = 0,
+              bool changeReward = true );
     Experience &getExperienceAt( unsigned index );
     Vector<unsigned> sample() const;
     unsigned size() const;
-    unsigned getNumReturnedExperiences() const;
+    int getNumRevisitExperiences() const;
     void updateReturnedWhenDoneSuccess();
     void increaseNumReturned();
 
@@ -63,10 +97,11 @@ private:
     unsigned _bufferSize;
     unsigned _batchSize;
     // number of experiences in the buffer
-    unsigned _numExperiences;
+    int _numExperiences;
     // The number of experiences we revisited after completing a branch search in the search tree.
-    unsigned _numReturnedExperiences;
+    int _numRevisitExperiences;
     Vector<Experience> _experiences;
+    Vector<Experience> _revisitExperiences;
 };
 
 #endif

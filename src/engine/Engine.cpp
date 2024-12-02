@@ -72,9 +72,6 @@ Engine::Engine()
     , _produceUNSATProofs( Options::get()->getBool( Options::PRODUCE_PROOFS ) )
     , _groundBoundManager( _context )
     , _UNSATCertificate( NULL )
-    , _actionSpace( nullptr )
-    , _agent( nullptr )
-    , _currentDQNState( nullptr )
     , _eps( GlobalConfiguration::DQN_EPSILON_START )
 {
     _smtCore.setStatistics( &_statistics );
@@ -129,7 +126,10 @@ void Engine::updateDQNState( State &stateToUpdate )
         index++;
     }
 }
-
+ActionSpace Engine::constructActionSpace()
+{
+    return ActionSpace(_plConstraints.size(), 3); // todo
+}
 unsigned Engine::getNumFixedConstraints() const
 {
     unsigned numFixed = 0;
@@ -238,7 +238,7 @@ void Engine::updateDQNEpsilon()
                      _eps * GlobalConfiguration::DQN_EPSILON_DECAY );
 }
 
-bool Engine::solve( double timeoutInSeconds )
+bool Engine::solve( double timeoutInSeconds, const std::string &trainedAgentPath)
 {
     SignalHandler::getInstance()->initialize();
     SignalHandler::getInstance()->registerClient( this );
@@ -278,20 +278,18 @@ bool Engine::solve( double timeoutInSeconds )
     }
 
     // for DQN use:
-    unsigned numPhases = 3; // todo change
-
-    std::unique_ptr<Action> action = nullptr;
-    std::unique_ptr<State> prevState = nullptr;
     if ( GlobalConfiguration::USE_DQN )
-    {
-        if ( !_agent )
-        {
+        if ( trainedAgentPath.empty() )
             // agent not trained.
             throw std::runtime_error( "Agent is not set" ); // todo
-        }
-        prevState = std::make_unique<State>( _plConstraints.size(), numPhases );
-        updateDQNState( *_currentDQNState );
-    }
+
+    unsigned numPhases = 3; // todo change
+    State currentDQNState = State(_plConstraints.size(), numPhases);
+    updateDQNState( currentDQNState );
+    const auto actionSpace = ActionSpace( _plConstraints.size(), 3 ); // todo change num
+    auto agent = Agent( actionSpace, trainedAgentPath );
+    auto action = Action( numPhases );
+    auto previousState = State( _plConstraints.size(), numPhases );
 
     bool splitJustPerformed = true;
     struct timespec mainLoopStart = TimeUtils::sampleMicro();
@@ -369,29 +367,27 @@ bool Engine::solve( double timeoutInSeconds )
             {
                 if ( GlobalConfiguration::USE_DQN )
                 {
-                    updateDQNState( *_currentDQNState );
+                    updateDQNState( currentDQNState );
                     // agent take an action according to current state:
-                    action = std::make_unique<Action>(
-                        _agent->act( _currentDQNState->toTensor(), _eps ) );
+                    action = Action( agent.act( currentDQNState.toTensor(), _eps ) );
                     // perform split according to agent's action:
                     PiecewiseLinearConstraint *pl =
-                        indexToConstraint( action->getPlConstraintAction() );
+                        indexToConstraint( action.getPlConstraintAction() );
 
                     while ( pl->getPhaseStatus() != PHASE_NOT_FIXED ) // todo check?
                     {
                         printf( "hey I chose a fixed constraint to split\n" );
                         fflush( stdout );
-                        action = std::make_unique<Action>(
-                            _agent->act( _currentDQNState->toTensor(), _eps ) );
-                        pl = indexToConstraint( action->getPlConstraintAction() );
+                        action = Action( agent.act( currentDQNState.toTensor(), _eps ) );
+                        pl = indexToConstraint( action.getPlConstraintAction() );
                     }
                     printf( "hey continue\n" );
                     fflush( stdout );
                     PhaseStatus phaseStatus =
-                        valueToPhase( action->getAssignmentStatus() ); // todo check phase
+                        valueToPhase( action.getAssignmentStatus() ); // todo check phase
                     _smtCore.performSplit( pl, &phaseStatus );
                     splitJustPerformed = true;
-                    updateDQNState( *prevState ); // prevState = currentState
+                    updateDQNState( previousState ); // prevState = currentState
                     continue;
                 }
                 else
@@ -553,43 +549,29 @@ bool Engine::solve( double timeoutInSeconds )
 }
 
 
-// void Engine::trainAndSolve()
+// void Engine::initDQN( const std::string &trainedAgentPath )
 // {
-//     unsigned _nEpisodes = 10; // todo make argument
-//     unsigned timeoutInSeconds = Options::get()->getInt( Options::TRAIN_DQN_TIMEOUT );
-//     for ( unsigned int episode = 1; episode <= _nEpisodes; ++episode )
-//     {
-//         reset();
-//         trainDQNAgent( timeoutInSeconds );
-//     }
-//     timeoutInSeconds = Options::get()->getInt( Options::TIMEOUT );
-//     solve( timeoutInSeconds );
+//     _actionSpace = ActionSpace( _plConstraints.size(), 3 ); // todo change num
+//     if ( trainedAgentPath.empty() )
+//         _agent = Agent( _actionSpace );
+//     else
+//         _agent = Agent( _actionSpace, trainedAgentPath );
+//
+//     printf( "initDQN start\n" );
+//     fflush( stdout );
 // }
 
-void Engine::initDQN( const std::string &trainedAgentPath )
+void Engine::saveAgentNetworks( const Agent &agent, const std::string &filePath ) const
 {
-    _actionSpace = std::make_unique<ActionSpace>( _plConstraints.size(), 3 ); // todo change num
-    if ( trainedAgentPath.empty() )
-        _agent = std::make_unique<Agent>( *_actionSpace );
-    else
-        _agent = std::make_unique<Agent>( *_actionSpace, trainedAgentPath );
-
-    _currentDQNState = std::make_unique<State>( _plConstraints.size(), 3 ); // todo change num
-    printf( "initDQN start\n" );
-    fflush( stdout );
+    agent.saveNetworks( filePath );
 }
 
-void Engine::saveAgentNetworks( const std::string &filePath ) const
+void Engine::loadAgentNetworks( Agent &agent)
 {
-    _agent->saveNetworks( filePath );
+    agent.loadNetworks();
 }
 
-void Engine::loadAgentNetworks()
-{
-    _agent->loadNetworks();
-}
-
-bool Engine::trainDQNAgent( double timeoutInSeconds, double *score )
+bool Engine::trainDQNAgent( Agent &agent, double timeoutInSeconds, double *score )
 {
     printf( "trainDQNAgent\n" );
     fflush( stdout );
@@ -612,37 +594,28 @@ bool Engine::trainDQNAgent( double timeoutInSeconds, double *score )
     // DQN CODE:
     // phases
     unsigned numPhases = 3; // todo change
-    updateDQNState( *_currentDQNState );
-    std::unique_ptr<Action> action = nullptr;
-    std::unique_ptr<State> prevState = std::make_unique<State>( _plConstraints.size(), numPhases );
+    State currentDQNState = State(_plConstraints.size(), numPhases);
+    updateDQNState( currentDQNState );
+    auto previousState = State( _plConstraints.size(), numPhases );
     double reward = 0;
+    Action action( numPhases );
     int currNumFixedPlConstraints, prevNumFixedPlConstraints = 0;
     bool firstStep = true;
     unsigned maxIterations = 100000;
     unsigned splitsCounter = 0;
-    // depth of tree in reward - unsat nums (pop)
-    // dump for the agent todo
+
     bool splitJustPerformed = true;
     struct timespec mainLoopStart = TimeUtils::sampleMicro();
     while ( splitsCounter <= maxIterations )
     {
         unsigned stackDepth = _smtCore.getStackDepth();
-        splitsCounter++; // todo?
+        splitsCounter++; // todo here?
         struct timespec mainLoopEnd = TimeUtils::sampleMicro();
         mainLoopStart = mainLoopEnd;
 
         if ( shouldExitDueToTimeout( timeoutInSeconds ) )
         {
-            reward = -_plConstraints.size(); // todo ?
-            *score += reward;
-            _agent->addToExperiences( prevState->toTensor(),
-                                      action->actionToTensor(),
-                                      reward,
-                                      _currentDQNState->toTensor(),
-                                      true,
-                                      stackDepth,
-                                      splitsCounter );
-            _agent->handleDone( false );
+            agent.handleDone( false );
             _exitCode = Engine::TIMEOUT;
             return false;
         }
@@ -685,7 +658,7 @@ bool Engine::trainDQNAgent( double timeoutInSeconds, double *score )
             {
                 // DQN CODE:
                 // need to split => agent not done.
-                updateDQNState( *_currentDQNState );
+                updateDQNState( currentDQNState );
                 currNumFixedPlConstraints = getNumFixedConstraints();
 
                 if ( !firstStep )
@@ -696,47 +669,50 @@ bool Engine::trainDQNAgent( double timeoutInSeconds, double *score )
                         _plConstraints.size() - currNumFixedPlConstraints;
                     // reward = diff;
                     reward = diff / static_cast<double>( numNotFixedPlConstraints );
-                    printf( "reward = %f\n", reward );
+                    printf( "depth = %d\n", stackDepth );
                     fflush( stdout );
                     *score += reward;
-                    _agent->step( stackDepth, splitsCounter );
-                    _agent->addToExperiences( prevState->toTensor(),
-                                              action->actionToTensor(),
+                    agent.step( splitsCounter, splitsCounter );
+                    agent.addToExperiences( previousState,
+                                              action,
                                               reward,
-                                              _currentDQNState->toTensor(),
+                                              currentDQNState,
                                               false,
                                               stackDepth,
-                                              splitsCounter );
+                                              splitsCounter,
+                                              true );
                 }
                 // agent take an action according to current state:
-                action =
-                    std::make_unique<Action>( _agent->act( _currentDQNState->toTensor(), _eps ) );
+                action = agent.act( currentDQNState.toTensor(), _eps );
                 // perform split according to agent's action:
-                PiecewiseLinearConstraint *pl =
-                    indexToConstraint( action->getPlConstraintAction() );
-                // bad action - need to split not fixed constraint
-                while ( pl->getPhaseStatus() != PHASE_NOT_FIXED )
+                PiecewiseLinearConstraint *pl = indexToConstraint( action.getPlConstraintAction() );
+
+                // can not split fixed constraint
+                if ( pl->getPhaseStatus() != PHASE_NOT_FIXED )
                 {
-                    reward = -1;
-                    // *score += reward;
-                    _agent->addToExperiences( prevState->toTensor(),
-                                              action->actionToTensor(),
-                                              reward,
-                                              _currentDQNState->toTensor(),
+                    agent.addToExperiences( previousState,
+                                              action,
+                                              -1,
+                                              currentDQNState,
                                               false,
                                               stackDepth,
-                                              splitsCounter );
-                    action = std::make_unique<Action>(
-                        _agent->act( _currentDQNState->toTensor(), _eps ) );
-                    // perform split according to agent's action:
-                    pl = indexToConstraint( action->getPlConstraintAction() );
+                                              splitsCounter,
+                                              false );
                 }
-                PhaseStatus phaseStatus = valueToPhase( action->getAssignmentStatus() );
+
+                while ( pl->getPhaseStatus() != PHASE_NOT_FIXED )
+                {
+                    action = Action( agent.act( currentDQNState.toTensor(), _eps ) );
+                    pl = indexToConstraint( action.getPlConstraintAction() );
+                }
+
+                // perform split according to agent's action:
+                PhaseStatus phaseStatus = valueToPhase( action.getAssignmentStatus() );
                 _smtCore.performSplit( pl, &phaseStatus );
                 splitJustPerformed = true;
                 // prepare for the next split:
                 firstStep = false;
-                updateDQNState( *prevState ); // prevState = currentState
+                updateDQNState( previousState ); // prevState = currentState
                 prevNumFixedPlConstraints = currNumFixedPlConstraints;
                 continue;
             }
@@ -764,14 +740,15 @@ bool Engine::trainDQNAgent( double timeoutInSeconds, double *score )
                         *score += reward;
                         mainLoopEnd = TimeUtils::sampleMicro();
                         _exitCode = Engine::SAT;
-                        _agent->addToExperiences( prevState->toTensor(),
-                                                  action->actionToTensor(),
+                        agent.addToExperiences( previousState,
+                                                  action,
                                                   reward,
-                                                  _currentDQNState->toTensor(),
+                                                  currentDQNState,
                                                   true,
                                                   stackDepth,
-                                                  splitsCounter );
-                        _agent->handleDone( true );
+                                                  splitsCounter,
+                                                  true );
+                        agent.handleDone( true );
                         printf( "success!" );
                         fflush( stdout );
                         return true;
@@ -783,14 +760,15 @@ bool Engine::trainDQNAgent( double timeoutInSeconds, double *score )
                         mainLoopEnd = TimeUtils::sampleMicro();
                         _exitCode = Engine::UNKNOWN;
                         // agent done with failure - reward is (- num of plConstraints)
-                        _agent->addToExperiences( prevState->toTensor(),
-                                                  action->actionToTensor(),
+                        agent.addToExperiences( previousState,
+                                                  action,
                                                   reward,
-                                                  _currentDQNState->toTensor(),
+                                                  currentDQNState,
                                                   true,
                                                   stackDepth,
-                                                  splitsCounter );
-                        _agent->handleDone( false );
+                                                  splitsCounter,
+                                                  false );
+                        agent.handleDone( false );
                         printf( "fail!" );
                         fflush( stdout );
                         return false;
@@ -803,9 +781,7 @@ bool Engine::trainDQNAgent( double timeoutInSeconds, double *score )
                     }
                 }
                 else
-                {
                     continue;
-                }
             }
 
             // We have out-of-bounds variables.
@@ -882,17 +858,9 @@ bool Engine::trainDQNAgent( double timeoutInSeconds, double *score )
             return false;
         }
     }
-    if ( action )
-        _agent->addToExperiences( prevState->toTensor(),
-                                  action->actionToTensor(),
-                                  -_plConstraints.empty(),
-                                  _currentDQNState->toTensor(),
-                                  true,
-                                  _smtCore.getStackDepth(),
-                                  splitsCounter );
+    // todo add done somehow
 
-
-    _agent->handleDone( false );
+    agent.handleDone( false );
     printf( "done iters!\n" );
     fflush( stdout );
     return false;

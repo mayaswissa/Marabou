@@ -87,7 +87,7 @@ public:
       Attempt to find a feasible solution for the input within a time limit
       (a timeout of 0 means no time limit). Returns true if found, false if infeasible.
     */
-    bool solve( double timeoutInSeconds = 0 );
+    bool solve( double timeoutInSeconds = 0, const std::string &trainedAgentPath = nullptr );
     void beforeSplitingLoop();
 
     /*
@@ -308,13 +308,13 @@ public:
 
     // void trainAndSolve();
 
-    void saveAgentNetworks( const std::string &filePath ) const;
+    ActionSpace constructActionSpace();
 
-    void loadAgentNetworks();
+    void saveAgentNetworks( const Agent &agent, const std::string &filePath ) const;
 
-    bool trainDQNAgent( double timeoutInSeconds, double *score );
+    void loadAgentNetworks( Agent &agent );
 
-    void initDQN( const std::string &trainedAgentPath = "" );
+    bool trainDQNAgent( Agent &agent, double timeoutInSeconds, double *score );
 
     void updateDQNEpsilon();
 
@@ -854,9 +854,6 @@ private:
     /*
      DQN
      */
-    std::unique_ptr<ActionSpace> _actionSpace;
-    std::unique_ptr<Agent> _agent;
-    std::unique_ptr<State> _currentDQNState;
     double _eps;
 
     /*

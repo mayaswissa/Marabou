@@ -3,10 +3,26 @@
 #include <Debug.h>
 #include <random>
 
+
+Experience& Experience::operator=(const Experience& other) {
+    if (this != &other) {
+        state = other.state;
+        action = other.action;
+        reward = other.reward;
+        nextState = other.nextState;
+        done = other.done;
+        depth = other.depth;
+        numSplits = other.numSplits;
+        revisit = other.revisit;
+        changeReward = other.changeReward;
+    }
+    return *this;
+}
+
 void Experience::updateReward( double newReward )
 {
     this->reward = newReward;
-    this->returned = true; // todo ?
+    this->revisit = true; // todo ?
 }
 
 ReplayBuffer::ReplayBuffer( const unsigned actionSize,
@@ -16,63 +32,66 @@ ReplayBuffer::ReplayBuffer( const unsigned actionSize,
     , _bufferSize( bufferSize )
     , _batchSize( batchSize )
     , _numExperiences( 0 )
-    , _numReturnedExperiences( 0 )
+    , _numRevisitExperiences( 0 )
 {
 }
 
-void ReplayBuffer::add( const torch::Tensor &state,
-                        const torch::Tensor &action,
-                        float reward,
-                        const torch::Tensor &nextState,
-                        bool done,
+void ReplayBuffer::add( State state,
+                        Action action,
+                        double reward,
+                        State nextState,
+                        const bool done,
                         unsigned depth,
-                        unsigned numSplits )
+                        unsigned numSplits,
+                        bool changeReward )
 {
     if ( _experiences.size() >= _bufferSize )
     {
-        _experiences.pop(); // last action is the
+        auto experience = _experiences.pop();
         _numExperiences--;
-        _numReturnedExperiences --;
+        if ( experience.revisit )
+            _numRevisitExperiences--;
     }
 
-
-    auto experience = Experience( state, action, reward, nextState, done, depth, numSplits );
-    printf("adding experience!\n");
-    fflush(stdout);
+    auto experience =
+        Experience( state, action, reward, nextState, done, depth, numSplits, changeReward );
     _experiences.append( experience );
     _numExperiences++;
 }
 
 Experience &ReplayBuffer::getExperienceAt( const unsigned index )
 {
-    printf("buffer 46\n");
-    fflush(stdout);
     return _experiences[index];
 }
 
 
 Vector<unsigned> ReplayBuffer::sample() const
 {
-    printf("sample:\n _numReturnedExperiences %d\n", _numReturnedExperiences );
-    fflush(stdout);
+    printf( "sample:\n _numRevisitExperiences %d\n", getNumRevisitExperiences() );
+    fflush( stdout );
     Vector<unsigned> sampledIndices;
 
-    if ( _experiences.empty() || _batchSize == 0 )
+    if ( _experiences.empty() || _batchSize == 0 || _numRevisitExperiences == 0 )
     {
-        printf("experiences empty\n");
-        fflush(stdout);
+        printf( "experiences empty\n" );
+        fflush( stdout );
         return sampledIndices;
     }
 
-    // todo sample from range of valid experiences
-    int sampleSize = static_cast<int>( std::min( _batchSize, _numReturnedExperiences ) );
-    Vector<unsigned> indices( _experiences.size() );
-    std::iota( indices.begin(), indices.end(), 0 );
+    unsigned startIndex = _experiences.size() - _numRevisitExperiences - 1;
+    unsigned endIndex = _experiences.size() - 1;
+
+    unsigned rangeSize = endIndex - startIndex;
+    unsigned sampleSize = std::min( _batchSize, rangeSize );
+
+    Vector<unsigned> indices( rangeSize );
+    std::iota( indices.begin(), indices.end(), startIndex );
+
     std::random_device rd;
     std::mt19937 g( rd() );
     std::shuffle( indices.begin(), indices.end(), g );
 
-    for ( int i = 0; i < sampleSize; ++i )
+    for ( unsigned i = 0; i < sampleSize; ++i )
     {
         auto it = sampledIndices.end();
         sampledIndices.insert( it, indices[i] );
@@ -80,22 +99,23 @@ Vector<unsigned> ReplayBuffer::sample() const
     return sampledIndices;
 }
 
+
 unsigned ReplayBuffer::size() const
 {
     return _numExperiences;
 }
 
-unsigned ReplayBuffer::getNumReturnedExperiences() const
+int ReplayBuffer::getNumRevisitExperiences() const
 {
-    return _numReturnedExperiences;
+    return _numRevisitExperiences;
 }
 
 void ReplayBuffer::updateReturnedWhenDoneSuccess()
 {
-    _numReturnedExperiences = _numExperiences;
+    _numRevisitExperiences = _numExperiences;
 }
 
 void ReplayBuffer::increaseNumReturned()
 {
-    _numReturnedExperiences++;
+    _numRevisitExperiences++;
 }

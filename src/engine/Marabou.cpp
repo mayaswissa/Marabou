@@ -228,7 +228,7 @@ void Marabou::exportAssignment() const
 //     }
 // }
 
-void Marabou::solveQueryWithAgent( double *episodeScore )
+void Marabou::solveQueryWithAgent( Agent &agent,  double *episodeScore )
 {
     enum {
         MICROSECONDS_IN_SECOND = 1000000
@@ -236,32 +236,7 @@ void Marabou::solveQueryWithAgent( double *episodeScore )
 
     // struct timespec start = TimeUtils::sampleMicro();
     unsigned timeoutInSeconds = Options::get()->getInt( Options::TRAIN_DQN_TIMEOUT );
-    _engine->trainDQNAgent( timeoutInSeconds, episodeScore );
-    // _engine->reset();
-
-    // if ( _engine->shouldProduceProofs() && _engine->getExitCode() == Engine::UNSAT )
-    //     _engine->certifyUNSATCertificate();
-    //
-    //
-    // if ( _engine->getExitCode() == Engine::UNKNOWN )
-    // {
-    // struct timespec end = TimeUtils::sampleMicro();
-    // unsigned long long totalElapsed = TimeUtils::timePassed( start, end );
-    // if ( timeoutInSeconds == 0 || totalElapsed < timeoutInSeconds * MICROSECONDS_IN_SECOND )
-    // {
-    //     _cegarSolver = new CEGAR::IncrementalLinearization( _inputQuery, _engine.release() );
-    //     unsigned long long timeoutInMicroSeconds =
-    //         ( timeoutInSeconds == 0 ? 0
-    //                                 : timeoutInSeconds * MICROSECONDS_IN_SECOND - totalElapsed );
-    //     _cegarSolver->setInitialTimeoutInMicroSeconds( timeoutInMicroSeconds );
-    //     // _cegarSolver->solve();
-    //     _engine = std::unique_ptr<Engine>( _cegarSolver->releaseEngine() );
-    // }
-    // }
-    //
-    //
-    // if ( _engine->getExitCode() == Engine::SAT )
-    //     _engine->extractSolution( _inputQuery );
+    _engine->trainDQNAgent( agent, timeoutInSeconds, episodeScore );
 }
 
 void Marabou::trainAndSolve()
@@ -269,20 +244,22 @@ void Marabou::trainAndSolve()
     unsigned _nEpisodes = 50; // todo make argument
     double currEpisodeScore = 0;
     double maxEpisodeScore = 0;
+
     if ( _engine->processInputQuery( _inputQuery ) )
     {
         std::string filePath = "trainedAgent";
-        _engine->initDQN();
+        ActionSpace actionSpace = _engine->constructActionSpace();
+        Agent agent = Agent(actionSpace, filePath);
         for ( unsigned int episode = 0; episode < _nEpisodes; ++episode )
         {
             currEpisodeScore = 0;
-            solveQueryWithAgent( &currEpisodeScore );
+            solveQueryWithAgent( agent, &currEpisodeScore );
             printf( "score: %f\n", currEpisodeScore );
             fflush( stdout );
             _engine->updateDQNEpsilon();
             if ( currEpisodeScore > maxEpisodeScore )
             {
-                _engine->saveAgentNetworks( filePath );
+                _engine->saveAgentNetworks( agent, filePath );
                 maxEpisodeScore = currEpisodeScore;
             }
 
@@ -293,8 +270,7 @@ void Marabou::trainAndSolve()
         printf( "start solving with trained agent\n" );
         fflush( stdout );
         unsigned timeoutInSeconds = Options::get()->getInt( Options::TIMEOUT );
-        _engine->initDQN( filePath );
-        _engine->solve( timeoutInSeconds );
+        _engine->solve( timeoutInSeconds, filePath );
     }
     // solveQuery();
 }
