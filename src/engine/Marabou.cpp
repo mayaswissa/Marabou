@@ -249,7 +249,7 @@ void Marabou::trainAndSolve()
     {
         std::string filePath = "trainedAgent";
         ActionSpace actionSpace = _engine->constructActionSpace();
-        Agent agent = Agent(actionSpace, filePath);
+        Agent agent = Agent(actionSpace, filePath, filePath);
         for ( unsigned int episode = 0; episode < _nEpisodes; ++episode )
         {
             currEpisodeScore = 0;
@@ -259,7 +259,7 @@ void Marabou::trainAndSolve()
             _engine->updateDQNEpsilon();
             if ( currEpisodeScore > maxEpisodeScore )
             {
-                _engine->saveAgentNetworks( agent, filePath );
+                agent.saveNetworks();
                 maxEpisodeScore = currEpisodeScore;
             }
 

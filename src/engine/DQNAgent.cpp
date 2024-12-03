@@ -3,7 +3,7 @@
 #include <random>
 #include <utility>
 
-Agent::Agent( const ActionSpace &actionSpace, const std::string &trainedAgentPath )
+Agent::Agent( const ActionSpace &actionSpace, const std::string &saveAgentPath, const std::string &trainedAgentPath )
     : _actionSpace( actionSpace )
     , _numPlConstraints( actionSpace.getNumConstraints() )
     , _numPhaseStatuses( actionSpace.getNumPhases() )
@@ -17,7 +17,7 @@ Agent::Agent( const ActionSpace &actionSpace, const std::string &trainedAgentPat
     , _tStep( 0 )
     , _experienceDepth( 0 )
     , device( torch::cuda::is_available() ? torch::kCUDA : torch::kCPU )
-    , _filePath( trainedAgentPath )
+    , _saveAgentFilePath(saveAgentPath) , _trainedAgentFilePath( trainedAgentPath )
 {
     _qNetworkLocal.to( device );
     _qNetworkTarget.to( device );
@@ -31,13 +31,13 @@ Agent::Agent( const ActionSpace &actionSpace, const std::string &trainedAgentPat
     }
 }
 
-void Agent::saveNetworks( const std::string &filepath ) const
+void Agent::saveNetworks( ) const
 {
     torch::serialize::OutputArchive output_archive;
     _qNetworkLocal.save( output_archive );
-    output_archive.save_to( filepath + "_local.pth" );
+    output_archive.save_to( _saveAgentFilePath + "_local.pth" );
     _qNetworkTarget.save( output_archive );
-    output_archive.save_to( filepath + "_target.pth" );
+    output_archive.save_to( _saveAgentFilePath + "_target.pth" );
 }
 
 void Agent::loadNetworks()
@@ -45,9 +45,9 @@ void Agent::loadNetworks()
     try
     {
         torch::serialize::InputArchive input_archive;
-        input_archive.load_from( _filePath + "_local.pth" );
+        input_archive.load_from( _trainedAgentFilePath + "_local.pth" );
         _qNetworkLocal.load( input_archive );
-        input_archive.load_from( _filePath + "_target.pth" );
+        input_archive.load_from( _trainedAgentFilePath + "_target.pth" );
         _qNetworkTarget.load( input_archive );
     }
     catch ( const torch::Error &e )
@@ -88,6 +88,12 @@ Action Agent::tensorToAction( const torch::Tensor &tensor )
 
 void Agent::handleDone( bool success )
 {
+
+    // todo - change last action's done to true , change its reward to a good reward if done with success and bad if not.
+    // todo - add all experiences to revisited experiences.
+    // todo - change Buffer size.
+    // todo - chack why not equal state found.
+
     // needs to insert all delayed experiences to the replay buffer and learn:
     // if done with success - the rewards of all steps in this branch remain the same.
     if ( success )
@@ -107,25 +113,40 @@ void Agent::handleDone( bool success )
     learn( GAMMA );
 }
 
-void Agent::moveExperiencesToRevisitedBuffer( unsigned currentNumSplits, unsigned depth )
+void Agent::moveExperiencesToRevisitedBuffer( unsigned currentNumSplits, unsigned depth, State* state )
 {
+
+    printf("backward\n");
+    fflush(stdout);
+
     int skippedSplits = -1;
     while ( _replayedBuffer.numExperiences() )
     {
         skippedSplits++;
         Experience &previousExperience =
             _replayedBuffer.getExperienceAt( _replayedBuffer.numExperiences() - 1 );
-        _experienceDepth = previousExperience.depth;
+
         if ( _experienceDepth < depth )
             break;
 
-
-        auto progress = currentNumSplits - previousExperience.numSplits;
-        double newReward = 0.0;
-        if ( progress > 0 )
-            newReward = 1.0 / static_cast<double>( progress );
-
+        double newReward = 1;
+        if (previousExperience.state.getData() == state->getData())
+        {
+            _experienceDepth = previousExperience.depth;
+            auto progress = currentNumSplits - previousExperience.numSplits;
+            if ( progress > 0 )
+                newReward = 1.0 / static_cast<double>( progress );
+            printf("same!!, reward : %f\n", newReward);
+            fflush(stdout);
+        } else
+        {
+            printf("not the same, reward : %f\n", newReward);
+            fflush(stdout);
+            // todo?
+        }
         previousExperience.updateReward( newReward );
+
+
 
 
         _replayedBuffer.moveToRevisitExperiences();
@@ -164,7 +185,7 @@ void Agent::addToExperiences( unsigned currentNumSplits,
     }
 
     if (_replayedBuffer.numExperiences() > 0 && _experienceDepth >= depth )
-        moveExperiencesToRevisitedBuffer( currentNumSplits, depth );
+        moveExperiencesToRevisitedBuffer( currentNumSplits, depth, &state );
 
     _replayedBuffer.add( state,
                              action,

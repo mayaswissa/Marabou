@@ -561,10 +561,6 @@ bool Engine::solve( double timeoutInSeconds, const std::string &trainedAgentPath
 //     fflush( stdout );
 // }
 
-void Engine::saveAgentNetworks( const Agent &agent, const std::string &filePath ) const
-{
-    agent.saveNetworks( filePath );
-}
 
 void Engine::loadAgentNetworks( Agent &agent )
 {

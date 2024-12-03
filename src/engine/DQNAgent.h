@@ -12,7 +12,7 @@
 class Agent
 {
 public:
-    Agent( const ActionSpace &actionSpace, const std::string &trainedAgentPath = "" );
+    Agent( const ActionSpace &actionSpace, const std::string &saveAgentPath, const std::string &trainedAgentPath = "" );
     Agent( unsigned numVariables,
            unsigned numPhaseStatuses,
            unsigned embeddingDim,
@@ -26,10 +26,10 @@ public:
                            unsigned depth,
                            unsigned numSplits,
                            bool changeReward );
-    void saveNetworks( const std::string &filepath ) const;
+    void saveNetworks() const;
     void loadNetworks();
     void handleDone( bool success );
-    void moveExperiencesToRevisitedBuffer( unsigned currentNumSplits, unsigned depth );
+    void moveExperiencesToRevisitedBuffer( unsigned currentNumSplits, unsigned depth, State* state );
     Action act( const torch::Tensor &state, double eps = 0.1 );
     void learn( const double gamma );
     torch::Device getDevice() const;
@@ -51,6 +51,7 @@ private:
     static constexpr unsigned UPDATE_EVERY = 4; // todo change
     static constexpr unsigned BATCH_SIZE = 10;  // todo check
     torch::Device device;
-    const std::string _filePath;
+    const std::string _saveAgentFilePath;
+    const std::string _trainedAgentFilePath;
 };
 #endif

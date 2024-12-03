@@ -310,8 +310,6 @@ public:
 
     ActionSpace constructActionSpace();
 
-    void saveAgentNetworks( const Agent &agent, const std::string &filePath ) const;
-
     void loadAgentNetworks( Agent &agent );
 
     bool trainDQNAgent( Agent &agent, double timeoutInSeconds, double *score );
