@@ -15,7 +15,7 @@ Agent::Agent( const ActionSpace &actionSpace, const std::string &trainedAgentPat
     , optimizer( _qNetworkLocal.parameters(), torch::optim::AdamOptions( LR ).weight_decay( 1e-4 ) )
     , _replayedBuffer( _numPlConstraints * _numPhaseStatuses, 1e5, BATCH_SIZE )
     , _tStep( 0 )
-    , _currentDepth( 0 )
+    , _experienceDepth( 0 )
     , device( torch::cuda::is_available() ? torch::kCUDA : torch::kCPU )
     , _filePath( trainedAgentPath )
 {
@@ -100,11 +100,36 @@ void Agent::handleDone( bool success )
     unsigned numReturned = _replayedBuffer.getNumRevisitExperiences();
     for ( unsigned index = numReturned + 1; index < _replayedBuffer.numExperiences(); index++ )
     {
-        _replayedBuffer.getExperienceAt( index ).updateReward( -1 );
+        _replayedBuffer.getRevisitedExperienceAt( index ).updateReward( -1 );
         _replayedBuffer.increaseNumReturned();
     }
     const auto experiences = _replayedBuffer.sample();
     learn( GAMMA );
+}
+
+void Agent::moveExperiencesToRevisitedBuffer( unsigned currentNumSplits, unsigned depth )
+{
+    int skippedSplits = -1;
+    while ( _replayedBuffer.numExperiences() )
+    {
+        skippedSplits++;
+        Experience &previousExperience =
+            _replayedBuffer.getExperienceAt( _replayedBuffer.numExperiences() - 1 );
+        _experienceDepth = previousExperience.depth;
+        if ( _experienceDepth < depth )
+            break;
+
+
+        auto progress = currentNumSplits - previousExperience.numSplits;
+        double newReward = 0.0;
+        if ( progress > 0 )
+            newReward = 1.0 / static_cast<double>( progress );
+
+        previousExperience.updateReward( newReward );
+
+
+        _replayedBuffer.moveToRevisitExperiences();
+    }
 }
 
 void Agent::addToExperiences( unsigned currentNumSplits,
@@ -117,48 +142,31 @@ void Agent::addToExperiences( unsigned currentNumSplits,
                               unsigned numSplits,
                               bool changeReward )
 {
-    _currentDepth = depth;
-    unsigned lastNotVisitedDepth = 0;
-    if ( _replayedBuffer.numExperiences() > 0 )
+    // need to first check if the depth is highe to the last inserted depth.
+    // if so - go over all the experiences until this depth's experience, give a reward and change
+    // vector. then when reaching the same depth validate its the same phase and plConstraint, if so
+    // - the reward would be the diff of depth / plConstraints.size (?) from the last inserted. if
+    // not - dont know.
+    // if not - if its equal - do something
+    // if not and not - insert it to the regular exeperiences vector
+
+    if ( !changeReward )
     {
-        lastNotVisitedDepth =
-            _replayedBuffer.getExperienceAt( _replayedBuffer.numExperiences() - 1 ).depth;
+        _replayedBuffer.addToRevisitExperiences( state,
+                                                 action,
+                                                 static_cast<float>( reward ),
+                                                 nextState,
+                                                 done,
+                                                 depth,
+                                                 numSplits,
+                                                 changeReward );
+        return;
     }
 
-    bool revisited = lastNotVisitedDepth >= _currentDepth;
-    while ( _replayedBuffer.numExperiences() && lastNotVisitedDepth >= _currentDepth )
-    {
-        Experience &experience =
-            _replayedBuffer.getExperienceAt( _replayedBuffer.numExperiences() - 1 );
+    if (_replayedBuffer.numExperiences() > 0 && _experienceDepth >= depth )
+        moveExperiencesToRevisitedBuffer( currentNumSplits, depth );
 
-        ASSERT ( _currentDepth >= experience.depth );
-
-        // todo - check if possible to skip the relu and go to a deeper depth in its other
-        // if no progress in splits, reward stays the same
-        if ( currentNumSplits > experience.numSplits && experience.changeReward )
-        {
-            // encourage the agent to quickly prune branches
-            printf( "this experience's depth: %d, current depth: %d\n",
-                    experience.depth,
-                    _currentDepth );
-            auto splitsSkipped = static_cast<double>( experience.depth - _currentDepth ); // todo?
-            printf( "new reward : %f, prev reward : %f\n", splitsSkipped, experience.reward );
-            fflush( stdout );
-            experience.updateReward( splitsSkipped );
-
-            // auto progress = currentNumSplits - experience.numSplits;
-            // double reward = 0.0;
-            // if (progress > 0)
-            //     reward = 1.0 / static_cast<double>(progress);
-
-            // experience.updateReward( reward );
-        }
-        _replayedBuffer.moveToRevisitExperiences( _replayedBuffer.numExperiences() - 1 );
-        lastNotVisitedDepth =
-            _replayedBuffer.getExperienceAt( _replayedBuffer.numExperiences() - 1 ).depth;
-    }
-    if ( !revisited )
-        _replayedBuffer.add( state,
+    _replayedBuffer.add( state,
                              action,
                              static_cast<float>( reward ),
                              nextState,
@@ -166,17 +174,88 @@ void Agent::addToExperiences( unsigned currentNumSplits,
                              depth,
                              numSplits,
                              changeReward );
-    if ( _replayedBuffer.numExperiences() > 0 )
-    {
-        _currentDepth =
-            _replayedBuffer.getExperienceAt( _replayedBuffer.numExperiences() - 1 ).depth;
-    }
+    _experienceDepth = depth;
 }
+
+// void Agent::addToExperiences( unsigned /*currentNumSplits*/,
+//                               State state,
+//                               Action action,
+//                               double reward,
+//                               State nextState,
+//                               const bool done,
+//                               unsigned depth,
+//                               unsigned numSplits,
+//                               bool changeReward )
+// {
+//     // need to first check if the depth is highe to the last inserted depth.
+//     // if so - go over all the experiences until this depth's experience, give a reward and change
+//     // vector. then when reaching the same depth validate its the same phase and plConstraint, if so
+//     // - the reward would be the diff of depth / plConstraints.size (?) from the last inserted. if
+//     // not - dont know.
+//     // if not - if its equal - do something
+//     // if not and not - insert it to the regular exeperiences vector
+//
+//
+//     if ( !changeReward )
+//     {
+//         _replayedBuffer.addToRevisitExperiences( state,
+//                                                  action,
+//                                                  static_cast<float>( reward ),
+//                                                  nextState,
+//                                                  done,
+//                                                  depth,
+//                                                  numSplits,
+//                                                  changeReward );
+//         return;
+//     }
+//
+//     if ( _replayedBuffer.numExperiences() == 0 || _experienceDepth < depth )
+//     {
+//         _replayedBuffer.add( state,
+//                              action,
+//                              static_cast<float>( reward ),
+//                              nextState,
+//                              done,
+//                              depth,
+//                              numSplits,
+//                              changeReward );
+//         _experienceDepth = depth;
+//         return;
+//     }
+//
+//
+//     int skippedSplits = -1;
+//     while ( _replayedBuffer.numExperiences() )
+//     {
+//         skippedSplits++;
+//         Experience &previousExperience =
+//             _replayedBuffer.getExperienceAt( _replayedBuffer.numExperiences() - 1 );
+//         _experienceDepth = previousExperience.depth;
+//         if ( _experienceDepth < depth )
+//             break;
+//         // todo - check if possible to skip the relu and go to a deeper depth in its other
+//         // encourage the agent to quickly prune branches
+//         double splitsSkipped = _numPlConstraints - _experienceDepth -
+//                                skippedSplits;
+//         double newReward = static_cast<double>( splitsSkipped / _numPlConstraints ); // todo?
+//         printf( "new reward : %f\n", newReward );
+//         fflush( stdout );
+//         previousExperience.updateReward( newReward );
+//
+//         // auto progress = currentNumSplits - experience.numSplits;
+//         // double reward = 0.0;
+//         // if (progress > 0)
+//         //     reward = 1.0 / static_cast<double>(progress);
+//
+//         // experience.updateReward( reward );
+//         _replayedBuffer.moveToRevisitExperiences();
+//     }
+// }
 
 void Agent::step()
 {
     _tStep = ( _tStep + 1 ) % UPDATE_EVERY;
-    if ( _tStep == 0 && _replayedBuffer.numRevisitExperiences() > BATCH_SIZE )
+    if ( _tStep == 0 && _replayedBuffer.numRevisitedExperiences() > BATCH_SIZE )
     {
         learn( GAMMA ); // todo Gamma should change?
     }
@@ -211,9 +290,9 @@ void Agent::learn( const double gamma )
     // then one more loop - to delete them ? no need, maybe.
     for ( const unsigned index : indices )
     {
-        if ( index < _replayedBuffer.numRevisitExperiences() )
+        if ( index < _replayedBuffer.numRevisitedExperiences() )
         {
-            Experience &experience = _replayedBuffer.getExperienceAt( index );
+            Experience &experience = _replayedBuffer.getRevisitedExperienceAt( index );
             states.push_back( experience.state.toTensor().to( device ) );
             actions.push_back( experience.action.actionToTensor().to( device ) );
             rewards.push_back( experience.reward );

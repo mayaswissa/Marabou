@@ -602,14 +602,14 @@ bool Engine::trainDQNAgent( Agent &agent, double timeoutInSeconds, double *score
     int currNumFixedPlConstraints, prevNumFixedPlConstraints = 0;
     bool firstStep = true;
     unsigned maxIterations = 100000;
+    unsigned iterations = 0;
     unsigned splitsCounter = 0;
-
     bool splitJustPerformed = true;
     struct timespec mainLoopStart = TimeUtils::sampleMicro();
-    while ( splitsCounter <= maxIterations )
+    while ( iterations <= maxIterations )
     {
         unsigned stackDepth = _smtCore.getStackDepth();
-        splitsCounter++; // todo here?
+        iterations++; // todo here?
         struct timespec mainLoopEnd = TimeUtils::sampleMicro();
         mainLoopStart = mainLoopEnd;
 
@@ -664,6 +664,7 @@ bool Engine::trainDQNAgent( Agent &agent, double timeoutInSeconds, double *score
                 if ( !firstStep )
                 {
                     // save the last split to replay buffer
+                    splitsCounter ++;
                     auto diff = currNumFixedPlConstraints - prevNumFixedPlConstraints;
                     auto numNotFixedPlConstraints =
                         _plConstraints.size() - currNumFixedPlConstraints;

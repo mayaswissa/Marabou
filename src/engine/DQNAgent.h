@@ -29,6 +29,7 @@ public:
     void saveNetworks( const std::string &filepath ) const;
     void loadNetworks();
     void handleDone( bool success );
+    void moveExperiencesToRevisitedBuffer( unsigned currentNumSplits, unsigned depth );
     Action act( const torch::Tensor &state, double eps = 0.1 );
     void learn( const double gamma );
     torch::Device getDevice() const;
@@ -43,7 +44,7 @@ private:
     torch::optim::Adam optimizer;
     ReplayBuffer _replayedBuffer;
     unsigned _tStep;
-    unsigned _currentDepth;
+    unsigned _experienceDepth;
     static constexpr double GAMMA = 0.99;
     static constexpr double TAU = 1e-3;
     static constexpr double LR = 5e-4;

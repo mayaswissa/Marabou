@@ -32,7 +32,7 @@ ReplayBuffer::ReplayBuffer( const unsigned actionSize,
     , _bufferSize( bufferSize )
     , _batchSize( batchSize )
     , _numExperiences( 0 )
-    , _numRevisitExperiences( 0 )
+    , _numRevisitedExperiences( 0 )
 {
 }
 
@@ -57,19 +57,44 @@ void ReplayBuffer::add( State state,
     _numExperiences++;
 }
 
+void ReplayBuffer::addToRevisitExperiences( State state,
+                        Action action,
+                        double reward,
+                        State nextState,
+                        const bool done,
+                        unsigned depth,
+                        unsigned numSplits,
+                        bool changeReward )
+{
+    if ( _revisitedExperiences.size() >= _bufferSize )
+    {
+        auto experience = _revisitedExperiences.pop();
+        _numRevisitedExperiences--;
+    }
+
+    auto experience =
+        Experience( state, action, reward, nextState, done, depth, numSplits, changeReward );
+    _revisitedExperiences.append( experience );
+    _numRevisitedExperiences++;
+}
+
 Experience &ReplayBuffer::getExperienceAt( const unsigned index )
 {
     return _experiences[index];
 }
 
 
+Experience &ReplayBuffer::getRevisitedExperienceAt( const unsigned index )
+{
+    return _revisitedExperiences[index];
+}
+
+
 Vector<unsigned> ReplayBuffer::sample() const
 {
-    printf( "sample:\n _numRevisitExperiences %d\n", getNumRevisitExperiences() );
-    fflush( stdout );
     Vector<unsigned> sampledIndices;
 
-    if ( _experiences.empty() || _batchSize == 0 || _numRevisitExperiences == 0 )
+    if ( _experiences.empty() || _batchSize == 0 || _numRevisitedExperiences == 0 )
     {
         printf( "experiences empty\n" );
         fflush( stdout );
@@ -77,7 +102,7 @@ Vector<unsigned> ReplayBuffer::sample() const
     }
 
     unsigned startIndex =  0;
-    unsigned endIndex = numRevisitExperiences() - 1;
+    unsigned endIndex = numRevisitedExperiences() - 1;
 
     unsigned rangeSize = endIndex - startIndex;
     unsigned sampleSize = std::min( _batchSize, rangeSize );
@@ -103,48 +128,50 @@ unsigned ReplayBuffer::numExperiences() const
     return _numExperiences;
 }
 
-unsigned ReplayBuffer::numRevisitExperiences() const
+unsigned ReplayBuffer::numRevisitedExperiences() const
 {
-    return _numRevisitExperiences;
+    return _numRevisitedExperiences;
 }
 
 void ReplayBuffer::decreaseNumRevisitExperiences()
 {
-    _numRevisitExperiences--;
+    _numRevisitedExperiences--;
 }
 
 
 int ReplayBuffer::getNumRevisitExperiences() const
 {
-    return _numRevisitExperiences;
+    return _numRevisitedExperiences;
 }
 
 void ReplayBuffer::updateReturnedWhenDoneSuccess()
 {
-    _numRevisitExperiences = _numExperiences;
+    _numRevisitedExperiences = _numExperiences;
 }
 
 void ReplayBuffer::increaseNumReturned()
 {
-    _numRevisitExperiences++;
+    _numRevisitedExperiences++;
 }
 
-void ReplayBuffer::moveToRevisitExperiences( const unsigned index )
+void ReplayBuffer::moveToRevisitExperiences()
 {
-    if ( _numRevisitExperiences >= _bufferSize )
-    {
-        auto experience = _revisitExperiences.popFirst();
-        decreaseNumRevisitExperiences();
+    if (_experiences.empty()) {
+        // If there are no experiences, do nothing
+        return;
     }
-    auto it = std::find_if( _experiences.begin(),
-                            _experiences.end(),
-                            [index]( const Experience &e ) { return e.depth == index; } );
 
-    if ( it != _experiences.end() )
-    {
-        _revisitExperiences.append( std::move( *it ) );
-        _numRevisitExperiences ++;
-        _experiences.erase( it );
-        _numExperiences--;
+    // Check if the revisit experiences buffer is full
+    if (_numRevisitedExperiences >= _bufferSize) {
+        // Remove the first experience from revisit experiences if it's full
+        _revisitedExperiences.popFirst();
+        _numRevisitedExperiences--;
     }
+
+    // Move the last experience from experiences to revisit experiences
+
+    _revisitedExperiences.append(std::move(_experiences[_numExperiences - 1]));
+    _numRevisitedExperiences++;
+    _experiences.pop();
+    _numExperiences--;
 }

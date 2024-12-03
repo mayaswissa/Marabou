@@ -81,15 +81,24 @@ public:
               unsigned depth,
               unsigned numSplits = 0,
               bool changeReward = true );
+    Experience &getRevisitedExperienceAt( unsigned index );
     Experience &getExperienceAt( unsigned index );
     Vector<unsigned> sample() const;
     unsigned numExperiences() const;
-    unsigned numRevisitExperiences() const;
+    unsigned numRevisitedExperiences() const;
     int getNumRevisitExperiences() const;
     void updateReturnedWhenDoneSuccess();
     void increaseNumReturned();
     void decreaseNumRevisitExperiences();
-    void moveToRevisitExperiences(const unsigned index);
+    void moveToRevisitExperiences();
+    void addToRevisitExperiences( State state,
+                                   Action action,
+                                   double reward,
+                                   State nextState,
+                                   const bool done,
+                                   unsigned depth,
+                                   unsigned numSplits = 0,
+                                   bool changeReward = true );
 
 private:
     unsigned _actionSize;
@@ -98,9 +107,9 @@ private:
     // number of experiences in the buffer
     int _numExperiences;
     // The number of experiences we revisited after completing a branch search in the search tree.
-    unsigned _numRevisitExperiences;
+    unsigned _numRevisitedExperiences;
     Vector<Experience> _experiences;
-    Vector<Experience> _revisitExperiences;
+    Vector<Experience> _revisitedExperiences;
 };
 
 #endif
