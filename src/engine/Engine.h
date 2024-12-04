@@ -308,11 +308,15 @@ public:
 
     // void trainAndSolve();
 
-    ActionSpace constructActionSpace();
+    unsigned numPlConstraints();
 
     void loadAgentNetworks( Agent &agent );
 
-    bool trainDQNAgent( Agent &agent, double timeoutInSeconds, double *score );
+    std::unique_ptr<Agent> trainDQNAgent( double epsilon,
+                        std::unique_ptr<Agent> agent,
+                        double timeoutInSeconds,
+                        double *score,
+                        const std::string &trainedAgentPath = "trainedAgent" );
 
     void updateDQNEpsilon();
 

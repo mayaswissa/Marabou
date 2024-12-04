@@ -32,7 +32,13 @@ public:
       Entry point of this class
     */
     void run();
-    Agent *runAgentTraining( double *episodeScore, double *maxEpisodeScore, Agent *agent=nullptr );
+    void prepareInputQuery();
+
+    unsigned numPLConstraints() const;
+    std::unique_ptr<Agent> runAgentTraining( double epsilon, bool training = true,
+                           std::unique_ptr<Agent> agent = nullptr,
+                           double *episodeScore = nullptr,
+                           double *maxEpisodeScore = nullptr );
 
 private:
     InputQuery _inputQuery;
@@ -41,7 +47,6 @@ private:
       Extract the options and input files (network and property), and
       use them to generate the input query
     */
-    void prepareInputQuery();
     void extractSplittingThreshold();
 
     /*
@@ -49,8 +54,10 @@ private:
     */
     void solveQuery();
 
-    Agent *
-    solveQueryWithAgent( double *episodeScore, double *maxEpisodeScore, Agent *agent = nullptr );
+    std::unique_ptr<Agent> solveQueryWithAgent( double epsilon, bool training = true,
+                              std::unique_ptr<Agent> agent = nullptr,
+                              double *episodeScore = nullptr,
+                              double *maxEpisodeScore = nullptr );
 
     /*
       Display the results
@@ -66,8 +73,6 @@ private:
       Import assignment for debugging as per Options
      */
     void importDebuggingSolution();
-
-    void trainAndSolve();
 
     /*
       ACAS network parser

@@ -3,12 +3,12 @@
 #include <random>
 #include <utility>
 
-Agent::Agent( const ActionSpace &actionSpace, const std::string &saveAgentPath, const std::string &trainedAgentPath )
-    : _actionSpace( actionSpace )
-    , _numPlConstraints( actionSpace.getNumConstraints() )
-    , _numPhaseStatuses( actionSpace.getNumPhases() )
+Agent::Agent( unsigned numPlConstraints, unsigned numPhases, const std::string &saveAgentPath, const std::string &trainedAgentPath )
+    : _actionSpace( ActionSpace( numPlConstraints, numPhases ) )
+    , _numPlConstraints( numPlConstraints )
+    , _numPhaseStatuses( numPhases )
     , _embeddingDim( 4 ) // todo change
-    , _numActions( actionSpace.getSpaceSize() )
+    , _numActions( _actionSpace.getSpaceSize() )
     , _qNetworkLocal( _numPlConstraints, _numPhaseStatuses, _embeddingDim, _numActions )
     , _qNetworkTarget( _numPlConstraints, _numPhaseStatuses, _embeddingDim, _numActions )
     // todo adaptive learning rate

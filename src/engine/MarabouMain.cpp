@@ -135,20 +135,24 @@ int marabouMain( int argc, char **argv )
             {
                 unsigned _nEpisodes = 50; // todo make argument
                 double currEpisodeScore = 0;
+                std::unique_ptr<Agent> agent = nullptr;
                 double maxEpisodeScore = 0;
-
+                double epsilon = GlobalConfiguration::DQN_EPSILON_START;
                 for ( unsigned int episode = 0; episode < _nEpisodes; ++episode )
                 {
                     currEpisodeScore = 0;
-                    // todo use the same agent.
-                    Marabou().runAgentTraining(&currEpisodeScore, &maxEpisodeScore);
+                    agent = Marabou().runAgentTraining(epsilon,
+                        true, std::move( agent ), &currEpisodeScore, &maxEpisodeScore );
                     printf( "done one train, score: %f\n", currEpisodeScore );
                     fflush( stdout );
+                    epsilon = std::max( GlobalConfiguration::DQN_EPSILON_END,
+                         epsilon * GlobalConfiguration::DQN_EPSILON_DECAY );
                 }
+
 
                 printf( "start solving with trained agent\n" );
                 fflush( stdout );
-
+                Marabou().runAgentTraining( false );
             }
 
             Marabou().run();

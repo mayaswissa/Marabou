@@ -39,7 +39,7 @@ class UnsatCertificateNode;
 class IEngine
 {
 public:
-    virtual ~IEngine(){};
+    virtual ~IEngine() {};
 
     enum ExitCode {
         UNSAT = 0,

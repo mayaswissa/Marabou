@@ -12,11 +12,11 @@
 class Agent
 {
 public:
-    Agent( const ActionSpace &actionSpace, const std::string &saveAgentPath, const std::string &trainedAgentPath = "" );
+    Agent( unsigned numPlConstraints, unsigned numPhases, const std::string &saveAgentPath, const std::string &trainedAgentPath = "" );
     Agent( unsigned numVariables,
            unsigned numPhaseStatuses,
            unsigned embeddingDim,
-           ActionSpace &actionSpace );
+           std::unique_ptr< ActionSpace > actionSpace );
     void step();
     void addToExperiences( unsigned currentNumSplits, State state,
                            Action action,
@@ -39,7 +39,7 @@ public:
 private:
     static void softUpdate( const QNetwork &localModel, const QNetwork &targetModel );
     bool handle_invalid_gradients();
-    const ActionSpace &_actionSpace;
+    ActionSpace _actionSpace;
     unsigned _numPlConstraints, _numPhaseStatuses, _embeddingDim, _numActions;
     QNetwork _qNetworkLocal, _qNetworkTarget;
     torch::optim::Adam optimizer;

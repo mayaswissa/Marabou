@@ -54,6 +54,10 @@ Marabou::~Marabou()
         _onnxParser = NULL;
     }
 }
+unsigned Marabou::numPLConstraints() const
+{
+    return _engine->numPlConstraints();
+}
 
 void Marabou::run()
 {
@@ -72,23 +76,18 @@ void Marabou::run()
         exportAssignment();
 }
 
-Agent * Marabou::runAgentTraining( double *episodeScore, double *maxEpisodeScore, Agent * agent )
+
+std::unique_ptr<Agent> Marabou::runAgentTraining( double epsilon,
+                                const bool training,
+                                std::unique_ptr<Agent> agent,
+                                double *episodeScore,
+                                double *maxEpisodeScore )
 {
     struct timespec start = TimeUtils::sampleMicro();
 
     prepareInputQuery();
 
-    if ( GlobalConfiguration::USE_DQN )
-        if (agent)
-            solveQueryWithAgent( episodeScore, maxEpisodeScore, agent ); // todo free agent
-    else
-    {
-        agent = solveQueryWithAgent( episodeScore, maxEpisodeScore );
-    }
-
-
-    else
-        solveQuery();
+    agent = solveQueryWithAgent( epsilon, training, std::move( agent ), episodeScore, maxEpisodeScore );
 
     struct timespec end = TimeUtils::sampleMicro();
 
@@ -252,7 +251,11 @@ void Marabou::exportAssignment() const
 //     }
 // }
 
-Agent* Marabou::solveQueryWithAgent( double *episodeScore, double *maxEpisodeScore, Agent *agent )
+std::unique_ptr<Agent> Marabou::solveQueryWithAgent( double epsilon,
+                                                     bool training,
+                                                     std::unique_ptr<Agent> agent,
+                                                     double *episodeScore,
+                                                     double *maxEpisodeScore )
 {
     enum {
         MICROSECONDS_IN_SECOND = 1000000
@@ -260,26 +263,26 @@ Agent* Marabou::solveQueryWithAgent( double *episodeScore, double *maxEpisodeSco
 
     if ( _engine->processInputQuery( _inputQuery ) )
     {
-        std::string filePath = "trainedAgent";
-        ActionSpace actionSpace = _engine->constructActionSpace();
-        if (!agent)
-        {
-            auto newAgent = new Agent( actionSpace, filePath, filePath );
-            agent = newAgent;
-        }
+        std::string filePath = "trainedAgent"; // todo move
+
         // struct timespec start = TimeUtils::sampleMicro();
         unsigned timeoutInSeconds = Options::get()->getInt( Options::TRAIN_DQN_TIMEOUT );
-        _engine->trainDQNAgent( *agent, timeoutInSeconds, episodeScore );
-        _engine->updateDQNEpsilon();
-
-        if ( *episodeScore > *maxEpisodeScore )
+        if ( training )
         {
-            agent->saveNetworks();
-            *maxEpisodeScore = *episodeScore;
+            agent = _engine->trainDQNAgent(
+                epsilon, std::move( agent ), timeoutInSeconds, episodeScore, filePath );
+
+
+            if ( *episodeScore > *maxEpisodeScore )
+            {
+                agent->saveNetworks();
+                *maxEpisodeScore = *episodeScore;
+            }
         }
-        return agent;
+        else
+            _engine->solve( timeoutInSeconds, filePath );
     }
-    return nullptr;
+    return agent;
 }
 
 
@@ -387,7 +390,7 @@ void Marabou::displayResults( unsigned long long microSecondsElapsed ) const
         resultString = "UNKNOWN";
         printf( "UNKNOWN\n" );
     }
-    else if (result == Engine::MAX_ITERATIONS)
+    else if ( result == Engine::MAX_ITERATIONS )
     {
         resultString = "MAX_ITERATIONS";
         printf( "MAX_ITERATIONS\n" );
