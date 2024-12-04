@@ -131,6 +131,25 @@ int marabouMain( int argc, char **argv )
 #ifdef ENABLE_OPENBLAS
             openblas_set_num_threads( options->getInt( Options::NUM_BLAS_THREADS ) );
 #endif
+            if ( GlobalConfiguration::USE_DQN )
+            {
+                unsigned _nEpisodes = 50; // todo make argument
+                double currEpisodeScore = 0;
+                double maxEpisodeScore = 0;
+
+                for ( unsigned int episode = 0; episode < _nEpisodes; ++episode )
+                {
+                    currEpisodeScore = 0;
+                    Marabou().runAgentTraining(&currEpisodeScore, &maxEpisodeScore);
+                    printf( "done one train, score: %f\n", currEpisodeScore" );
+                    fflush( stdout );
+                }
+
+                printf( "start solving with trained agent\n" );
+                fflush( stdout );
+
+            }
+
             Marabou().run();
         }
     }

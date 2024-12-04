@@ -48,7 +48,7 @@ public:
         UNKNOWN = 3,
         TIMEOUT = 4,
         QUIT_REQUESTED = 5,
-
+        MAX_ITERATIONS = 6,
         NOT_DONE = 999,
     };
 
@@ -90,7 +90,8 @@ public:
     /*
       Solve the encoded query.
     */
-    virtual bool solve( double timeoutInSeconds, const std::string &trainedAgentPath = nullptr ) = 0;
+    virtual bool solve( double timeoutInSeconds,
+                        const std::string &trainedAgentPath = nullptr ) = 0;
 
     /*
       Retrieve the exit code.

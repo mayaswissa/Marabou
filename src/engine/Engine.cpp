@@ -862,6 +862,7 @@ bool Engine::trainDQNAgent( Agent &agent, double timeoutInSeconds, double *score
     agent.handleDone( false );
     printf( "done iters!\n" );
     fflush( stdout );
+    _exitCode = Engine::MAX_ITERATIONS;
     return false;
 }
 

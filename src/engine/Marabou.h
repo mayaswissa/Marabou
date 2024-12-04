@@ -32,6 +32,7 @@ public:
       Entry point of this class
     */
     void run();
+    void runAgentTraining( double *episodeScore, double *maxEpisodeScore );
 
 private:
     InputQuery _inputQuery;
@@ -48,7 +49,7 @@ private:
     */
     void solveQuery();
 
-    void solveQueryWithAgent( Agent &agent, double *episodeScore );
+    void solveQueryWithAgent( double *episodeScore, double *maxEpisodeScore );
 
     /*
       Display the results
