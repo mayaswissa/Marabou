@@ -140,8 +140,9 @@ int marabouMain( int argc, char **argv )
                 for ( unsigned int episode = 0; episode < _nEpisodes; ++episode )
                 {
                     currEpisodeScore = 0;
+                    // todo use the same agent.
                     Marabou().runAgentTraining(&currEpisodeScore, &maxEpisodeScore);
-                    printf( "done one train, score: %f\n", currEpisodeScore" );
+                    printf( "done one train, score: %f\n", currEpisodeScore );
                     fflush( stdout );
                 }
 

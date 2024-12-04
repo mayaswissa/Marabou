@@ -32,7 +32,7 @@ public:
       Entry point of this class
     */
     void run();
-    void runAgentTraining( double *episodeScore, double *maxEpisodeScore );
+    Agent *runAgentTraining( double *episodeScore, double *maxEpisodeScore, Agent *agent=nullptr );
 
 private:
     InputQuery _inputQuery;
@@ -49,7 +49,8 @@ private:
     */
     void solveQuery();
 
-    void solveQueryWithAgent( double *episodeScore, double *maxEpisodeScore );
+    Agent *
+    solveQueryWithAgent( double *episodeScore, double *maxEpisodeScore, Agent *agent = nullptr );
 
     /*
       Display the results
@@ -87,7 +88,6 @@ private:
       The solver
     */
     std::unique_ptr<Engine> _engine;
-
 };
 
 #endif // __Marabou_h__

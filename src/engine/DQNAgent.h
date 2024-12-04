@@ -34,6 +34,7 @@ public:
     void learn( const double gamma );
     torch::Device getDevice() const;
     Action tensorToAction( const torch::Tensor &tensor );
+  unsigned getNumExperiences() const;
 
 private:
     static void softUpdate( const QNetwork &localModel, const QNetwork &targetModel );

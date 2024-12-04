@@ -72,14 +72,20 @@ void Marabou::run()
         exportAssignment();
 }
 
-void Marabou::runAgentTraining( double *episodeScore, double *maxEpisodeScore )
+Agent * Marabou::runAgentTraining( double *episodeScore, double *maxEpisodeScore, Agent * agent )
 {
     struct timespec start = TimeUtils::sampleMicro();
 
     prepareInputQuery();
 
     if ( GlobalConfiguration::USE_DQN )
-        solveQueryWithAgent( episodeScore, maxEpisodeScore );
+        if (agent)
+            solveQueryWithAgent( episodeScore, maxEpisodeScore, agent ); // todo free agent
+    else
+    {
+        agent = solveQueryWithAgent( episodeScore, maxEpisodeScore );
+    }
+
 
     else
         solveQuery();
@@ -91,6 +97,7 @@ void Marabou::runAgentTraining( double *episodeScore, double *maxEpisodeScore )
 
     if ( Options::get()->getBool( Options::EXPORT_ASSIGNMENT ) )
         exportAssignment();
+    return agent;
 }
 
 void Marabou::prepareInputQuery()
@@ -245,7 +252,7 @@ void Marabou::exportAssignment() const
 //     }
 // }
 
-void Marabou::solveQueryWithAgent( double *episodeScore, double *maxEpisodeScore )
+Agent* Marabou::solveQueryWithAgent( double *episodeScore, double *maxEpisodeScore, Agent *agent )
 {
     enum {
         MICROSECONDS_IN_SECOND = 1000000
@@ -255,18 +262,24 @@ void Marabou::solveQueryWithAgent( double *episodeScore, double *maxEpisodeScore
     {
         std::string filePath = "trainedAgent";
         ActionSpace actionSpace = _engine->constructActionSpace();
-        Agent agent = Agent( actionSpace, filePath, filePath );
+        if (!agent)
+        {
+            auto newAgent = new Agent( actionSpace, filePath, filePath );
+            agent = newAgent;
+        }
         // struct timespec start = TimeUtils::sampleMicro();
         unsigned timeoutInSeconds = Options::get()->getInt( Options::TRAIN_DQN_TIMEOUT );
-        _engine->trainDQNAgent( agent, timeoutInSeconds, episodeScore );
+        _engine->trainDQNAgent( *agent, timeoutInSeconds, episodeScore );
         _engine->updateDQNEpsilon();
 
         if ( *episodeScore > *maxEpisodeScore )
         {
-            agent.saveNetworks();
+            agent->saveNetworks();
             *maxEpisodeScore = *episodeScore;
         }
+        return agent;
     }
+    return nullptr;
 }
 
 

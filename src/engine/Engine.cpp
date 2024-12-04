@@ -569,8 +569,9 @@ void Engine::loadAgentNetworks( Agent &agent )
 
 bool Engine::trainDQNAgent( Agent &agent, double timeoutInSeconds, double *score )
 {
-    printf( "trainDQNAgent\n" );
+    printf( "trainDQNAgent, numExperiences : %d\n", agent.getNumExperiences() );
     fflush( stdout );
+
     SignalHandler::getInstance()->initialize();
     SignalHandler::getInstance()->registerClient( this );
 

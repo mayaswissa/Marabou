@@ -13,7 +13,7 @@ Agent::Agent( const ActionSpace &actionSpace, const std::string &saveAgentPath, 
     , _qNetworkTarget( _numPlConstraints, _numPhaseStatuses, _embeddingDim, _numActions )
     // todo adaptive learning rate
     , optimizer( _qNetworkLocal.parameters(), torch::optim::AdamOptions( LR ).weight_decay( 1e-4 ) )
-    , _replayedBuffer( _numPlConstraints * _numPhaseStatuses, 1e5, BATCH_SIZE )
+    , _replayedBuffer( _numPlConstraints * _numPhaseStatuses, _numPlConstraints, BATCH_SIZE )
     , _tStep( 0 )
     , _experienceDepth( 0 )
     , device( torch::cuda::is_available() ? torch::kCUDA : torch::kCPU )
@@ -85,6 +85,11 @@ Action Agent::tensorToAction( const torch::Tensor &tensor )
     return Action( _numPhaseStatuses, plConstraintActionIndex, assignmentIndex );
 }
 
+unsigned Agent::getNumExperiences() const
+{
+    return _replayedBuffer.getNumRevisitExperiences();
+}
+
 
 void Agent::handleDone( bool success )
 {
@@ -92,28 +97,24 @@ void Agent::handleDone( bool success )
     // todo - change last action's done to true , change its reward to a good reward if done with success and bad if not.
     // todo - add all experiences to revisited experiences.
     // todo - change Buffer size.
-    // todo - chack why not equal state found.
+    // todo - check why not equal state found.
 
     // needs to insert all delayed experiences to the replay buffer and learn:
     // if done with success - the rewards of all steps in this branch remain the same.
-    if ( success )
+    if ( _replayedBuffer.numExperiences())
     {
         _replayedBuffer.updateReturnedWhenDoneSuccess();
-        learn( GAMMA );
-        return;
+        _replayedBuffer.getExperienceAt( -1 ).done = true;
+        _replayedBuffer.getExperienceAt( -1 ).reward = success ? 10 : -10;
+        _replayedBuffer.moveToRevisitExperiences();
     }
-    // if not success - the steps not returned to where bad todo?
-    unsigned numReturned = _replayedBuffer.getNumRevisitExperiences();
-    for ( unsigned index = numReturned + 1; index < _replayedBuffer.numExperiences(); index++ )
-    {
-        _replayedBuffer.getRevisitedExperienceAt( index ).updateReward( -1 );
-        _replayedBuffer.increaseNumReturned();
-    }
-    const auto experiences = _replayedBuffer.sample();
+    while (_replayedBuffer.numExperiences())
+        _replayedBuffer.moveToRevisitExperiences();
+
     learn( GAMMA );
 }
 
-void Agent::moveExperiencesToRevisitedBuffer( unsigned currentNumSplits, unsigned depth, State* state )
+void Agent::moveExperiencesToRevisitedBuffer( unsigned currentNumSplits, unsigned depth, State* /*state*/ )
 {
 
     printf("backward\n");
@@ -130,20 +131,20 @@ void Agent::moveExperiencesToRevisitedBuffer( unsigned currentNumSplits, unsigne
             break;
 
         double newReward = 1;
-        if (previousExperience.state.getData() == state->getData())
-        {
+        // if (previousExperience.state.getData() == state->getData())
+        // {
             _experienceDepth = previousExperience.depth;
             auto progress = currentNumSplits - previousExperience.numSplits;
             if ( progress > 0 )
                 newReward = 1.0 / static_cast<double>( progress );
             printf("same!!, reward : %f\n", newReward);
             fflush(stdout);
-        } else
-        {
-            printf("not the same, reward : %f\n", newReward);
-            fflush(stdout);
-            // todo?
-        }
+        // } else
+        // {
+        //     printf("not the same, reward : %f\n", newReward);
+        //     fflush(stdout);
+        //     // todo?
+        // }
         previousExperience.updateReward( newReward );
 
 
@@ -171,6 +172,19 @@ void Agent::addToExperiences( unsigned currentNumSplits,
     // if not - if its equal - do something
     // if not and not - insert it to the regular exeperiences vector
 
+    if ( done )
+    {
+        _replayedBuffer.addToRevisitExperiences( state,
+                                                 action,
+                                                 static_cast<float>( reward ),
+                                                 nextState,
+                                                 done,
+                                                 depth,
+                                                 numSplits,
+                                                 changeReward );
+        handleDone( done );
+        return;
+    }
     if ( !changeReward )
     {
         _replayedBuffer.addToRevisitExperiences( state,
