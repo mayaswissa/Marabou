@@ -157,7 +157,6 @@ void ReplayBuffer::increaseNumReturned()
 void ReplayBuffer::moveToRevisitExperiences()
 {
     if (_experiences.empty()) {
-        // If there are no experiences, do nothing
         return;
     }
 
@@ -170,7 +169,8 @@ void ReplayBuffer::moveToRevisitExperiences()
 
     // Move the last experience from experiences to revisit experiences
 
-    _revisitedExperiences.append(std::move(_experiences[_numExperiences - 1]));
+    auto& experience = _experiences[_numExperiences - 1];
+    _revisitedExperiences.append(std::move(experience));
     _numRevisitedExperiences++;
     _experiences.pop();
     _numExperiences--;

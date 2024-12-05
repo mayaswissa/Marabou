@@ -18,7 +18,7 @@ public:
            unsigned embeddingDim,
            std::unique_ptr< ActionSpace > actionSpace );
     void step();
-    void addToExperiences( unsigned currentNumSplits, State state,
+    void addToExperiences( State state,
                            Action action,
                            double reward,
                            State nextState,

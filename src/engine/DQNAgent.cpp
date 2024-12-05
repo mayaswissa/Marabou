@@ -3,7 +3,10 @@
 #include <random>
 #include <utility>
 
-Agent::Agent( unsigned numPlConstraints, unsigned numPhases, const std::string &saveAgentPath, const std::string &trainedAgentPath )
+Agent::Agent( unsigned numPlConstraints,
+              unsigned numPhases,
+              const std::string &saveAgentPath,
+              const std::string &trainedAgentPath )
     : _actionSpace( ActionSpace( numPlConstraints, numPhases ) )
     , _numPlConstraints( numPlConstraints )
     , _numPhaseStatuses( numPhases )
@@ -17,7 +20,8 @@ Agent::Agent( unsigned numPlConstraints, unsigned numPhases, const std::string &
     , _tStep( 0 )
     , _experienceDepth( 0 )
     , device( torch::cuda::is_available() ? torch::kCUDA : torch::kCPU )
-    , _saveAgentFilePath(saveAgentPath) , _trainedAgentFilePath( trainedAgentPath )
+    , _saveAgentFilePath( saveAgentPath )
+    , _trainedAgentFilePath( trainedAgentPath )
 {
     _qNetworkLocal.to( device );
     _qNetworkTarget.to( device );
@@ -31,7 +35,7 @@ Agent::Agent( unsigned numPlConstraints, unsigned numPhases, const std::string &
     }
 }
 
-void Agent::saveNetworks( ) const
+void Agent::saveNetworks() const
 {
     torch::serialize::OutputArchive output_archive;
     _qNetworkLocal.save( output_archive );
@@ -93,32 +97,31 @@ unsigned Agent::getNumExperiences() const
 
 void Agent::handleDone( bool success )
 {
-
-    // todo - change last action's done to true , change its reward to a good reward if done with success and bad if not.
-    // todo - add all experiences to revisited experiences.
-    // todo - change Buffer size.
-    // todo - check why not equal state found.
+    // todo - change last action's done to true , change its reward to a good reward if done with
+    // success and bad if not. todo - add all experiences to revisited experiences. todo - change
+    // Buffer size. todo - check why not equal state found.
 
     // needs to insert all delayed experiences to the replay buffer and learn:
     // if done with success - the rewards of all steps in this branch remain the same.
-    if ( _replayedBuffer.numExperiences())
+    if ( _replayedBuffer.numExperiences() )
     {
         _replayedBuffer.updateReturnedWhenDoneSuccess();
         _replayedBuffer.getExperienceAt( -1 ).done = true;
         _replayedBuffer.getExperienceAt( -1 ).reward = success ? 10 : -10;
         _replayedBuffer.moveToRevisitExperiences();
     }
-    while (_replayedBuffer.numExperiences())
+    while ( _replayedBuffer.numExperiences() )
         _replayedBuffer.moveToRevisitExperiences();
 
     learn( GAMMA );
 }
 
-void Agent::moveExperiencesToRevisitedBuffer( unsigned currentNumSplits, unsigned depth, State* /*state*/ )
+void Agent::moveExperiencesToRevisitedBuffer( unsigned currentNumSplits,
+                                              unsigned depth,
+                                              State * /*state*/ )
 {
-
-    printf("backward\n");
-    fflush(stdout);
+    printf( "backward\n" );
+    fflush( stdout );
 
     int skippedSplits = -1;
     while ( _replayedBuffer.numExperiences() )
@@ -133,12 +136,12 @@ void Agent::moveExperiencesToRevisitedBuffer( unsigned currentNumSplits, unsigne
         double newReward = 1;
         // if (previousExperience.state.getData() == state->getData())
         // {
-            _experienceDepth = previousExperience.depth;
-            auto progress = currentNumSplits - previousExperience.numSplits;
-            if ( progress > 0 )
-                newReward = 1.0 / static_cast<double>( progress );
-            printf("same!!, reward : %f\n", newReward);
-            fflush(stdout);
+        _experienceDepth = previousExperience.depth;
+        auto progress = currentNumSplits - previousExperience.numSplits;
+        if ( progress > 0 )
+            newReward = 1.0 / static_cast<double>( progress ) * 100;
+        printf( "same!!, reward : %f\n", newReward );
+        fflush( stdout );
         // } else
         // {
         //     printf("not the same, reward : %f\n", newReward);
@@ -148,14 +151,11 @@ void Agent::moveExperiencesToRevisitedBuffer( unsigned currentNumSplits, unsigne
         previousExperience.updateReward( newReward );
 
 
-
-
         _replayedBuffer.moveToRevisitExperiences();
     }
 }
 
-void Agent::addToExperiences( unsigned currentNumSplits,
-                              State state,
+void Agent::addToExperiences( State state,
                               Action action,
                               double reward,
                               State nextState,
@@ -198,17 +198,17 @@ void Agent::addToExperiences( unsigned currentNumSplits,
         return;
     }
 
-    if (_replayedBuffer.numExperiences() > 0 && _experienceDepth >= depth )
-        moveExperiencesToRevisitedBuffer( currentNumSplits, depth, &state );
+    if ( _replayedBuffer.numExperiences() > 0 && _experienceDepth >= depth )
+        moveExperiencesToRevisitedBuffer( numSplits, depth, &state );
 
     _replayedBuffer.add( state,
-                             action,
-                             static_cast<float>( reward ),
-                             nextState,
-                             done,
-                             depth,
-                             numSplits,
-                             changeReward );
+                         action,
+                         static_cast<float>( reward ),
+                         nextState,
+                         done,
+                         depth,
+                         numSplits,
+                         changeReward );
     _experienceDepth = depth;
 }
 
@@ -223,9 +223,12 @@ void Agent::addToExperiences( unsigned currentNumSplits,
 //                               bool changeReward )
 // {
 //     // need to first check if the depth is highe to the last inserted depth.
-//     // if so - go over all the experiences until this depth's experience, give a reward and change
-//     // vector. then when reaching the same depth validate its the same phase and plConstraint, if so
-//     // - the reward would be the diff of depth / plConstraints.size (?) from the last inserted. if
+//     // if so - go over all the experiences until this depth's experience, give a reward and
+//     change
+//     // vector. then when reaching the same depth validate its the same phase and plConstraint, if
+//     so
+//     // - the reward would be the diff of depth / plConstraints.size (?) from the last inserted.
+//     if
 //     // not - dont know.
 //     // if not - if its equal - do something
 //     // if not and not - insert it to the regular exeperiences vector

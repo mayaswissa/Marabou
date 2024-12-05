@@ -286,7 +286,8 @@ bool Engine::solve( double timeoutInSeconds, const std::string &trainedAgentPath
     unsigned numPhases = 3; // todo change
     State currentDQNState = State( _plConstraints.size(), numPhases );
     updateDQNState( currentDQNState );
-    std::unique_ptr<Agent> agent = std::make_unique<Agent>( _plConstraints.size(), 3, "agent", "agent" );
+    std::unique_ptr<Agent> agent =
+        std::make_unique<Agent>( _plConstraints.size(), 3, "agent", "agent" );
     auto action = Action( numPhases );
     auto previousState = State( _plConstraints.size(), numPhases );
 
@@ -572,7 +573,6 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( double epsilon,
                                               double *score,
                                               const std::string &trainedAgentPath )
 {
-
     SignalHandler::getInstance()->initialize();
     SignalHandler::getInstance()->registerClient( this );
 
@@ -604,12 +604,10 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( double epsilon,
     unsigned iterations = 0;
     unsigned splitsCounter = 0;
     bool splitJustPerformed = true;
-    std::unique_ptr<ActionSpace> actionSpace = std::make_unique<ActionSpace>(numPlConstraints(), numPhases );
     struct timespec mainLoopStart = TimeUtils::sampleMicro();
     if ( agent == nullptr )
     {
-        agent =
-            std::make_unique<Agent>(numPlConstraints(), numPhases, trainedAgentPath );
+        agent = std::make_unique<Agent>( numPlConstraints(), numPhases, trainedAgentPath );
     }
     while ( iterations <= maxIterations )
     {
@@ -679,8 +677,7 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( double epsilon,
                     fflush( stdout );
                     *score += reward;
                     agent->step();
-                    agent->addToExperiences( splitsCounter,
-                                             previousState,
+                    agent->addToExperiences( previousState,
                                              action,
                                              reward,
                                              currentDQNState,
@@ -697,8 +694,7 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( double epsilon,
                 // can not split fixed constraint
                 if ( pl->getPhaseStatus() != PHASE_NOT_FIXED )
                 {
-                    agent->addToExperiences( splitsCounter,
-                                             previousState,
+                    agent->addToExperiences( previousState,
                                              action,
                                              -1,
                                              currentDQNState,
@@ -748,14 +744,13 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( double epsilon,
                         *score += reward;
                         mainLoopEnd = TimeUtils::sampleMicro();
                         _exitCode = Engine::SAT;
-                        agent->addToExperiences( splitsCounter,
-                                                 previousState,
+                        agent->addToExperiences( previousState,
                                                  action,
                                                  reward,
                                                  currentDQNState,
                                                  true,
                                                  stackDepth,
-                                                 splitsCounter,
+                                                 iterations,
                                                  true );
                         agent->handleDone( true );
                         printf( "success!" );
@@ -769,14 +764,13 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( double epsilon,
                         mainLoopEnd = TimeUtils::sampleMicro();
                         _exitCode = Engine::UNKNOWN;
                         // agent done with failure - reward is (- num of plConstraints)
-                        agent->addToExperiences( splitsCounter,
-                                                 previousState,
+                        agent->addToExperiences( previousState,
                                                  action,
                                                  reward,
                                                  currentDQNState,
                                                  true,
                                                  stackDepth,
-                                                 splitsCounter,
+                                                 iterations,
                                                  false );
                         agent->handleDone( false );
                         printf( "fail!" );
