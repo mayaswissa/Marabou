@@ -64,7 +64,19 @@ struct Experience
     {
     }
 
-    Experience &operator=( const Experience &other );
+    Experience& operator=(Experience&& other) noexcept {
+        if (this != &other) {
+            state = std::move(other.state);
+            action = std::move(other.action);
+            reward = other.reward;
+            nextState = std::move(other.nextState);
+            done = other.done;
+            depth = other.depth;
+            numSplits = other.numSplits;
+            changeReward = other.changeReward;
+        }
+        return *this;
+    }
     void updateReward( double newReward );
 };
 
@@ -87,7 +99,6 @@ public:
     unsigned numExperiences() const;
     unsigned numRevisitedExperiences() const;
     int getNumRevisitExperiences() const;
-    void updateReturnedWhenDoneSuccess();
     void increaseNumReturned();
     void decreaseNumRevisitExperiences();
     void moveToRevisitExperiences();
@@ -105,11 +116,11 @@ private:
     unsigned _bufferSize;
     unsigned _batchSize;
     // number of experiences in the buffer
-    int _numExperiences;
+    unsigned _numExperiences;
     // The number of experiences we revisited after completing a branch search in the search tree.
     unsigned _numRevisitedExperiences;
-    Vector<Experience> _experiences;
-    Vector<Experience> _revisitedExperiences;
+    std::deque<std::unique_ptr<Experience>> _experiences;
+    std::deque<std::unique_ptr<Experience>> _revisitedExperiences;
 };
 
 #endif

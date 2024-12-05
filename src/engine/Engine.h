@@ -54,7 +54,6 @@
 #include <atomic>
 #include <context/context.h>
 #undef Warning
-#include <DQNEnvironment.h>
 #include <torch/torch.h>
 
 #ifdef _WIN32
@@ -933,7 +932,6 @@ private:
     unsigned getNumFixedConstraints() const;
     PiecewiseLinearConstraint *indexToConstraint( unsigned index );
     PhaseStatus valueToPhase( unsigned index );   // todo this is not really the value but the index
-    void resetDQN( torch::Tensor &initialState ); // todo implement?
 };
 
 #endif // __Engine_h__

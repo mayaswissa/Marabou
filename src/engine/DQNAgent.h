@@ -13,12 +13,7 @@ class Agent
 {
 public:
     Agent( unsigned numPlConstraints, unsigned numPhases, const std::string &saveAgentPath, const std::string &trainedAgentPath = "" );
-    Agent( unsigned numVariables,
-           unsigned numPhaseStatuses,
-           unsigned embeddingDim,
-           std::unique_ptr< ActionSpace > actionSpace );
-    void step();
-    void addToExperiences( State state,
+    void step( State state,
                            Action action,
                            double reward,
                            State nextState,
@@ -33,12 +28,11 @@ public:
     Action act( const torch::Tensor &state, double eps = 0.1 );
     void learn( const double gamma );
     torch::Device getDevice() const;
-    Action tensorToAction( const torch::Tensor &tensor );
+    Action tensorToAction( const torch::Tensor &tensor ) const;
   unsigned getNumExperiences() const;
 
 private:
     static void softUpdate( const QNetwork &localModel, const QNetwork &targetModel );
-    bool handle_invalid_gradients();
     ActionSpace _actionSpace;
     unsigned _numPlConstraints, _numPhaseStatuses, _embeddingDim, _numActions;
     QNetwork _qNetworkLocal, _qNetworkTarget;
