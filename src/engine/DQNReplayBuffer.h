@@ -13,7 +13,7 @@ struct Experience
 {
     State state;
     Action action;
-    float reward;
+    double reward;
     State nextState;
     bool done;
     unsigned depth;
@@ -96,9 +96,10 @@ public:
     Experience &getRevisitedExperienceAt( unsigned index );
     Experience &getExperienceAt( unsigned index );
     Vector<unsigned> sample() const;
-    unsigned numExperiences() const;
-    unsigned numRevisitedExperiences() const;
-    int getNumRevisitExperiences() const;
+    unsigned getNumExperiences() const;
+    unsigned getNumRevisitedExperiences() const;
+    unsigned getExperienceBufferDepth() const;
+    unsigned getBatchSize() const;
     void increaseNumReturned();
     void decreaseNumRevisitExperiences();
     void moveToRevisitExperiences();
@@ -119,6 +120,8 @@ private:
     unsigned _numExperiences;
     // The number of experiences we revisited after completing a branch search in the search tree.
     unsigned _numRevisitedExperiences;
+
+    unsigned _experienceBufferDepth;
     std::deque<std::unique_ptr<Experience>> _experiences;
     std::deque<std::unique_ptr<Experience>> _revisitedExperiences;
 };

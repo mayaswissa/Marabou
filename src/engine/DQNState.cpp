@@ -1,10 +1,11 @@
 #include "DQNState.h"
 
-State::State( int numConstraints, int numPhases )
+State::State( unsigned numConstraints, unsigned numPhases )
     : _stateData( numConstraints, std::vector<int>( numPhases, 0 ) )
     , _numPhases( numPhases )
 {
-    for ( int i = 0; i < numConstraints; ++i )
+    // set all phases not fixed
+    for ( unsigned i = 0; i < numConstraints; ++i )
     {
         _stateData[i][0] = 1;
     }
@@ -41,9 +42,9 @@ torch::Tensor State::toTensor() const
     return tensor.view({1, static_cast<long>(flatData.size())});
 }
 
-void State::updateState( int constraintIndex, int newPhase )
+void State::updatConstraintPhase( unsigned constraintIndex, unsigned newPhase )
 {
-    if ( constraintIndex < static_cast<int>(_stateData.size()) && newPhase < _numPhases )
+    if ( constraintIndex < static_cast<unsigned>(_stateData.size()) && newPhase < _numPhases )
     {
         // reset this constraint's vector to zeros and assign 1 to the new phase's enrty
         std::fill( _stateData[constraintIndex].begin(), _stateData[constraintIndex].end(), 0 );

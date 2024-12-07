@@ -18,6 +18,7 @@ ReplayBuffer::ReplayBuffer( const unsigned actionSize,
     , _batchSize( batchSize )
     , _numExperiences( 0 )
     , _numRevisitedExperiences( 0 )
+    , _experienceBufferDepth( 0 )
     // , _experiences( bufferSize )
     // , _revisitedExperiences( bufferSize )
 {
@@ -47,6 +48,7 @@ void ReplayBuffer::add( State state,
                                                     numSplits,
                                                     changeReward );
     _experiences.push_back( std::move( experience ) );
+    _experienceBufferDepth = depth;
     _numExperiences++;
 }
 
@@ -59,28 +61,36 @@ void ReplayBuffer::addToRevisitExperiences( State state,
                                             unsigned numSplits,
                                             bool changeReward )
 {
-    if ( numRevisitedExperiences() >= _bufferSize )
+    if ( getNumRevisitedExperiences() >= _bufferSize )
     {
         _revisitedExperiences.pop_front();
         _numRevisitedExperiences--;
     }
 
-    auto experience = std::make_unique<Experience>(
-        std::move(state), std::move(action), reward, std::move(nextState), done, depth, numSplits, changeReward );
+    auto experience = std::make_unique<Experience>( std::move( state ),
+                                                    std::move( action ),
+                                                    reward,
+                                                    std::move( nextState ),
+                                                    done,
+                                                    depth,
+                                                    numSplits,
+                                                    changeReward );
     _revisitedExperiences.push_back( std::move( experience ) );
     _numRevisitedExperiences++;
 }
 
 Experience &ReplayBuffer::getExperienceAt( const unsigned index )
 {
-    if (index >= _numExperiences) throw std::out_of_range("Index out of range in experiences"); // todo error
+    if ( index >= _numExperiences )
+        throw std::out_of_range( "Index out of range in experiences" ); // todo error
     return *_experiences[index];
 }
 
 
 Experience &ReplayBuffer::getRevisitedExperienceAt( const unsigned index )
 {
-    if (index >= numRevisitedExperiences()) throw std::out_of_range("Index out of range in revisited experiences"); // todo error
+    if ( index >= getNumRevisitedExperiences() )
+        throw std::out_of_range( "Index out of range in revisited experiences" ); // todo error
     return *_revisitedExperiences[index];
 }
 
@@ -97,7 +107,7 @@ Vector<unsigned> ReplayBuffer::sample() const
     }
 
     unsigned startIndex = 0;
-    unsigned endIndex = numRevisitedExperiences() - 1;
+    unsigned endIndex = getNumRevisitedExperiences() - 1;
 
     unsigned rangeSize = endIndex - startIndex;
     unsigned sampleSize = std::min( _batchSize, rangeSize );
@@ -118,25 +128,24 @@ Vector<unsigned> ReplayBuffer::sample() const
 }
 
 
-unsigned ReplayBuffer::numExperiences() const
+unsigned ReplayBuffer::getNumExperiences() const
 {
     return _numExperiences;
 }
 
-unsigned ReplayBuffer::numRevisitedExperiences() const
+unsigned ReplayBuffer::getNumRevisitedExperiences() const
 {
     return _numRevisitedExperiences;
+}
+
+unsigned ReplayBuffer::getExperienceBufferDepth() const
+{
+    return _experienceBufferDepth;
 }
 
 void ReplayBuffer::decreaseNumRevisitExperiences()
 {
     _numRevisitedExperiences--;
-}
-
-
-int ReplayBuffer::getNumRevisitExperiences() const
-{
-    return _numRevisitedExperiences;
 }
 
 void ReplayBuffer::increaseNumReturned()
@@ -164,4 +173,13 @@ void ReplayBuffer::moveToRevisitExperiences()
     _numRevisitedExperiences++;
     _experiences.pop_back();
     _numExperiences--;
+    if ( _numExperiences == 0 )
+        _experienceBufferDepth = 0;
+    else
+        _experienceBufferDepth = _experiences.at( _numExperiences - 1 ).get()->depth;
+}
+
+unsigned ReplayBuffer::getBatchSize() const
+{
+    return _batchSize;
 }

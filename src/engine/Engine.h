@@ -307,7 +307,7 @@ public:
 
     // void trainAndSolve();
 
-    unsigned numPlConstraints();
+    unsigned numPlConstraints() const;
 
     void loadAgentNetworks( Agent &agent );
 
@@ -928,7 +928,7 @@ private:
     /*
       DQN functions
      */
-    void updateDQNState( State &state );
+    void updateToCurrentDQNState( State &state );
     unsigned getNumFixedConstraints() const;
     PiecewiseLinearConstraint *indexToConstraint( unsigned index );
     PhaseStatus valueToPhase( unsigned index );   // todo this is not really the value but the index

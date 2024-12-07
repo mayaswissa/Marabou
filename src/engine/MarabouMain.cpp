@@ -133,7 +133,7 @@ int marabouMain( int argc, char **argv )
 #endif
             if ( GlobalConfiguration::USE_DQN )
             {
-                unsigned _nEpisodes = 10; // todo make argument
+                unsigned _nEpisodes = 20; // todo make argument
                 double currEpisodeScore = 0;
                 std::unique_ptr<Agent> agent = nullptr;
                 double maxEpisodeScore = 0;
@@ -143,7 +143,6 @@ int marabouMain( int argc, char **argv )
                     currEpisodeScore = 0;
                     agent = Marabou().runAgentTraining(epsilon,
                         true, std::move( agent ), &currEpisodeScore, &maxEpisodeScore );
-                    // Marabou().runAgentTraining(1.0, false);
                     printf( "done one train, score: %f\n", currEpisodeScore );
                     fflush( stdout );
                     epsilon = std::max( GlobalConfiguration::DQN_EPSILON_END,

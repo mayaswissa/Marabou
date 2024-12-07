@@ -16,9 +16,9 @@ Agent::Agent( unsigned numPlConstraints,
     , _qNetworkTarget( _numPlConstraints, _numPhaseStatuses, _embeddingDim, _numActions )
     // todo adaptive learning rate
     , optimizer( _qNetworkLocal.parameters(), torch::optim::AdamOptions( LR ).weight_decay( 1e-4 ) )
-    , _replayedBuffer( ReplayBuffer(_numPlConstraints * _numPhaseStatuses, _numPlConstraints, BATCH_SIZE ))
+    , _replayedBuffer(
+          ReplayBuffer( _numPlConstraints * _numPhaseStatuses, _numPlConstraints, BATCH_SIZE ) )
     , _tStep( 0 )
-    , _experienceDepth( 0 )
     , device( torch::cuda::is_available() ? torch::kCUDA : torch::kCPU )
     , _saveAgentFilePath( saveAgentPath )
     , _trainedAgentFilePath( trainedAgentPath )
@@ -59,6 +59,26 @@ void Agent::loadNetworks()
     }
 }
 
+bool Agent::handle_invalid_gradients()
+{
+    bool invalid = false;
+    for ( auto &group : optimizer.param_groups() )
+    {
+        for ( auto &p : group.params() )
+        {
+            if ( p.grad().defined() && ( torch::isnan( p.grad() ).any().item<bool>() ||
+                                         torch::isinf( p.grad() ).any().item<bool>() ) )
+            {
+                std::cerr << "Invalid gradient detected, resetting gradient..." << std::endl;
+                p.grad().detach_();
+                p.grad().zero_();
+                invalid = true;
+            }
+        }
+    }
+    return invalid;
+}
+
 Action Agent::tensorToAction( const torch::Tensor &tensor ) const
 {
     int combinedIndex = tensor.item<int>();
@@ -69,60 +89,58 @@ Action Agent::tensorToAction( const torch::Tensor &tensor ) const
     return Action( _numPhaseStatuses, plConstraintActionIndex, assignmentIndex );
 }
 
-unsigned Agent::getNumExperiences() const
-{
-    return _replayedBuffer.getNumRevisitExperiences();
-}
-
 
 void Agent::handleDone( bool success )
 {
-
     // needs to insert all delayed experiences to the replay buffer and learn:
     // if done with success - the rewards of all steps in this branch remain the same.
-    unsigned numExperiences = _replayedBuffer.numExperiences();
+    unsigned numExperiences = _replayedBuffer.getNumExperiences();
     if ( numExperiences > 0 )
     {
         _replayedBuffer.getExperienceAt( numExperiences - 1 ).done = true;
         _replayedBuffer.getExperienceAt( numExperiences - 1 ).reward = success ? 10 : -10;
         _replayedBuffer.moveToRevisitExperiences();
     }
-    while ( _replayedBuffer.numExperiences() )
+    while ( _replayedBuffer.getNumExperiences() )
         _replayedBuffer.moveToRevisitExperiences();
 
-    learn( GAMMA );
+    learn();
 }
 
 void Agent::moveExperiencesToRevisitedBuffer( unsigned currentNumSplits,
                                               unsigned depth,
-                                              State * /*state*/ )
+                                              State *state )
 {
-    printf( "backward\n" );
-    fflush( stdout );
-    while ( _replayedBuffer.numExperiences() )
+
+    while ( _replayedBuffer.getNumExperiences() )
     {
         Experience &previousExperience =
-            _replayedBuffer.getExperienceAt( _replayedBuffer.numExperiences() - 1 );
+            _replayedBuffer.getExperienceAt( _replayedBuffer.getNumExperiences() - 1 );
 
-        if ( _experienceDepth < depth )
+        double newReward = previousExperience.reward;
+        if ( previousExperience.state.getData() == state->getData() )
+        {
+            printf( "same !! \n" );
+            fflush( stdout );
+        }
+
+        if ( _replayedBuffer.getExperienceBufferDepth() < depth )
             break;
 
-        double newReward = 1;
-        // if (previousExperience.state.getData() == state->getData())
-        // {
-        _experienceDepth = previousExperience.depth;
         auto progress = currentNumSplits - previousExperience.numSplits;
         if ( progress > 0 )
             newReward = 1.0 / static_cast<double>( progress );
-        printf( "curr num splits: %d, prev num splits: %d,  new reward : %f\n",
+        printf( "actionDepth : %u, curr num splits: %d, prev num splits: %d,  new reward : %f\n",
+                _replayedBuffer.getExperienceBufferDepth(),
                 currentNumSplits,
                 previousExperience.numSplits,
                 newReward );
         fflush( stdout );
-        // } else
+        // }
+        // else
         // {
-        //     printf("not the same, reward : %f\n", newReward);
-        //     fflush(stdout);
+        //     printf( "not the same, reward : %f\n", newReward );
+        //     fflush( stdout );
         //     // todo?
         // }
         previousExperience.updateReward( newReward );
@@ -131,21 +149,20 @@ void Agent::moveExperiencesToRevisitedBuffer( unsigned currentNumSplits,
 }
 
 void Agent::step( State state,
-                              Action action,
-                              double reward,
-                              State nextState,
-                              const bool done,
-                              unsigned depth,
-                              unsigned numSplits,
-                              bool changeReward )
+                  Action action,
+                  double reward,
+                  State nextState,
+                  const bool done,
+                  unsigned depth,
+                  unsigned numSplits,
+                  bool changeReward )
 {
-
     if ( !changeReward )
     {
-        _replayedBuffer.addToRevisitExperiences( std::move( state ),
-                                                 std::move( action ),
+        _replayedBuffer.addToRevisitExperiences(  state ,
+                                                 action ,
                                                  static_cast<float>( reward ),
-                                                 std::move( nextState ),
+                                                 nextState ,
                                                  done,
                                                  depth,
                                                  numSplits,
@@ -155,38 +172,37 @@ void Agent::step( State state,
 
     if ( done )
     {
-        _replayedBuffer.add( std::move( state ),
-                         std::move( action ),
-                         static_cast<float>( reward ),
-                         std::move( nextState ),
-                         done,
-                         depth,
-                         numSplits,
-                         changeReward );
+        _replayedBuffer.add( state,
+                             action,
+                             static_cast<float>( reward ),
+                             nextState,
+                             done,
+                             depth,
+                             numSplits,
+                             changeReward );
         return;
     }
 
-    if ( _replayedBuffer.numExperiences() > 0 && _experienceDepth >= depth )
+    if ( _replayedBuffer.getNumExperiences() > 0 &&
+         _replayedBuffer.getExperienceBufferDepth() >= depth )
         moveExperiencesToRevisitedBuffer( numSplits, depth, &state );
 
-    _replayedBuffer.add( std::move( state ),
-                         std::move( action ),
+    _replayedBuffer.add( state,
+                         action,
                          static_cast<float>( reward ),
-                         std::move( nextState ),
+                         nextState,
                          done,
                          depth,
                          numSplits,
                          changeReward );
-    _experienceDepth = depth;
 
     _tStep = ( _tStep + 1 ) % UPDATE_EVERY;
-    if ( _tStep == 0 && _replayedBuffer.numRevisitedExperiences() > BATCH_SIZE )
+    if ( _tStep == 0 && _replayedBuffer.getNumRevisitedExperiences() > BATCH_SIZE )
     {
-        learn( GAMMA ); // todo Gamma should change?
+        learn(); // todo Gamma should change?
     }
 
 }
-
 
 
 Action Agent::act( const torch::Tensor &state, double eps )
@@ -207,19 +223,18 @@ Action Agent::act( const torch::Tensor &state, double eps )
 }
 
 
-void Agent::learn( const double gamma )
+void Agent::learn()
 {
     Vector<unsigned> indices = _replayedBuffer.sample();
-    if ( indices.empty() )
+    if ( indices.size() < _replayedBuffer.getBatchSize() )
         return;
     std::vector<torch::Tensor> states, actions, nextStates;
-    std::vector<float> rewards;
+    std::vector<double> rewards;
     std::vector<uint8_t> dones;
-    // for index in indices - get the specific experience from memory .
-    // then one more loop - to delete them ? no need, maybe.
+
     for ( const unsigned index : indices )
     {
-        if ( index < _replayedBuffer.numRevisitedExperiences() )
+        if ( index < _replayedBuffer.getNumRevisitedExperiences() )
         {
             Experience &experience = _replayedBuffer.getRevisitedExperienceAt( index );
             states.push_back( experience.state.toTensor().to( device ) );
@@ -229,6 +244,7 @@ void Agent::learn( const double gamma )
             dones.push_back( static_cast<uint8_t>( experience.done ) );
         }
     }
+
     // Create tensors from vectors
     const auto statesTensor = torch::cat( states, 0 ).to( device );
     const auto actionsTensor = torch::cat( actions, 0 ).to( device );
@@ -247,7 +263,7 @@ void Agent::learn( const double gamma )
         forwardTargetNet.detach().gather( 1, localQValuesNextState.unsqueeze( -1 ) ).squeeze( -1 );
     // Calculate Q targets for current states
     const auto QTargets =
-        rewardsTensor + gamma * targetQValuesNextState * ( 1 - doneTensor.to( torch::kFloat64 ) );
+        rewardsTensor + GAMMA * targetQValuesNextState * ( 1 - doneTensor.to( torch::kFloat64 ) );
 
     const auto QExpected = _qNetworkLocal.forward( statesTensor )
                                .gather( 1, actionsTensor.unsqueeze( -1 ) )
@@ -261,6 +277,15 @@ void Agent::learn( const double gamma )
     // Backpropagation
     optimizer.zero_grad();
     loss.backward();
+    if ( !handle_invalid_gradients() )
+    {
+        optimizer.step();
+    }
+    else
+    {
+        printf("Skipped updating weights due to invalid gradients.\n");
+        fflush( stdout );
+    }
     optimizer.step();
     softUpdate( _qNetworkLocal, _qNetworkTarget );
 }

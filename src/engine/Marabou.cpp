@@ -61,10 +61,10 @@ unsigned Marabou::numPLConstraints() const
 
 void Marabou::run()
 {
+    std::cout << "start run time: " << TimeUtils::now().ascii() << std::endl;
     struct timespec start = TimeUtils::sampleMicro();
 
     prepareInputQuery();
-
     solveQuery();
 
     struct timespec end = TimeUtils::sampleMicro();
@@ -74,6 +74,8 @@ void Marabou::run()
 
     if ( Options::get()->getBool( Options::EXPORT_ASSIGNMENT ) )
         exportAssignment();
+
+    std::cout << "end run time: " << TimeUtils::now().ascii() << std::endl;
 }
 
 
