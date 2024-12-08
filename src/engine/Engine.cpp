@@ -122,7 +122,7 @@ void Engine::updateToCurrentDQNState( State &stateToUpdate )
     int index = 0;
     for ( const auto &plConstraint : _plConstraints )
     {
-        stateToUpdate.updatConstraintPhase( index, static_cast<int>( plConstraint->getPhaseStatus() ) );
+        stateToUpdate.updateConstraintPhase( index, static_cast<int>( plConstraint->getPhaseStatus() ) );
         index++;
     }
 }
@@ -669,16 +669,16 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( double epsilon,
 
                 if ( !firstStep )
                 {
-                    // save the last split to replay buffer
-                    // auto diff = currNumFixedPlConstraints - prevNumFixedPlConstraints;
-                    // auto numNotFixedPlConstraints =
-                    //     _plConstraints.size() - currNumFixedPlConstraints;
-                    // reward = diff;
-                    // reward = diff / static_cast<double>( numNotFixedPlConstraints );
+
                     printf( "depth = %d\n", stackDepth );
                     fflush( stdout );
                     reward = 0;
                     *score += reward;
+                    // previous state (depth - 1 ) -> action -> current state (depth)
+                    // or :
+                    // previous state (depth  + n) -> action -> current state (depth)
+                    // if (previous state's depth > current state depth) :
+                        //  back to current state
                     agent->step( previousState,
                                              action,
                                              reward,
@@ -691,18 +691,17 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( double epsilon,
                 // agent take an action according to current state:
                 action = agent->act( currentDQNState.toTensor(), epsilon );
                 auto actionPlConstraint = action.getPlConstraintAction();
-                auto actionPhase = action.getAssignmentIndex();
-                // perform split according to agent's action:
                 PiecewiseLinearConstraint *pl = indexToConstraint( actionPlConstraint );
+                auto actionPhase = action.getAssignmentIndex();
 
                 // can not split fixed constraint
-                if ( actionPhase != PHASE_NOT_FIXED )
+                if ( pl->getPhaseStatus() != PHASE_NOT_FIXED ) // todo
                 {
                     numNotFixes ++;
                     if (numNotFixes % LEARN_NOT_FIXED_PHASE_EVERY == 0)
                     {
                         State tepmState = State(currentDQNState);
-                        tepmState.updatConstraintPhase( actionPlConstraint, actionPhase );
+                        tepmState.updateConstraintPhase( actionPlConstraint, actionPhase );
 
                         agent->step( currentDQNState,
                                                  action,
@@ -715,15 +714,18 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( double epsilon,
                     }
 
                 }
-
+                // perform split according to agent's action:
+                actionPlConstraint = action.getPlConstraintAction();
+                pl = indexToConstraint( actionPlConstraint );
                 while ( pl->getPhaseStatus() != PHASE_NOT_FIXED )
                 {
                     action = Action( agent->act( currentDQNState.toTensor(), epsilon ) );
                     pl = indexToConstraint( action.getPlConstraintAction() );
+                    actionPhase = action.getAssignmentIndex();
                 }
 
                 // perform split according to agent's action:
-                PhaseStatus phaseStatus = valueToPhase( action.getAssignmentStatus() );
+                PhaseStatus phaseStatus = valueToPhase( actionPhase );
                 _smtCore.performSplit( pl, &phaseStatus );
                 splitJustPerformed = true;
                 // prepare for the next split:

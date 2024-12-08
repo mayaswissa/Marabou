@@ -97,8 +97,8 @@ void Agent::handleDone( bool success )
     unsigned numExperiences = _replayedBuffer.getNumExperiences();
     if ( numExperiences > 0 )
     {
-        _replayedBuffer.getExperienceAt( numExperiences - 1 ).done = true;
-        _replayedBuffer.getExperienceAt( numExperiences - 1 ).reward = success ? 10 : -10;
+        _replayedBuffer.getExperienceAt( numExperiences - 1 )._done = true;
+        _replayedBuffer.getExperienceAt( numExperiences - 1 )._reward = success ? 10 : -10;
         _replayedBuffer.moveToRevisitExperiences();
     }
     while ( _replayedBuffer.getNumExperiences() )
@@ -107,51 +107,46 @@ void Agent::handleDone( bool success )
     learn();
 }
 
-void Agent::moveExperiencesToRevisitedBuffer( unsigned currentNumSplits,
+void Agent::moveExperiencesToRevisitBuffer( unsigned currentNumSplits,
                                               unsigned depth,
-                                              State *state )
+                                              State *currentState )
 {
 
     while ( _replayedBuffer.getNumExperiences() )
     {
-        Experience &previousExperience =
+        Experience &revisitExperience =
             _replayedBuffer.getExperienceAt( _replayedBuffer.getNumExperiences() - 1 );
 
-        double newReward = previousExperience.reward;
-        if ( previousExperience.state.getData() == state->getData() )
-        {
-            printf( "same !! \n" );
-            fflush( stdout );
-        }
+        double newReward = 1.0;
+        if (revisitExperience._depth == depth)
+            if ( revisitExperience._currentState.getData() == currentState->getData() )
+            {
+                printf( "same !! \n" );
+                fflush( stdout );
+            }
 
         if ( _replayedBuffer.getExperienceBufferDepth() < depth )
             break;
 
-        auto progress = currentNumSplits - previousExperience.numSplits;
+        auto progress = currentNumSplits - revisitExperience._numSplits;
         if ( progress > 0 )
             newReward = 1.0 / static_cast<double>( progress );
+        // newReward = static_cast<double>(_numPlConstraints - progress) / static_cast<double>(_numPlConstraints);
         printf( "actionDepth : %u, curr num splits: %d, prev num splits: %d,  new reward : %f\n",
                 _replayedBuffer.getExperienceBufferDepth(),
                 currentNumSplits,
-                previousExperience.numSplits,
+                revisitExperience._numSplits,
                 newReward );
         fflush( stdout );
-        // }
-        // else
-        // {
-        //     printf( "not the same, reward : %f\n", newReward );
-        //     fflush( stdout );
-        //     // todo?
-        // }
-        previousExperience.updateReward( newReward );
+        revisitExperience.updateReward( newReward );
         _replayedBuffer.moveToRevisitExperiences();
     }
 }
 
-void Agent::step( State state,
+void Agent::step( State previousState,
                   Action action,
                   double reward,
-                  State nextState,
+                  State currentState,
                   const bool done,
                   unsigned depth,
                   unsigned numSplits,
@@ -159,10 +154,10 @@ void Agent::step( State state,
 {
     if ( !changeReward )
     {
-        _replayedBuffer.addToRevisitExperiences(  state ,
+        _replayedBuffer.addToRevisitExperiences(  previousState ,
                                                  action ,
                                                  static_cast<float>( reward ),
-                                                 nextState ,
+                                                 currentState ,
                                                  done,
                                                  depth,
                                                  numSplits,
@@ -172,10 +167,10 @@ void Agent::step( State state,
 
     if ( done )
     {
-        _replayedBuffer.add( state,
+        _replayedBuffer.add( previousState,
                              action,
                              static_cast<float>( reward ),
-                             nextState,
+                             currentState,
                              done,
                              depth,
                              numSplits,
@@ -185,19 +180,19 @@ void Agent::step( State state,
 
     if ( _replayedBuffer.getNumExperiences() > 0 &&
          _replayedBuffer.getExperienceBufferDepth() >= depth )
-        moveExperiencesToRevisitedBuffer( numSplits, depth, &state );
+        moveExperiencesToRevisitBuffer( numSplits, depth, &currentState );
 
-    _replayedBuffer.add( state,
+    _replayedBuffer.add( previousState,
                          action,
                          static_cast<float>( reward ),
-                         nextState,
+                         currentState,
                          done,
                          depth,
                          numSplits,
                          changeReward );
 
     _tStep = ( _tStep + 1 ) % UPDATE_EVERY;
-    if ( _tStep == 0 && _replayedBuffer.getNumRevisitedExperiences() > BATCH_SIZE )
+    if ( _tStep == 0 && _replayedBuffer.getNumRevisitExperiences() > BATCH_SIZE )
     {
         learn(); // todo Gamma should change?
     }
@@ -228,25 +223,25 @@ void Agent::learn()
     Vector<unsigned> indices = _replayedBuffer.sample();
     if ( indices.size() < _replayedBuffer.getBatchSize() )
         return;
-    std::vector<torch::Tensor> states, actions, nextStates;
+    std::vector<torch::Tensor> previousStates, actions, nextStates;
     std::vector<double> rewards;
     std::vector<uint8_t> dones;
 
     for ( const unsigned index : indices )
     {
-        if ( index < _replayedBuffer.getNumRevisitedExperiences() )
+        if ( index < _replayedBuffer.getNumRevisitExperiences() )
         {
-            Experience &experience = _replayedBuffer.getRevisitedExperienceAt( index );
-            states.push_back( experience.state.toTensor().to( device ) );
-            actions.push_back( experience.action.actionToTensor().to( device ) );
-            rewards.push_back( experience.reward );
-            nextStates.push_back( experience.nextState.toTensor().to( device ) );
-            dones.push_back( static_cast<uint8_t>( experience.done ) );
+            Experience &experience = _replayedBuffer.getRevisitExperienceAt( index );
+            previousStates.push_back( experience._previousState.toTensor().to( device ) );
+            actions.push_back( experience._action.actionToTensor().to( device ) );
+            rewards.push_back( experience._reward );
+            nextStates.push_back( experience._currentState.toTensor().to( device ) );
+            dones.push_back( static_cast<uint8_t>( experience._done ) );
         }
     }
 
     // Create tensors from vectors
-    const auto statesTensor = torch::cat( states, 0 ).to( device );
+    const auto statesTensor = torch::cat( previousStates, 0 ).to( device );
     const auto actionsTensor = torch::cat( actions, 0 ).to( device );
     const auto rewardsTensor =
         torch::tensor( rewards, torch::dtype( torch::kFloat64 ) ).to( device );

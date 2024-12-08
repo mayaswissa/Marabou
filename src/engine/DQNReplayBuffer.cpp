@@ -7,7 +7,7 @@
 
 void Experience::updateReward( double newReward )
 {
-    this->reward = newReward;
+    this->_reward = newReward;
 }
 
 ReplayBuffer::ReplayBuffer( const unsigned actionSize,
@@ -19,15 +19,13 @@ ReplayBuffer::ReplayBuffer( const unsigned actionSize,
     , _numExperiences( 0 )
     , _numRevisitedExperiences( 0 )
     , _experienceBufferDepth( 0 )
-    // , _experiences( bufferSize )
-    // , _revisitedExperiences( bufferSize )
 {
 }
 
-void ReplayBuffer::add( State state,
+void ReplayBuffer::add( State previousState,
                         Action action,
                         double reward,
-                        State nextState,
+                        State currentState,
                         const bool done,
                         unsigned depth,
                         unsigned numSplits,
@@ -39,10 +37,10 @@ void ReplayBuffer::add( State state,
         _numExperiences--;
     }
 
-    auto experience = std::make_unique<Experience>( std::move( state ),
+    auto experience = std::make_unique<Experience>( std::move( previousState ),
                                                     std::move( action ),
                                                     reward,
-                                                    std::move( nextState ),
+                                                    std::move( currentState ),
                                                     done,
                                                     depth,
                                                     numSplits,
@@ -61,9 +59,9 @@ void ReplayBuffer::addToRevisitExperiences( State state,
                                             unsigned numSplits,
                                             bool changeReward )
 {
-    if ( getNumRevisitedExperiences() >= _bufferSize )
+    if ( getNumRevisitExperiences() >= _bufferSize )
     {
-        _revisitedExperiences.pop_front();
+        _revisitExperiences.pop_front();
         _numRevisitedExperiences--;
     }
 
@@ -75,7 +73,7 @@ void ReplayBuffer::addToRevisitExperiences( State state,
                                                     depth,
                                                     numSplits,
                                                     changeReward );
-    _revisitedExperiences.push_back( std::move( experience ) );
+    _revisitExperiences.push_back( std::move( experience ) );
     _numRevisitedExperiences++;
 }
 
@@ -87,11 +85,11 @@ Experience &ReplayBuffer::getExperienceAt( const unsigned index )
 }
 
 
-Experience &ReplayBuffer::getRevisitedExperienceAt( const unsigned index )
+Experience &ReplayBuffer::getRevisitExperienceAt( const unsigned index )
 {
-    if ( index >= getNumRevisitedExperiences() )
+    if ( index >= getNumRevisitExperiences() )
         throw std::out_of_range( "Index out of range in revisited experiences" ); // todo error
-    return *_revisitedExperiences[index];
+    return *_revisitExperiences[index];
 }
 
 
@@ -107,7 +105,7 @@ Vector<unsigned> ReplayBuffer::sample() const
     }
 
     unsigned startIndex = 0;
-    unsigned endIndex = getNumRevisitedExperiences() - 1;
+    unsigned endIndex = getNumRevisitExperiences() - 1;
 
     unsigned rangeSize = endIndex - startIndex;
     unsigned sampleSize = std::min( _batchSize, rangeSize );
@@ -133,7 +131,7 @@ unsigned ReplayBuffer::getNumExperiences() const
     return _numExperiences;
 }
 
-unsigned ReplayBuffer::getNumRevisitedExperiences() const
+unsigned ReplayBuffer::getNumRevisitExperiences() const
 {
     return _numRevisitedExperiences;
 }
@@ -141,16 +139,6 @@ unsigned ReplayBuffer::getNumRevisitedExperiences() const
 unsigned ReplayBuffer::getExperienceBufferDepth() const
 {
     return _experienceBufferDepth;
-}
-
-void ReplayBuffer::decreaseNumRevisitExperiences()
-{
-    _numRevisitedExperiences--;
-}
-
-void ReplayBuffer::increaseNumReturned()
-{
-    _numRevisitedExperiences++;
 }
 
 void ReplayBuffer::moveToRevisitExperiences()
@@ -164,19 +152,19 @@ void ReplayBuffer::moveToRevisitExperiences()
     if ( _numRevisitedExperiences >= _bufferSize )
     {
         // Remove the first experience from revisit experiences if it's full
-        _revisitedExperiences.pop_front();
+        _revisitExperiences.pop_front();
         _numRevisitedExperiences--;
     }
 
     auto &experience = _experiences[_numExperiences - 1];
-    _revisitedExperiences.push_back( std::move( experience ) );
+    _revisitExperiences.push_back( std::move( experience ) );
     _numRevisitedExperiences++;
     _experiences.pop_back();
     _numExperiences--;
     if ( _numExperiences == 0 )
         _experienceBufferDepth = 0;
     else
-        _experienceBufferDepth = _experiences.at( _numExperiences - 1 ).get()->depth;
+        _experienceBufferDepth = _experiences.at( _numExperiences - 1 ).get()->_depth;
 }
 
 unsigned ReplayBuffer::getBatchSize() const

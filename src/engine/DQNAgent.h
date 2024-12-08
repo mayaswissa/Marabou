@@ -30,13 +30,15 @@ public:
     Action tensorToAction( const torch::Tensor &tensor ) const;
     void saveNetworks() const;
     void loadNetworks();
+    void moveRevisitExperience( unsigned currentNumSplits, unsigned depth, State *state );
 
 private:
     static void softUpdate( const QNetwork &localModel, const QNetwork &targetModel );
-    void
-    moveExperiencesToRevisitedBuffer( unsigned currentNumSplits, unsigned depth, State *state );
     void learn();
     torch::Device getDevice() const;
+    bool isEqualState( const State *state, const State *other ) const;
+    void moveExperiencesToRevisitBuffer( unsigned currentNumSplits, unsigned depth, State *state );
+
     ActionSpace _actionSpace;
     unsigned _numPlConstraints, _numPhaseStatuses, _embeddingDim, _numActions;
     QNetwork _qNetworkLocal, _qNetworkTarget;
@@ -47,7 +49,7 @@ private:
     static constexpr double TAU = 1e-3;
     static constexpr double LR = 5e-4;
     static constexpr unsigned UPDATE_EVERY = 10; // todo change
-    static constexpr unsigned BATCH_SIZE = 10;  // todo check
+    static constexpr unsigned BATCH_SIZE = 10;   // todo check
     torch::Device device;
     const std::string _saveAgentFilePath;
     const std::string _trainedAgentFilePath;

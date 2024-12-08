@@ -42,7 +42,7 @@ torch::Tensor State::toTensor() const
     return tensor.view({1, static_cast<long>(flatData.size())});
 }
 
-void State::updatConstraintPhase( unsigned constraintIndex, unsigned newPhase )
+void State::updateConstraintPhase( const unsigned constraintIndex, const unsigned newPhase )
 {
     if ( constraintIndex < static_cast<unsigned>(_stateData.size()) && newPhase < _numPhases )
     {

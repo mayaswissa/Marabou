@@ -11,7 +11,7 @@ public:
     State &operator=( const State &other );
 
     torch::Tensor toTensor() const;
-    void updatConstraintPhase( unsigned constraintIndex, unsigned newPhase );
+    void updateConstraintPhase( unsigned constraintIndex, unsigned newPhase );
     int encodeStateIndex(const std::pair<int, int>& element) const;
     const std::vector<std::vector<int>>& getData() const;
 
