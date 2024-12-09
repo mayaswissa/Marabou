@@ -92,6 +92,10 @@ Experience &ReplayBuffer::getRevisitExperienceAt( const unsigned index )
     return *_revisitExperiences[index];
 }
 
+void ReplayBuffer::setBufferDepth( const unsigned depth )
+{
+    _experienceBufferDepth = depth;
+}
 
 Vector<unsigned> ReplayBuffer::sample() const
 {
