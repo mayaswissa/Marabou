@@ -563,11 +563,13 @@ List<PiecewiseLinearCaseSplit> ReluConstraint::getCaseSplitsByAgent(PhaseStatus 
     if ( DQNDirection == RELU_PHASE_INACTIVE )
     {
         splits.append( getInactiveSplit() );
+        splits.append( getActiveSplit() );
         return splits;
     }
     if ( DQNDirection == RELU_PHASE_ACTIVE )
     {
         splits.append( getActiveSplit() );
+        splits.append( getInactiveSplit() );
         return splits;
     }
     // todo : random ?

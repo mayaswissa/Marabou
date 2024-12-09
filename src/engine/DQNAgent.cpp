@@ -114,6 +114,8 @@ void Agent::moveExperiencesToRevisitBuffer( unsigned currentNumSplits,
                                               State *currentState )
 {
 
+    printf("insert to revisit\n");
+    fflush( stdout );
     while ( _replayedBuffer.getNumExperiences() )
     {
         Experience &revisitExperience =
@@ -134,12 +136,6 @@ void Agent::moveExperiencesToRevisitBuffer( unsigned currentNumSplits,
         if ( progress > 0 )
             newReward = 1.0 / static_cast<double>( progress );
         // newReward = static_cast<double>(_numPlConstraints - progress) / static_cast<double>(_numPlConstraints);
-        printf( "actionDepth : %u, curr num splits: %d, prev num splits: %d,  new reward : %f\n",
-                _replayedBuffer.getExperienceBufferDepth(),
-                currentNumSplits,
-                revisitExperience._numSplits,
-                newReward );
-        fflush( stdout );
         revisitExperience.updateReward( newReward );
         _replayedBuffer.moveToRevisitExperiences();
     }

@@ -177,9 +177,9 @@ bool Engine::inSnCMode() const
     return _sncMode;
 }
 
-void Engine::setRandomSeed( unsigned seed )
+void Engine::setRandomSeed( unsigned /*seed*/ )
 {
-    srand( seed );
+    srand( time(NULL) );
 }
 
 InputQuery Engine::prepareSnCInputQuery()
@@ -374,17 +374,15 @@ bool Engine::solve( double timeoutInSeconds, const std::string &trainedAgentPath
                     // perform split according to agent's action:
                     PiecewiseLinearConstraint *pl =
                         indexToConstraint( action.getPlConstraintAction() );
-                    auto actionPhase = action.getNumPhases();
                     while ( pl->getPhaseStatus() != PHASE_NOT_FIXED ||
-                            actionPhase == PHASE_NOT_FIXED ) // todo check?
+                            action.getAssignmentIndex() == PHASE_NOT_FIXED ) // todo check?
                     {
                         printf( "fixed constraint or action not fixed split\n" );
                         fflush( stdout );
                         action = Action( agent->act( currentDQNState.toTensor(), _eps ) );
                         pl = indexToConstraint( action.getPlConstraintAction() );
-                        actionPhase = action.getNumPhases();
                     }
-                    printf( "hey continue\n" );
+                    printf( "continue\n" );
                     fflush( stdout );
                     PhaseStatus phaseStatus =
                         valueToPhase( action.getAssignmentStatus() ); // todo check phase
@@ -678,11 +676,6 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( double epsilon,
                     fflush( stdout );
                     reward = 0;
                     *score += reward;
-                    // previous state (depth - 1 ) -> action -> current state (depth)
-                    // or :
-                    // previous state (depth  + n) -> action -> current state (depth)
-                    // if (previous state's depth > current state depth) :
-                    //  back to current state
                     agent->step( previousState,
                                  action,
                                  reward,
@@ -696,17 +689,16 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( double epsilon,
                 action = agent->act( currentDQNState.toTensor(), epsilon );
                 auto actionPlConstraint = action.getPlConstraintAction();
                 PiecewiseLinearConstraint *pl = indexToConstraint( actionPlConstraint );
-                auto actionPhase = action.getAssignmentIndex();
 
                 // can not split fixed constraint or choose not-fixed phase as splitting step
                 if ( pl->getPhaseStatus() != PHASE_NOT_FIXED ||
-                     actionPhase == PHASE_NOT_FIXED ) // todo
+                     action.getAssignmentIndex() == PHASE_NOT_FIXED ) // todo
                 {
                     numNotFixes++;
                     if ( numNotFixes % LEARN_NOT_FIXED_PHASE_EVERY == 0 )
                     {
                         State tepmState = State( currentDQNState );
-                        tepmState.updateConstraintPhase( actionPlConstraint, actionPhase );
+                        tepmState.updateConstraintPhase( actionPlConstraint, action.getAssignmentIndex() );
 
                         agent->step( currentDQNState,
                                      action,
@@ -719,15 +711,14 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( double epsilon,
                     }
                 }
                 // perform split according to agent's action:
-                while ( pl->getPhaseStatus() != PHASE_NOT_FIXED || actionPhase == PHASE_NOT_FIXED )
+                while ( pl->getPhaseStatus() != PHASE_NOT_FIXED || action.getAssignmentIndex() == PHASE_NOT_FIXED )
                 {
                     action = Action( agent->act( currentDQNState.toTensor(), epsilon ) );
                     pl = indexToConstraint( action.getPlConstraintAction() );
-                    actionPhase = action.getAssignmentIndex();
                 }
 
                 // perform split according to agent's action:
-                PhaseStatus phaseStatus = valueToPhase( actionPhase );
+                PhaseStatus phaseStatus = valueToPhase( action.getAssignmentIndex() );
                 _smtCore.performSplit( pl, &phaseStatus );
                 splitJustPerformed = true;
                 // prepare for the next split:
@@ -841,11 +832,7 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( double epsilon,
                 mainLoopEnd = TimeUtils::sampleMicro();
                 _statistics.incLongAttribute( Statistics::TIME_MAIN_LOOP_MICRO,
                                               TimeUtils::timePassed( mainLoopStart, mainLoopEnd ) );
-                if ( _verbosity > 0 )
-                {
-                    printf( "\nEngine::solve: unsat query\n" );
-                    _statistics.print();
-                }
+
                 printf( "done unsat!\n" );
                 fflush( stdout );
                 updateToCurrentDQNState( currentDQNState );
