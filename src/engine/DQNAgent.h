@@ -25,7 +25,7 @@ public:
                unsigned numSplits,
                bool changeReward );
 
-    void handleDone( bool success );
+    void handleDone( State *currentState, bool success, unsigned stackDepth,  unsigned numSplits );
     Action act( const torch::Tensor &state, double eps = 0.1 );
     Action tensorToAction( const torch::Tensor &tensor ) const;
     void saveNetworks() const;
@@ -48,11 +48,11 @@ private:
     static constexpr double GAMMA = 0.9;
     static constexpr double TAU = 1e-3;
     static constexpr double LR = 5e-4;
-    static constexpr unsigned UPDATE_EVERY = 10; // todo change
-    static constexpr unsigned BATCH_SIZE = 10;   // todo check
+    static constexpr unsigned UPDATE_EVERY = 4; // todo change
+    static constexpr unsigned BATCH_SIZE = 20;   // todo check
     torch::Device device;
     const std::string _saveAgentFilePath;
     const std::string _trainedAgentFilePath;
-    bool handle_invalid_gradients();
+    bool handleInvalidGradients();
 };
 #endif

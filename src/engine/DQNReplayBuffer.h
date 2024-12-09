@@ -109,6 +109,7 @@ public:
                                    unsigned depth,
                                    unsigned numSplits = 0,
                                    bool changeReward = true );
+    void setBufferDepth( unsigned depth );
 
 private:
     unsigned _actionSize;

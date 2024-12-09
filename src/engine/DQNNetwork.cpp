@@ -79,7 +79,6 @@ std::pair<int, int> QNetwork::getDims() const {
 void QNetwork::save(torch::serialize::OutputArchive& archive) const {
     // Save weights and biases of the embedding and linear layers
     archive.write("statusEmbedding_weight", _statusEmbedding->weight);
-
     // Save weights and biases for each Linear layer
     archive.write("fc1_weight", fc1->weight);
     archive.write("fc1_bias", fc1->bias);

@@ -121,8 +121,8 @@ const bool GlobalConfiguration::WRITE_JSON_PROOF = false;
 const unsigned GlobalConfiguration::BACKWARD_BOUND_PROPAGATION_DEPTH = 3;
 const unsigned GlobalConfiguration::MAX_ROUNDS_OF_BACKWARD_ANALYSIS = 10;
 
-const double GlobalConfiguration::DQN_EPSILON_START = 0.9;
-const double GlobalConfiguration::DQN_EPSILON_END = 1.0;
+const double GlobalConfiguration::DQN_EPSILON_START = 1.0;
+const double GlobalConfiguration::DQN_EPSILON_END = 0.01;
 const double GlobalConfiguration::DQN_EPSILON_DECAY = 0.995;
 
 #ifdef ENABLE_GUROBI

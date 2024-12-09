@@ -275,11 +275,11 @@ std::unique_ptr<Agent> Marabou::solveQueryWithAgent( double epsilon,
                 epsilon, std::move( agent ), timeoutInSeconds, episodeScore, filePath );
 
 
-            if ( *episodeScore > *maxEpisodeScore )
-            {
+            // if ( *episodeScore > *maxEpisodeScore )
+            // {
                 agent->saveNetworks();
                 *maxEpisodeScore = *episodeScore;
-            }
+            // }
         }
         else
             _engine->solve( timeoutInSeconds, filePath );

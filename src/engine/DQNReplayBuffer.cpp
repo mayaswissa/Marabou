@@ -97,9 +97,9 @@ Vector<unsigned> ReplayBuffer::sample() const
 {
     Vector<unsigned> sampledIndices;
 
-    if ( _experiences.empty() || _batchSize == 0 || _numRevisitedExperiences == 0 )
+    if ( _batchSize == 0 || _numRevisitedExperiences == 0 )
     {
-        printf( "experiences empty\n" );
+        printf( "revisit experiences empty\n" );
         fflush( stdout );
         return sampledIndices;
     }

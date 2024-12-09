@@ -59,7 +59,7 @@ void Agent::loadNetworks()
     }
 }
 
-bool Agent::handle_invalid_gradients()
+bool Agent::handleInvalidGradients()
 {
     bool invalid = false;
     for ( auto &group : optimizer.param_groups() )
@@ -90,7 +90,7 @@ Action Agent::tensorToAction( const torch::Tensor &tensor ) const
 }
 
 
-void Agent::handleDone( bool success )
+void Agent::handleDone( State *currentState, bool success, unsigned stackDepth,  unsigned numSplits )
 {
     // needs to insert all delayed experiences to the replay buffer and learn:
     // if done with success - the rewards of all steps in this branch remain the same.
@@ -101,9 +101,11 @@ void Agent::handleDone( bool success )
         _replayedBuffer.getExperienceAt( numExperiences - 1 )._reward = success ? 10 : -10;
         _replayedBuffer.moveToRevisitExperiences();
     }
+    moveExperiencesToRevisitBuffer(numSplits, stackDepth, currentState);
     while ( _replayedBuffer.getNumExperiences() )
         _replayedBuffer.moveToRevisitExperiences();
 
+    _replayedBuffer.setBufferDepth( 0 );
     learn();
 }
 
@@ -272,7 +274,7 @@ void Agent::learn()
     // Backpropagation
     optimizer.zero_grad();
     loss.backward();
-    if ( !handle_invalid_gradients() )
+    if ( !handleInvalidGradients() )
     {
         optimizer.step();
     }
