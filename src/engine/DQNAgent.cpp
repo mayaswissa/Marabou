@@ -90,7 +90,7 @@ Action Agent::tensorToAction( const torch::Tensor &tensor ) const
 }
 
 
-void Agent::handleDone( State *currentState, bool success, unsigned stackDepth,  unsigned numSplits )
+void Agent::handleDone( State *currentState, bool success, unsigned stackDepth, unsigned numSplits )
 {
     // needs to insert all delayed experiences to the replay buffer and learn:
     // if done with success - the rewards of all steps in this branch remain the same.
@@ -101,7 +101,7 @@ void Agent::handleDone( State *currentState, bool success, unsigned stackDepth, 
         _replayedBuffer.getExperienceAt( numExperiences - 1 )._reward = success ? 10 : -10;
         _replayedBuffer.moveToRevisitExperiences();
     }
-    moveExperiencesToRevisitBuffer(numSplits, stackDepth, currentState);
+    moveExperiencesToRevisitBuffer( numSplits, stackDepth, currentState );
     while ( _replayedBuffer.getNumExperiences() )
         _replayedBuffer.moveToRevisitExperiences();
 
@@ -110,11 +110,10 @@ void Agent::handleDone( State *currentState, bool success, unsigned stackDepth, 
 }
 
 void Agent::moveExperiencesToRevisitBuffer( unsigned currentNumSplits,
-                                              unsigned depth,
-                                              State *currentState )
+                                            unsigned depth,
+                                            State *currentState )
 {
-
-    printf("insert to revisit\n");
+    printf( "insert to revisit\n" );
     fflush( stdout );
     while ( _replayedBuffer.getNumExperiences() )
     {
@@ -122,7 +121,7 @@ void Agent::moveExperiencesToRevisitBuffer( unsigned currentNumSplits,
             _replayedBuffer.getExperienceAt( _replayedBuffer.getNumExperiences() - 1 );
 
         double newReward = 1.0;
-        if (revisitExperience._depth == depth)
+        if ( revisitExperience._depth == depth )
             if ( revisitExperience._currentState.getData() == currentState->getData() )
             {
                 printf( "same !! \n" );
@@ -135,11 +134,36 @@ void Agent::moveExperiencesToRevisitBuffer( unsigned currentNumSplits,
         auto progress = currentNumSplits - revisitExperience._numSplits;
         if ( progress > 0 )
             newReward = 1.0 / static_cast<double>( progress );
-        // newReward = static_cast<double>(_numPlConstraints - progress) / static_cast<double>(_numPlConstraints);
+        // newReward = static_cast<double>(_numPlConstraints - progress) /
+        // static_cast<double>(_numPlConstraints);
         revisitExperience.updateReward( newReward );
         _replayedBuffer.moveToRevisitExperiences();
     }
 }
+void Agent::moveAlternativeSplitToExperience( State stateBeforeSplit,
+                                              State stateAfterSplit,
+                                              unsigned numSplits )
+{
+    _replayedBuffer.moveAlternativeActionToExperience(
+        std::move(stateBeforeSplit), std::move(stateAfterSplit), numSplits );
+}
+
+void Agent::addAlternativeAction( Action agentAction,
+                                  State stateBeforeSplit,
+                                  unsigned depthBeforeSplit )
+{
+    auto alternateAction =
+        Action( agentAction.getNumPhases(),
+                agentAction.getPlConstraintActionIndex(),
+                ( agentAction.getAssignmentIndex() + 2 ) % agentAction.getNumPhases() );
+
+    _replayedBuffer.addAlternativeAction( std::move( alternateAction ),
+                                         alternateAction.getPlConstraintActionIndex(),
+                                         alternateAction.getAssignmentIndex(),
+                                         stateBeforeSplit,
+                                         depthBeforeSplit );
+}
+
 
 void Agent::step( State previousState,
                   Action action,
@@ -150,12 +174,22 @@ void Agent::step( State previousState,
                   unsigned numSplits,
                   bool changeReward )
 {
+    // save alternative action (the action not chosen by the agent) to alternative splits buffer.
+    auto alternateAction = Action( action.getNumPhases(),
+                                   action.getPlConstraintActionIndex(),
+                                   ( action.getAssignmentIndex() + 2 ) % action.getNumPhases() );
+
+    _replayedBuffer.addAlternativeAction( std::move( alternateAction ),
+                                         alternateAction.getPlConstraintActionIndex(),
+                                         alternateAction.getAssignmentIndex(),
+                                         previousState,
+                                         depth );
     if ( !changeReward )
     {
-        _replayedBuffer.addToRevisitExperiences(  previousState ,
-                                                 action ,
+        _replayedBuffer.addToRevisitExperiences( previousState,
+                                                 action,
                                                  static_cast<float>( reward ),
-                                                 currentState ,
+                                                 currentState,
                                                  done,
                                                  depth,
                                                  numSplits,
@@ -194,7 +228,6 @@ void Agent::step( State previousState,
     {
         learn(); // todo Gamma should change?
     }
-
 }
 
 
@@ -276,7 +309,7 @@ void Agent::learn()
     }
     else
     {
-        printf("Skipped updating weights due to invalid gradients.\n");
+        printf( "Skipped updating weights due to invalid gradients.\n" );
         fflush( stdout );
     }
     optimizer.step();
@@ -298,4 +331,9 @@ void Agent::softUpdate( const QNetwork &localModel, const QNetwork &targetModel 
 torch::Device Agent::getDevice() const
 {
     return device;
+}
+
+bool Agent::compareAlternativeAndCurrentState( State state )
+{
+    return _replayedBuffer.compareStateWithAlternative( std::move( state ) );
 }

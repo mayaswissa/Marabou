@@ -179,7 +179,7 @@ bool Engine::inSnCMode() const
 
 void Engine::setRandomSeed( unsigned /*seed*/ )
 {
-    srand( time(NULL) );
+    srand( time( NULL ) );
 }
 
 InputQuery Engine::prepareSnCInputQuery()
@@ -611,10 +611,11 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( double epsilon,
     unsigned LEARN_NOT_FIXED_PHASE_EVERY = 5;
     unsigned numNotFixes = 0;
     bool splitJustPerformed = true;
+    int stackDepth = _smtCore.getStackDepth();
     struct timespec mainLoopStart = TimeUtils::sampleMicro();
     while ( iterations <= maxIterations )
     {
-        unsigned stackDepth = _smtCore.getStackDepth();
+        stackDepth = _smtCore.getStackDepth();
         iterations++; // todo here?
         struct timespec mainLoopEnd = TimeUtils::sampleMicro();
         mainLoopStart = mainLoopEnd;
@@ -674,6 +675,7 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( double epsilon,
                 {
                     printf( "depth = %d\n", stackDepth );
                     fflush( stdout );
+
                     reward = 0;
                     *score += reward;
                     agent->step( previousState,
@@ -692,13 +694,14 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( double epsilon,
 
                 // can not split fixed constraint or choose not-fixed phase as splitting step
                 if ( pl->getPhaseStatus() != PHASE_NOT_FIXED ||
-                     action.getAssignmentIndex() == PHASE_NOT_FIXED ) // todo
+                     action.getAssignmentIndex() == PHASE_NOT_FIXED )
                 {
                     numNotFixes++;
                     if ( numNotFixes % LEARN_NOT_FIXED_PHASE_EVERY == 0 )
                     {
                         State tepmState = State( currentDQNState );
-                        tepmState.updateConstraintPhase( actionPlConstraint, action.getAssignmentIndex() );
+                        tepmState.updateConstraintPhase( actionPlConstraint,
+                                                         action.getAssignmentIndex() );
 
                         agent->step( currentDQNState,
                                      action,
@@ -711,7 +714,8 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( double epsilon,
                     }
                 }
                 // perform split according to agent's action:
-                while ( pl->getPhaseStatus() != PHASE_NOT_FIXED || action.getAssignmentIndex() == PHASE_NOT_FIXED )
+                while ( pl->getPhaseStatus() != PHASE_NOT_FIXED ||
+                        action.getAssignmentIndex() == PHASE_NOT_FIXED )
                 {
                     action = Action( agent->act( currentDQNState.toTensor(), epsilon ) );
                     pl = indexToConstraint( action.getPlConstraintAction() );
@@ -719,6 +723,10 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( double epsilon,
 
                 // perform split according to agent's action:
                 PhaseStatus phaseStatus = valueToPhase( action.getAssignmentIndex() );
+
+                // add alternative action (not chosen by agent) to replay buffer with depth of
+                // currentDepth
+                agent->addAlternativeAction( action, currentDQNState, stackDepth );
                 _smtCore.performSplit( pl, &phaseStatus );
                 splitJustPerformed = true;
                 // prepare for the next split:
@@ -826,8 +834,22 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( double epsilon,
             // If we're at level 0, the whole query is unsat.
             if ( _produceUNSATProofs )
                 explainSimplexFailure();
-
-            if ( !_smtCore.popSplit() )
+            stackDepth = _smtCore.getStackDepth();
+            printf( "before pop : depth = %d\n", stackDepth );
+            fflush( stdout );
+            updateToCurrentDQNState( previousState );
+            auto popSplit = _smtCore.popSplit();
+            if ( popSplit )
+            {
+                updateToCurrentDQNState( currentDQNState );
+                agent->moveAlternativeSplitToExperience(
+                    previousState, currentDQNState, iterations );
+            }
+            stackDepth = _smtCore.getStackDepth();
+            printf( "after pop : depth = %d\n", stackDepth );
+            fflush( stdout );
+            updateToCurrentDQNState( currentDQNState );
+            if ( !popSplit )
             {
                 mainLoopEnd = TimeUtils::sampleMicro();
                 _statistics.incLongAttribute( Statistics::TIME_MAIN_LOOP_MICRO,

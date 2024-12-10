@@ -170,7 +170,6 @@ void SmtCore::performSplit( PiecewiseLinearConstraint *plConstraint,
         splits = _constraintForSplitting->getCaseSplits();
 
     ASSERT( !splits.empty() );
-    // todo check assert
     ASSERT( splits.size() >= 2 ); // Not really necessary, can add code to handle this case.
     _constraintForSplitting->setActiveConstraint( false );
 
@@ -323,7 +322,7 @@ bool SmtCore::popSplit()
             printf( "Error! Popping from a compliant stack\n" );
             throw MarabouError( MarabouError::DEBUGGING_ERROR );
         }
-
+        // todo insert new action here?
         SmtStackEntry *stackEntry = _stack.back();
 
         popContext();
@@ -335,6 +334,7 @@ bool SmtCore::popSplit()
 
         // Apply the new split and erase it from the list
         auto split = stackEntry->_alternativeSplits.begin();
+        // todo insert new action to agent here - find what current state is (the state after the action)
 
         // Erase any valid splits that were learned using the split we just
         // popped

@@ -18,6 +18,7 @@ ReplayBuffer::ReplayBuffer( const unsigned actionSize,
     , _batchSize( batchSize )
     , _numExperiences( 0 )
     , _numRevisitedExperiences( 0 )
+    , _numAlternativeSplits( 0 )
     , _experienceBufferDepth( 0 )
 {
 }
@@ -174,4 +175,43 @@ void ReplayBuffer::moveToRevisitExperiences()
 unsigned ReplayBuffer::getBatchSize() const
 {
     return _batchSize;
+}
+
+void ReplayBuffer::addAlternativeAction( Action action,
+                                         unsigned plConstraint,
+                                         unsigned constraintPhase,
+                                         State currentState,
+                                         unsigned depth )
+{
+    auto alternativeSplit = std::make_unique<AlternativeSplits>(
+        std::move( action ), plConstraint, constraintPhase, currentState, depth );
+    _alternativeExperiences.push_back( std::move( alternativeSplit ) );
+    _numAlternativeSplits++;
+}
+
+void ReplayBuffer::moveAlternativeActionToExperience( State stateBeforeSplit,
+                                                      State stateAfterSplit,
+                                                      unsigned numSplits )
+{
+    const auto &alternativeSplit = _alternativeExperiences[_numExperiences - 1];
+    double reward = 0;
+
+    add( std::move( stateBeforeSplit ),
+         std::move( std::move( alternativeSplit.get()->action ) ),
+         reward,
+         std::move( stateAfterSplit ),
+         false,
+         alternativeSplit.get()->depthBeforeSplit + 1, // todo check depth
+         numSplits,
+         true );
+    _alternativeExperiences.pop_back();
+    _numAlternativeSplits--;
+}
+
+bool ReplayBuffer::compareStateWithAlternative( const State &state ) const
+{
+    const auto &alternativeSplit = _alternativeExperiences[_numExperiences - 1];
+    auto alternativeState = alternativeSplit.get()->stateBeforeSplit;
+    alternativeState.updateConstraintPhase( alternativeSplit.get()->plConstraint, 0 );
+    return alternativeState.getData() == state.getData();
 }

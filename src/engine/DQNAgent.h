@@ -16,6 +16,8 @@ public:
            unsigned numPhases,
            const std::string &saveAgentPath,
            const std::string &trainedAgentPath = "" );
+    void
+    addAlternativeAction( Action agentAction, State stateBeforeSplit, unsigned depthBeforeSplit );
     void step( State state,
                Action action,
                double reward,
@@ -25,19 +27,25 @@ public:
                unsigned numSplits,
                bool changeReward );
 
-    void handleDone( State *currentState, bool success, unsigned stackDepth,  unsigned numSplits );
+    void handleDone( State *currentState, bool success, unsigned stackDepth, unsigned numSplits );
     Action act( const torch::Tensor &state, double eps = 0.1 );
     Action tensorToAction( const torch::Tensor &tensor ) const;
     void saveNetworks() const;
     void loadNetworks();
     void moveRevisitExperience( unsigned currentNumSplits, unsigned depth, State *state );
+    bool compareStateWithAlternative( const State &state );
+    void moveAlternativeSplitToExperience( State stateBeforeSplit,
+                                           State stateAfterSplit,
+                                           unsigned numSplits );
 
 private:
     static void softUpdate( const QNetwork &localModel, const QNetwork &targetModel );
     void learn();
     torch::Device getDevice() const;
+    bool compareAlternativeAndCurrentState( State state );
     bool isEqualState( const State *state, const State *other ) const;
     void moveExperiencesToRevisitBuffer( unsigned currentNumSplits, unsigned depth, State *state );
+
 
     ActionSpace _actionSpace;
     unsigned _numPlConstraints, _numPhaseStatuses, _embeddingDim, _numActions;
@@ -49,7 +57,7 @@ private:
     static constexpr double TAU = 1e-3;
     static constexpr double LR = 5e-4;
     static constexpr unsigned UPDATE_EVERY = 8; // todo change
-    static constexpr unsigned BATCH_SIZE = 10;   // todo check
+    static constexpr unsigned BATCH_SIZE = 10;  // todo check
     torch::Device device;
     const std::string _saveAgentFilePath;
     const std::string _trainedAgentFilePath;

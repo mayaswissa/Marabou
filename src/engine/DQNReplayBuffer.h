@@ -7,6 +7,7 @@
 #include <deque>
 #include <utility>
 #undef Warning
+#include <boost/thread/futures/future_status.hpp>
 #include <torch/torch.h>
 
 struct Experience
@@ -64,12 +65,14 @@ struct Experience
     {
     }
 
-    Experience& operator=(Experience&& other) noexcept {
-        if (this != &other) {
-            _previousState = std::move(other._previousState);
-            _action = std::move(other._action);
+    Experience &operator=( Experience &&other ) noexcept
+    {
+        if ( this != &other )
+        {
+            _previousState = std::move( other._previousState );
+            _action = std::move( other._action );
             _reward = other._reward;
-            _currentState = std::move(other._currentState);
+            _currentState = std::move( other._currentState );
             _done = other._done;
             _depth = other._depth;
             _numSplits = other._numSplits;
@@ -80,6 +83,28 @@ struct Experience
     void updateReward( double newReward );
 };
 
+
+struct AlternativeSplits
+{
+    Action action;
+    unsigned plConstraint;
+    unsigned constraintPhase;
+    State stateBeforeSplit;
+    unsigned depthBeforeSplit;
+
+    AlternativeSplits( Action action,
+                       unsigned plConstraint,
+                       unsigned constraintPhase,
+                       State stateBeforeSplit,
+                       unsigned depthBeforeSplit )
+        : action( std::move( action ) )
+        , plConstraint( plConstraint )
+        , constraintPhase( constraintPhase )
+        , stateBeforeSplit( std::move( stateBeforeSplit ) )
+        , depthBeforeSplit( depthBeforeSplit )
+    {
+    }
+};
 
 class ReplayBuffer
 {
@@ -100,16 +125,25 @@ public:
     unsigned getNumRevisitExperiences() const;
     unsigned getExperienceBufferDepth() const;
     unsigned getBatchSize() const;
+    void addAlternativeAction( Action action,
+                               unsigned plConstraint,
+                               unsigned constraintPhase,
+                               State currentState,
+                               unsigned depth );
+    void moveAlternativeActionToExperience( State stateBeforeSplit,
+                                            State stateAfterSplit,
+                                            unsigned numSplits );
     void moveToRevisitExperiences();
     void addToRevisitExperiences( State state,
-                                   Action action,
-                                   double reward,
-                                   State nextState,
-                                   const bool done,
-                                   unsigned depth,
-                                   unsigned numSplits = 0,
-                                   bool changeReward = true );
+                                  Action action,
+                                  double reward,
+                                  State nextState,
+                                  const bool done,
+                                  unsigned depth,
+                                  unsigned numSplits = 0,
+                                  bool changeReward = true );
     void setBufferDepth( unsigned depth );
+    bool compareStateWithAlternative( const State &state ) const;
 
 private:
     unsigned _actionSize;
@@ -117,9 +151,11 @@ private:
     unsigned _batchSize;
     unsigned _numExperiences;
     unsigned _numRevisitedExperiences;
+    unsigned _numAlternativeSplits;
     unsigned _experienceBufferDepth;
     std::deque<std::unique_ptr<Experience>> _experiences;
     std::deque<std::unique_ptr<Experience>> _revisitExperiences;
+    std::deque<std::unique_ptr<AlternativeSplits>> _alternativeExperiences;
 };
 
 #endif
