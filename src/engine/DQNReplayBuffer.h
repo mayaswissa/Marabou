@@ -7,60 +7,59 @@
 #include <deque>
 #include <utility>
 #undef Warning
-#include <boost/thread/futures/future_status.hpp>
 #include <torch/torch.h>
 
 struct Experience
 {
-    State _previousState;
+    State _stateBeforeAction;
     Action _action;
     double _reward;
-    State _currentState;
+    State _stateAfterAction;
     bool _done;
-    unsigned _depth;
-    unsigned _numSplits;
+    unsigned _depthAfter;
+    unsigned _splitsBefore;
     bool _changeReward;
 
     // Existing constructor
-    Experience( State previousState,
+    Experience( State stateBeforeAction,
                 Action action,
                 double reward,
-                State currentState,
+                State stateAfterAction,
                 const bool done,
                 unsigned depth,
                 unsigned numSplits = 0,
                 bool changeReward = true )
-        : _previousState( previousState )
+        : _stateBeforeAction( stateBeforeAction )
         , _action( action )
         , _reward( reward )
-        , _currentState( currentState )
+        , _stateAfterAction( stateAfterAction )
         , _done( done )
-        , _depth( depth )
-        , _numSplits( numSplits )
+        , _depthAfter( depth )
+        , _splitsBefore( numSplits )
         , _changeReward( changeReward )
     {
     }
 
     Experience( const Experience &other )
-        : _previousState( other._previousState )
+        : _stateBeforeAction( other._stateBeforeAction )
         , _action( other._action )
         , _reward( other._reward )
-        , _currentState( other._currentState )
+        , _stateAfterAction( other._stateAfterAction )
         , _done( other._done )
-        , _depth( other._depth )
-        , _numSplits( other._numSplits )
+        , _depthAfter( other._depthAfter )
+        , _splitsBefore( other._splitsBefore )
         , _changeReward( other._changeReward )
     {
     }
 
     Experience( Experience &&other ) noexcept
-        : _previousState( std::move( other._previousState ) )
+        : _stateBeforeAction( std::move( other._stateBeforeAction ) )
         , _action( std::move( other._action ) )
         , _reward( other._reward )
-        , _currentState( std::move( other._currentState ) )
+        , _stateAfterAction( std::move( other._stateAfterAction ) )
         , _done( other._done )
-        , _depth( other._depth )
-        , _numSplits( other._numSplits )
+        , _depthAfter( other._depthAfter )
+        , _splitsBefore( other._splitsBefore )
         , _changeReward( other._changeReward )
     {
     }
@@ -69,13 +68,13 @@ struct Experience
     {
         if ( this != &other )
         {
-            _previousState = std::move( other._previousState );
+            _stateBeforeAction = std::move( other._stateBeforeAction );
             _action = std::move( other._action );
             _reward = other._reward;
-            _currentState = std::move( other._currentState );
+            _stateAfterAction = std::move( other._stateAfterAction );
             _done = other._done;
-            _depth = other._depth;
-            _numSplits = other._numSplits;
+            _depthAfter = other._depthAfter;
+            _splitsBefore = other._splitsBefore;
             _changeReward = other._changeReward;
         }
         return *this;
@@ -83,26 +82,53 @@ struct Experience
     void updateReward( double newReward );
 };
 
-
-struct AlternativeSplits
+struct ActiveAction
 {
-    Action action;
-    unsigned plConstraint;
-    unsigned constraintPhase;
-    State stateBeforeSplit;
-    unsigned depthBeforeSplit;
-
-    AlternativeSplits( Action action,
-                       unsigned plConstraint,
-                       unsigned constraintPhase,
-                       State stateBeforeSplit,
-                       unsigned depthBeforeSplit )
-        : action( std::move( action ) )
-        , plConstraint( plConstraint )
-        , constraintPhase( constraintPhase )
-        , stateBeforeSplit( std::move( stateBeforeSplit ) )
-        , depthBeforeSplit( depthBeforeSplit )
+    Action _action;
+    State _stateBeforeAction;
+    State _stateAfterAction;
+    unsigned _depthBeforeAction;
+    unsigned _splitsBeforeActiveAction;
+    ActiveAction( Action action,
+                  State stateBeforeAction,
+                  State stateAfterAction,
+                  unsigned depthBeforeAction,
+                  unsigned splitsBeforeAction )
+        : _action( action )
+        , _stateBeforeAction( stateBeforeAction )
+        , _stateAfterAction( stateAfterAction )
+        , _depthBeforeAction( depthBeforeAction )
+        , _splitsBeforeActiveAction( splitsBeforeAction )
     {
+    }
+};
+
+struct ActionsStack
+{
+    // pairs of actions and numSplits when act
+    List<ActiveAction> _activeActions;
+    List<Action> _alternativeActions;
+    State _stateBeforeAction;
+
+    ActionsStack( Action action,
+                  State stateBeforeAction,
+                  State stateAfterAction,
+                  unsigned depthBeforeAction,
+                  unsigned splitsBeforeAction ) : _stateBeforeAction( stateBeforeAction )
+
+    {
+        _activeActions = List<ActiveAction>();
+        _activeActions.append( ActiveAction( action,
+                                             std::move( stateBeforeAction ),
+                                             std::move( stateAfterAction ),
+                                             depthBeforeAction,
+                                             splitsBeforeAction ) );
+        _alternativeActions = List<Action>();
+
+        unsigned actionPhase = action.getAssignmentIndex() == 2 ? 1 : 2;
+        auto alternateAction =
+            Action( action.getNumPhases(), action.getPlConstraintActionIndex(), actionPhase );
+        _alternativeActions.append( alternateAction );
     }
 };
 
@@ -118,22 +144,10 @@ public:
               unsigned depth,
               unsigned numSplits = 0,
               bool changeReward = true );
-    Experience &getRevisitExperienceAt( unsigned index );
-    Experience &getExperienceAt( unsigned index );
+    Experience &getRevisitExperienceAt( unsigned index ) const;
     Vector<unsigned> sample() const;
-    unsigned getNumExperiences() const;
     unsigned getNumRevisitExperiences() const;
-    unsigned getExperienceBufferDepth() const;
     unsigned getBatchSize() const;
-    void addAlternativeAction( Action action,
-                               unsigned plConstraint,
-                               unsigned constraintPhase,
-                               State currentState,
-                               unsigned depth );
-    void moveAlternativeActionToExperience( State stateBeforeSplit,
-                                            State stateAfterSplit,
-                                            unsigned numSplits );
-    void moveToRevisitExperiences();
     void addToRevisitExperiences( State state,
                                   Action action,
                                   double reward,
@@ -142,20 +156,25 @@ public:
                                   unsigned depth,
                                   unsigned numSplits = 0,
                                   bool changeReward = true );
-    void setBufferDepth( unsigned depth );
-    bool compareStateWithAlternative( const State &state ) const;
+
+    bool compareStateWithAlternative( State &state ) const;
+
+    void pushActionEntry( Action action,
+                          State stateBeforeAction,
+                          State stateAfterAction,
+                          unsigned depth,
+                          unsigned numSplits );
+    void handleDone( State currentState, bool success, unsigned stackDepth, unsigned numSplits );
+    void applyNextAction( State state, unsigned depth, unsigned numSplits );
 
 private:
     unsigned _actionSize;
     unsigned _bufferSize;
     unsigned _batchSize;
-    unsigned _numExperiences;
     unsigned _numRevisitedExperiences;
-    unsigned _numAlternativeSplits;
-    unsigned _experienceBufferDepth;
-    std::deque<std::unique_ptr<Experience>> _experiences;
     std::deque<std::unique_ptr<Experience>> _revisitExperiences;
-    std::deque<std::unique_ptr<AlternativeSplits>> _alternativeExperiences;
+    void goToCurrentDepth( unsigned currentDepth );
+    List<ActionsStack *> _actionsStack;
 };
 
 #endif

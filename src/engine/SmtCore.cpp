@@ -162,7 +162,6 @@ void SmtCore::performSplit( PiecewiseLinearConstraint *plConstraint,
     // Before storing the state of the engine, we:
     //   1. Obtain the splits.
     //   2. Disable the constraint, so that it is marked as disbaled in the EngineState.
-    // todo choose split agent getCaseSplitsByAgent
     List<PiecewiseLinearCaseSplit> splits;
     if ( GlobalConfiguration::USE_DQN )
         splits = _constraintForSplitting->getCaseSplitsByAgent( *directionByAgent );

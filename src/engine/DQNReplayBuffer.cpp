@@ -16,40 +16,114 @@ ReplayBuffer::ReplayBuffer( const unsigned actionSize,
     : _actionSize( actionSize )
     , _bufferSize( bufferSize )
     , _batchSize( batchSize )
-    , _numExperiences( 0 )
     , _numRevisitedExperiences( 0 )
-    , _numAlternativeSplits( 0 )
-    , _experienceBufferDepth( 0 )
 {
 }
 
-void ReplayBuffer::add( State previousState,
-                        Action action,
-                        double reward,
-                        State currentState,
-                        const bool done,
-                        unsigned depth,
-                        unsigned numSplits,
-                        bool changeReward )
+void ReplayBuffer::pushActionEntry( Action action,
+                                    State stateBeforeAction,
+                                    State stateAfterAction,
+                                    unsigned depth,
+                                    unsigned numSplits )
 {
-    if ( _numExperiences >= _bufferSize )
+    ActionsStack *actionEntry = new ActionsStack( std::move( action ),
+                                                  std::move( stateBeforeAction ),
+                                                  std::move( stateAfterAction ),
+                                                  depth,
+                                                  numSplits );
+    _actionsStack.append( actionEntry );
+}
+
+void ReplayBuffer::handleDone( State currentState, bool success, unsigned stackDepth, unsigned numSplits )
+{
+    // go over all actions in actionsStack and move them to revisitExperiences
+    // no need to go over alternative actions since they did not occur.
+    while (!_actionsStack.empty())
     {
-        _experiences.pop_front();
-        _numExperiences--;
+        ActionsStack *actionEntry = _actionsStack.back();
+        while (! actionEntry->_activeActions.empty())
+        {
+            auto activeAction = actionEntry->_activeActions.back();
+            double reward = 0;
+            auto progress = numSplits - activeAction._splitsBeforeActiveAction;
+            if ( progress > 0 )
+                reward = 1.0 / static_cast<double>( progress );
+            auto experience =
+                std::make_unique<Experience>( std::move( activeAction._stateBeforeAction ),
+                                              std::move( activeAction._action ),
+                                              reward,
+                                              currentState,
+                                              false,
+                                              stackDepth,
+                                              numSplits,
+                                              false );
+            _revisitExperiences.push_back( std::move( experience ) );
+            actionEntry->_activeActions.popBack();
+        }
+        delete _actionsStack.back();
+        _actionsStack.popBack();
     }
 
-    auto experience = std::make_unique<Experience>( std::move( previousState ),
-                                                    std::move( action ),
-                                                    reward,
-                                                    std::move( currentState ),
-                                                    done,
-                                                    depth,
-                                                    numSplits,
-                                                    changeReward );
-    _experiences.push_back( std::move( experience ) );
-    _experienceBufferDepth = depth;
-    _numExperiences++;
+    _revisitExperiences.back().get()->_done = true;
+    _revisitExperiences.back().get()->_reward = success ? 10 : -10;
 }
+
+// go to next alternative action available in actionsStack.
+void ReplayBuffer::applyNextAction( State stateAfterAction, unsigned depth, unsigned numSplits )
+{
+    if ( _actionsStack.empty() )
+    {
+        handleDone(std::move(stateAfterAction), true, depth, numSplits); // todo check success - if no actions in actions stack - seems like unsat successfully
+        return;
+    }
+    ActionsStack *actionEntry = _actionsStack.back();
+    //  no alternative splits for previous actions - pop this entry and move activeActions to
+    //  revisit Buffer.
+    while ( actionEntry->_alternativeActions.empty() )
+    {
+        // move activeSplit to revisit buffer.
+        while ( !actionEntry->_activeActions.empty() )
+        {
+            auto activeAction = actionEntry->_activeActions.back();
+            double reward = 0;
+            auto progress = numSplits - activeAction._splitsBeforeActiveAction;
+            if ( progress > 0 )
+                reward = 1.0 / static_cast<double>( progress );
+            auto experience =
+                std::make_unique<Experience>( std::move( activeAction._stateBeforeAction ),
+                                              std::move( activeAction._action ),
+                                              reward,
+                                              stateAfterAction ,
+                                              false,
+                                              depth,
+                                              numSplits,
+                                              false );
+            _revisitExperiences.push_back( std::move( experience ) );
+            actionEntry->_activeActions.popBack();
+        }
+        delete _actionsStack.back();
+        _actionsStack.popBack();
+
+        if ( _actionsStack.empty() )
+        {
+            handleDone(stateAfterAction, true, depth, numSplits);
+            return;
+        }
+        actionEntry = _actionsStack.back();
+    }
+
+        // alternative action exists - push it to activeSplits with current numSplits:
+        actionEntry = _actionsStack.back();
+        auto action = actionEntry->_alternativeActions.begin();
+        actionEntry->_activeActions.append( ActiveAction( std::move( *action ),
+                                                          actionEntry->_stateBeforeAction,
+                                                          std::move( stateAfterAction ),
+                                                          depth,
+                                                          numSplits ) );
+        actionEntry->_alternativeActions.erase( action );
+
+}
+
 
 void ReplayBuffer::addToRevisitExperiences( State state,
                                             Action action,
@@ -78,24 +152,12 @@ void ReplayBuffer::addToRevisitExperiences( State state,
     _numRevisitedExperiences++;
 }
 
-Experience &ReplayBuffer::getExperienceAt( const unsigned index )
-{
-    if ( index >= _numExperiences )
-        throw std::out_of_range( "Index out of range in experiences" ); // todo error
-    return *_experiences[index];
-}
 
-
-Experience &ReplayBuffer::getRevisitExperienceAt( const unsigned index )
+Experience &ReplayBuffer::getRevisitExperienceAt( const unsigned index ) const
 {
     if ( index >= getNumRevisitExperiences() )
         throw std::out_of_range( "Index out of range in revisited experiences" ); // todo error
     return *_revisitExperiences[index];
-}
-
-void ReplayBuffer::setBufferDepth( const unsigned depth )
-{
-    _experienceBufferDepth = depth;
 }
 
 Vector<unsigned> ReplayBuffer::sample() const
@@ -130,46 +192,9 @@ Vector<unsigned> ReplayBuffer::sample() const
     return sampledIndices;
 }
 
-
-unsigned ReplayBuffer::getNumExperiences() const
-{
-    return _numExperiences;
-}
-
 unsigned ReplayBuffer::getNumRevisitExperiences() const
 {
     return _numRevisitedExperiences;
-}
-
-unsigned ReplayBuffer::getExperienceBufferDepth() const
-{
-    return _experienceBufferDepth;
-}
-
-void ReplayBuffer::moveToRevisitExperiences()
-{
-    if ( _experiences.empty() )
-    {
-        return;
-    }
-
-    // Check if the revisit experiences buffer is full
-    if ( _numRevisitedExperiences >= _bufferSize )
-    {
-        // Remove the first experience from revisit experiences if it's full
-        _revisitExperiences.pop_front();
-        _numRevisitedExperiences--;
-    }
-
-    auto &experience = _experiences[_numExperiences - 1];
-    _revisitExperiences.push_back( std::move( experience ) );
-    _numRevisitedExperiences++;
-    _experiences.pop_back();
-    _numExperiences--;
-    if ( _numExperiences == 0 )
-        _experienceBufferDepth = 0;
-    else
-        _experienceBufferDepth = _experiences.at( _numExperiences - 1 ).get()->_depth;
 }
 
 unsigned ReplayBuffer::getBatchSize() const
@@ -177,41 +202,4 @@ unsigned ReplayBuffer::getBatchSize() const
     return _batchSize;
 }
 
-void ReplayBuffer::addAlternativeAction( Action action,
-                                         unsigned plConstraint,
-                                         unsigned constraintPhase,
-                                         State currentState,
-                                         unsigned depth )
-{
-    auto alternativeSplit = std::make_unique<AlternativeSplits>(
-        std::move( action ), plConstraint, constraintPhase, currentState, depth );
-    _alternativeExperiences.push_back( std::move( alternativeSplit ) );
-    _numAlternativeSplits++;
-}
 
-void ReplayBuffer::moveAlternativeActionToExperience( State stateBeforeSplit,
-                                                      State stateAfterSplit,
-                                                      unsigned numSplits )
-{
-    const auto &alternativeSplit = _alternativeExperiences[_numExperiences - 1];
-    double reward = 0;
-
-    add( std::move( stateBeforeSplit ),
-         std::move( std::move( alternativeSplit.get()->action ) ),
-         reward,
-         std::move( stateAfterSplit ),
-         false,
-         alternativeSplit.get()->depthBeforeSplit + 1, // todo check depth
-         numSplits,
-         true );
-    _alternativeExperiences.pop_back();
-    _numAlternativeSplits--;
-}
-
-bool ReplayBuffer::compareStateWithAlternative( const State &state ) const
-{
-    const auto &alternativeSplit = _alternativeExperiences[_numExperiences - 1];
-    auto alternativeState = alternativeSplit.get()->stateBeforeSplit;
-    alternativeState.updateConstraintPhase( alternativeSplit.get()->plConstraint, 0 );
-    return alternativeState.getData() == state.getData();
-}

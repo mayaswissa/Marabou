@@ -17,7 +17,7 @@ public:
            const std::string &saveAgentPath,
            const std::string &trainedAgentPath = "" );
     void
-    addAlternativeAction( Action agentAction, State stateBeforeSplit, unsigned depthBeforeSplit );
+    addAlternativeAction( State stateBeforeSplit, unsigned depthBeforeSplit, unsigned numSplits );
     void step( State state,
                Action action,
                double reward,
@@ -27,22 +27,19 @@ public:
                unsigned numSplits,
                bool changeReward );
 
-    void handleDone( State *currentState, bool success, unsigned stackDepth, unsigned numSplits );
+    void handleDone(  State currentState, unsigned stackDepth, unsigned numSplits,bool success = false  );
     Action act( const torch::Tensor &state, double eps = 0.1 );
     Action tensorToAction( const torch::Tensor &tensor ) const;
     void saveNetworks() const;
     void loadNetworks();
     void moveRevisitExperience( unsigned currentNumSplits, unsigned depth, State *state );
     bool compareStateWithAlternative( const State &state );
-    void moveAlternativeSplitToExperience( State stateBeforeSplit,
-                                           State stateAfterSplit,
-                                           unsigned numSplits );
+    void moveAlternativeSplitToExperience( State stateAfterSplit, unsigned numSplits, unsigned currentDepth, Action &action );
 
 private:
     static void softUpdate( const QNetwork &localModel, const QNetwork &targetModel );
     void learn();
     torch::Device getDevice() const;
-    bool compareAlternativeAndCurrentState( State state );
     bool isEqualState( const State *state, const State *other ) const;
     void moveExperiencesToRevisitBuffer( unsigned currentNumSplits, unsigned depth, State *state );
 
