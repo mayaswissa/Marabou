@@ -101,10 +101,14 @@ void Agent::handleDone( State currentState, unsigned stackDepth, unsigned numSpl
 
 void Agent::addAlternativeAction( State stateBeforeSplit,
                                   unsigned depthBeforeSplit,
-                                  unsigned numSplits )
+                                  unsigned numSplits,
+                                  unsigned &numInconsistent)
 {
 
-    _replayedBuffer.applyNextAction( std::move(stateBeforeSplit), depthBeforeSplit, numSplits);
+    _replayedBuffer.applyNextAction( std::move(stateBeforeSplit), depthBeforeSplit, numSplits, numInconsistent);
+    _tStep = ( _tStep + 1 ) % UPDATE_EVERY;
+    if ( _tStep == 0 && _replayedBuffer.getNumRevisitExperiences() > BATCH_SIZE )
+        learn();
 }
 
 
@@ -134,6 +138,7 @@ void Agent::step( State previousState,
     if ( done ) // todo check what to do.
     {
         handleDone( currentState, depth, numSplits );
+        return;
     }
 
     // add new _actionEntry and push it to ActionsStack.
@@ -145,66 +150,6 @@ void Agent::step( State previousState,
     if ( _tStep == 0 && _replayedBuffer.getNumRevisitExperiences() > BATCH_SIZE )
         learn();
 }
-
-// void Agent::step( State previousState,
-//                   Action action,
-//                   double reward,
-//                   State currentState,
-//                   const bool done,
-//                   unsigned depth,
-//                   unsigned numSplits,
-//                   bool changeReward )
-// {
-//     // invalid step due to fixed pl constraint or not fixed phase in action.
-//     if ( !changeReward )
-//     {
-//         _replayedBuffer.addToRevisitExperiences( previousState,
-//                                                  action,
-//                                                  static_cast<float>( reward ),
-//                                                  currentState,
-//                                                  done,
-//                                                  depth,
-//                                                  numSplits,
-//                                                  changeReward );
-//         return;
-//     }
-//
-//     if ( done )
-//     {
-//         _replayedBuffer.add( previousState,
-//                              action,
-//                              static_cast<float>( reward ),
-//                              currentState,
-//                              done,
-//                              depth,
-//                              numSplits,
-//                              changeReward );
-//         return;
-//     }
-//
-//     // prune the branch.
-//     if ( _replayedBuffer.getNumExperiences() > 0 &&
-//          _replayedBuffer.getExperienceBufferDepth() > depth ) // todo check if >=
-//     {
-//         moveExperiencesToRevisitBuffer( numSplits, depth, &currentState );
-//         return;
-//     }
-//
-//     // valid action and continue in the same branch.
-//     _replayedBuffer.add( previousState,
-//                          action,
-//                          static_cast<float>( reward ),
-//                          currentState,
-//                          done,
-//                          depth,
-//                          numSplits,
-//                          changeReward );
-//
-//     _tStep = ( _tStep + 1 ) % UPDATE_EVERY;
-//     if ( _tStep == 0 && _replayedBuffer.getNumRevisitExperiences() > BATCH_SIZE )
-//         learn();
-// }
-
 
 Action Agent::act( const torch::Tensor &state, double eps )
 {

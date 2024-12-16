@@ -600,7 +600,6 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( double epsilon,
 
     double reward = 0;
     // unsigned currNumFixedPlConstraints, prevNumFixedPlConstraints = 0;
-    bool firstStep = true;
     unsigned maxIterations = 100000;
     unsigned iterations = 0;
     unsigned splitsCounter = 0;
@@ -610,10 +609,12 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( double epsilon,
     int stackDepth = _smtCore.getStackDepth();
     struct timespec mainLoopStart = TimeUtils::sampleMicro();
     bool splitAlternative = false;
+    bool splitAction = false;
     State stateBeforeSplit = State( currentDQNState );
     updateToCurrentDQNState( stateBeforeSplit );
     State stateAfterSplit = State( currentDQNState );
     updateToCurrentDQNState( stateAfterSplit );
+    unsigned numInconsistent = 0;
     while ( iterations <= maxIterations )
     {
         stackDepth = _smtCore.getStackDepth();
@@ -625,7 +626,7 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( double epsilon,
         {
             stackDepth = _smtCore.getStackDepth();
             updateToCurrentDQNState( currentDQNState );
-            agent->handleDone( currentDQNState, _smtCore.getStackDepth(), iterations );
+            agent->handleDone( currentDQNState, _smtCore.getStackDepth(), splitsCounter );
             _exitCode = Engine::TIMEOUT;
             return agent;
         }
@@ -660,31 +661,17 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( double epsilon,
             {
                 performBoundTighteningAfterCaseSplit();
                 informLPSolverOfBounds();
-                // todo move add to alternative to here.
                 if ( splitAlternative )
                 {
+                    splitsCounter++;
                     updateToCurrentDQNState( stateAfterSplit );
-                    // todo compare actions of the popAlternative and the current
-                    agent->addAlternativeAction( stateAfterSplit, stackDepth, iterations );
+                    agent->addAlternativeAction(
+                        stateAfterSplit, stackDepth, splitsCounter, numInconsistent );
                     splitAlternative = false;
                 }
-                splitJustPerformed = false;
-            }
-
-            // Perform agent case split
-            if ( _smtCore.needToSplit() )
-            {
-                // DQN CODE:
-                // need to split => agent not done.
-                splitsCounter++;
-                updateToCurrentDQNState( currentDQNState );
-                // currNumFixedPlConstraints = getNumFixedConstraints();
-
-                if ( !firstStep )
+                else if ( splitAction )
                 {
-                    printf( "depth = %d\n", stackDepth );
-                    fflush( stdout );
-
+                    updateToCurrentDQNState( currentDQNState );
                     reward = 0;
                     *score += reward;
                     agent->step( previousState,
@@ -693,52 +680,44 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( double epsilon,
                                  currentDQNState,
                                  false,
                                  stackDepth,
-                                 iterations,
+                                 splitsCounter,
                                  true );
+                    splitAction = false;
                 }
-                // agent take an action according to current state:
+                splitJustPerformed = false;
+            }
+
+            if ( _smtCore.needToSplit() )
+            {
+                splitsCounter++;
                 action = agent->act( currentDQNState.toTensor(), epsilon );
                 auto actionPlConstraint = action.getPlConstraintAction();
                 PiecewiseLinearConstraint *pl = indexToConstraint( actionPlConstraint );
-
                 // can not split fixed constraint or choose not-fixed phase as splitting step
-                if ( pl->getPhaseStatus() != PHASE_NOT_FIXED ||
-                     action.getAssignmentIndex() == PHASE_NOT_FIXED )
+                while ( pl->getPhaseStatus() != PHASE_NOT_FIXED ||
+                        action.getAssignmentIndex() == PHASE_NOT_FIXED )
                 {
                     numNotFixes++;
                     if ( numNotFixes % LEARN_NOT_FIXED_PHASE_EVERY == 0 )
                     {
-                        State tepmState = State( currentDQNState );
-                        tepmState.updateConstraintPhase( actionPlConstraint,
-                                                         action.getAssignmentIndex() );
-
                         agent->step( currentDQNState,
                                      action,
                                      -1,
-                                     tepmState,
+                                     currentDQNState,
                                      false,
                                      stackDepth,
-                                     iterations,
+                                     splitsCounter,
                                      false );
                     }
-                }
-                // perform split according to agent's action:
-                while ( pl->getPhaseStatus() != PHASE_NOT_FIXED ||
-                        action.getAssignmentIndex() == PHASE_NOT_FIXED )
-                {
                     action = Action( agent->act( currentDQNState.toTensor(), epsilon ) );
                     pl = indexToConstraint( action.getPlConstraintAction() );
                 }
 
-                // perform split according to agent's action:
+                updateToCurrentDQNState( previousState );
                 PhaseStatus phaseStatus = valueToPhase( action.getAssignmentIndex() );
-
-                _smtCore.performSplit( pl, &phaseStatus );
+                if ( _smtCore.performSplit( pl, &phaseStatus ) )
+                    splitAction = true;
                 splitJustPerformed = true;
-                // prepare for the next split:
-                firstStep = false;
-                updateToCurrentDQNState( previousState ); // prevState = currentState
-                // prevNumFixedPlConstraints = currNumFixedPlConstraints;
                 continue;
             }
 
@@ -772,10 +751,10 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( double epsilon,
                                      currentDQNState,
                                      true,
                                      stackDepth,
-                                     iterations,
+                                     splitsCounter,
                                      true );
                         agent->handleDone(
-                            currentDQNState, _smtCore.getStackDepth(), iterations, true );
+                            currentDQNState, _smtCore.getStackDepth(), splitsCounter, true );
                         printf( "success!" );
                         fflush( stdout );
                         return agent;
@@ -794,10 +773,10 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( double epsilon,
                                      currentDQNState,
                                      true,
                                      stackDepth,
-                                     iterations,
+                                     splitsCounter,
                                      false );
                         agent->handleDone(
-                            currentDQNState, _smtCore.getStackDepth(), iterations );
+                            currentDQNState, _smtCore.getStackDepth(), splitsCounter );
                         printf( "fail!" );
                         fflush( stdout );
                         return agent;
@@ -842,11 +821,8 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( double epsilon,
                 explainSimplexFailure();
             stackDepth = _smtCore.getStackDepth();
             updateToCurrentDQNState( stateBeforeSplit );
-            auto popSplit = _smtCore.popSplit();
-            if ( popSplit )
-                splitAlternative = true;
-            stackDepth = _smtCore.getStackDepth();
-            if ( !popSplit )
+            numInconsistent = 0;
+            if ( !_smtCore.popSplit( &numInconsistent ) )
             {
                 mainLoopEnd = TimeUtils::sampleMicro();
                 _statistics.incLongAttribute( Statistics::TIME_MAIN_LOOP_MICRO,
@@ -855,15 +831,14 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( double epsilon,
                 printf( "done unsat!\n" );
                 fflush( stdout );
                 updateToCurrentDQNState( currentDQNState );
-                agent->handleDone(
-                    currentDQNState, _smtCore.getStackDepth(), iterations, true);
+                agent->handleDone( currentDQNState, _smtCore.getStackDepth(), splitsCounter, true );
                 _exitCode = Engine::UNSAT;
                 return agent;
             }
-            else
-            {
-                splitJustPerformed = true;
-            }
+
+            splitJustPerformed = true;
+            splitAlternative = true;
+            stackDepth = _smtCore.getStackDepth();
         }
         catch ( const VariableOutOfBoundDuringOptimizationException & )
         {
@@ -894,7 +869,7 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( double epsilon,
     // todo add done somehow
 
     updateToCurrentDQNState( currentDQNState );
-    agent->handleDone( currentDQNState, _smtCore.getStackDepth(), iterations );
+    agent->handleDone( currentDQNState, _smtCore.getStackDepth(), splitsCounter );
     printf( "done iters!\n" );
     fflush( stdout );
     _exitCode = Engine::MAX_ITERATIONS;

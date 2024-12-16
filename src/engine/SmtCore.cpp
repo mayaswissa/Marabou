@@ -131,12 +131,12 @@ bool SmtCore::needToSplit() const
     return _needToSplit;
 }
 
-void SmtCore::performSplit( PiecewiseLinearConstraint *plConstraint,
+bool SmtCore::performSplit( PiecewiseLinearConstraint *plConstraint,
                             const PhaseStatus *directionByAgent )
 {
     ASSERT( _needToSplit );
 
-    if (GlobalConfiguration::USE_DQN)
+    if ( GlobalConfiguration::USE_DQN )
         _constraintForSplitting = plConstraint;
     _numRejectedPhasePatternProposal = 0;
     // Maybe the constraint has already become inactive - if so, ignore
@@ -145,7 +145,9 @@ void SmtCore::performSplit( PiecewiseLinearConstraint *plConstraint,
         _needToSplit = false;
         _constraintToViolationCount[_constraintForSplitting] = 0;
         _constraintForSplitting = NULL;
-        return;
+        printf( "skipping split \n" );
+        fflush( stdout );
+        return false;
     }
 
     struct timespec start = TimeUtils::sampleMicro();
@@ -213,12 +215,15 @@ void SmtCore::performSplit( PiecewiseLinearConstraint *plConstraint,
     ++split;
     while ( split != splits.end() )
     {
+        printf( "smt: append alternative to stack entry, depth : %u\n", _stack.size() + 1 );
+        fflush( stdout );
         stackEntry->_alternativeSplits.append( *split );
         ++split;
     }
 
     _stack.append( stackEntry );
-
+    printf( "smt: add entry, depth %u\n", _stack.size() );
+    fflush( stdout );
     if ( _statistics )
     {
         unsigned level = getStackDepth();
@@ -231,6 +236,7 @@ void SmtCore::performSplit( PiecewiseLinearConstraint *plConstraint,
     }
 
     _constraintForSplitting = NULL;
+    return true;
 }
 
 unsigned SmtCore::getStackDepth() const
@@ -268,10 +274,11 @@ void SmtCore::pushContext()
     }
 }
 
-bool SmtCore::popSplit()
+bool SmtCore::popSplit( unsigned *numInconsistent )
 {
     SMT_LOG( "Performing a pop" );
-
+    printf( "smt popSplit: enter popSplit, depth %u\n", _stack.size() );
+    fflush( stdout );
     if ( _stack.empty() )
         return false;
 
@@ -290,6 +297,7 @@ bool SmtCore::popSplit()
     {
         // Remove any entries that have no alternatives
         String error;
+        (*numInconsistent)++;
         while ( _stack.back()->_alternativeSplits.empty() )
         {
             if ( checkSkewFromDebuggingSolution() )
@@ -302,6 +310,9 @@ bool SmtCore::popSplit()
             delete _stack.back()->_engineState;
             delete _stack.back();
             _stack.popBack();
+
+            printf( "smt popSplit: delete entry, depth %u\n, inconsistent %u\n", _stack.size(), inconsistent );
+            fflush( stdout );
             popContext();
 
             if ( _engine->shouldProduceProofs() && _engine->getUNSATCertificateCurrentPointer() )
@@ -333,7 +344,6 @@ bool SmtCore::popSplit()
 
         // Apply the new split and erase it from the list
         auto split = stackEntry->_alternativeSplits.begin();
-        // todo insert new action to agent here - find what current state is (the state after the action)
 
         // Erase any valid splits that were learned using the split we just
         // popped
@@ -363,10 +373,13 @@ bool SmtCore::popSplit()
         pushContext();
         _engine->applySplit( *split );
         SMT_LOG( "\tApplying new split - DONE" );
-
+        printf( "smt popSplit: applying new split from alternative splits at depth: %u\n",
+                _stack.size() );
+        fflush( stdout );
         stackEntry->_activeSplit = *split;
         stackEntry->_alternativeSplits.erase( split );
-
+        printf( "smt popSplit: erase alternative from stack entry\n" );
+        fflush( stdout );
         inconsistent = !_engine->consistentBounds();
 
         if ( _engine->shouldProduceProofs() && inconsistent )
@@ -586,6 +599,8 @@ void SmtCore::replaySmtStackEntry( SmtStackEntry *stackEntry )
         _engine->applySplit( impliedSplit );
 
     _stack.append( stackEntry );
+    printf( "smt 595 entry: add entry, depth %u\n", _stack.size() );
+    fflush( stdout );
 
     if ( _statistics )
     {

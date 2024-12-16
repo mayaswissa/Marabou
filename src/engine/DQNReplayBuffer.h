@@ -109,19 +109,22 @@ struct ActionsStack
     List<ActiveAction> _activeActions;
     List<Action> _alternativeActions;
     State _stateBeforeAction;
+    unsigned _depthBeforeAction;
 
     ActionsStack( Action action,
                   State stateBeforeAction,
                   State stateAfterAction,
                   unsigned depthBeforeAction,
-                  unsigned splitsBeforeAction ) : _stateBeforeAction( stateBeforeAction )
+                  unsigned splitsBeforeAction )
+        : _stateBeforeAction( stateBeforeAction )
+        , _depthBeforeAction( depthBeforeAction )
 
     {
         _activeActions = List<ActiveAction>();
         _activeActions.append( ActiveAction( action,
                                              std::move( stateBeforeAction ),
                                              std::move( stateAfterAction ),
-                                             depthBeforeAction,
+                                             _depthBeforeAction,
                                              splitsBeforeAction ) );
         _alternativeActions = List<Action>();
 
@@ -136,14 +139,6 @@ class ReplayBuffer
 {
 public:
     ReplayBuffer( unsigned actionSize, unsigned bufferSize, unsigned batchSize );
-    void add( State state,
-              Action action,
-              double reward,
-              State nextState,
-              const bool done,
-              unsigned depth,
-              unsigned numSplits = 0,
-              bool changeReward = true );
     Experience &getRevisitExperienceAt( unsigned index ) const;
     Vector<unsigned> sample() const;
     unsigned getNumRevisitExperiences() const;
@@ -165,13 +160,15 @@ public:
                           unsigned depth,
                           unsigned numSplits );
     void handleDone( State currentState, bool success, unsigned stackDepth, unsigned numSplits );
-    void applyNextAction( State state, unsigned depth, unsigned numSplits );
+    void applyNextAction( State state,
+                          unsigned depth,
+                          unsigned numSplits,
+                          unsigned &numInconsistent  );
 
 private:
     unsigned _actionSize;
     unsigned _bufferSize;
     unsigned _batchSize;
-    unsigned _numRevisitedExperiences;
     std::deque<std::unique_ptr<Experience>> _revisitExperiences;
     void goToCurrentDepth( unsigned currentDepth );
     List<ActionsStack *> _actionsStack;
