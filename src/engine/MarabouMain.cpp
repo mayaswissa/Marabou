@@ -136,17 +136,15 @@ int marabouMain( int argc, char **argv )
                 unsigned _nEpisodes = 20; // todo make argument
                 double currEpisodeScore = 0;
                 std::unique_ptr<Agent> agent = nullptr;
-                double maxEpisodeScore = 0;
                 double epsilon = GlobalConfiguration::DQN_EPSILON_START;
                 for ( unsigned int episode = 0; episode < _nEpisodes; ++episode )
                 {
                     currEpisodeScore = 0;
-                    agent = Marabou().runAgentTraining(epsilon,
-                        true, std::move( agent ), &currEpisodeScore, &maxEpisodeScore );
+                    agent = Marabou().runAgentTraining( epsilon, true, std::move( agent ) );
                     printf( "done one train, score: %f\n", currEpisodeScore );
                     fflush( stdout );
                     epsilon = std::max( GlobalConfiguration::DQN_EPSILON_END,
-                         epsilon * GlobalConfiguration::DQN_EPSILON_DECAY );
+                                        epsilon * GlobalConfiguration::DQN_EPSILON_DECAY );
                 }
 
 

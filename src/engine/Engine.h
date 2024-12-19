@@ -305,8 +305,6 @@ public:
     void propagateBoundManagerTightenings();
 
 
-    // void trainAndSolve();
-
     unsigned numPlConstraints() const;
 
     void loadAgentNetworks( Agent &agent );
@@ -314,7 +312,6 @@ public:
     std::unique_ptr<Agent> trainDQNAgent( double epsilon,
                         std::unique_ptr<Agent> agent,
                         double timeoutInSeconds,
-                        double *score,
                         const std::string &trainedAgentPath = "trainedAgent" );
 
 private:

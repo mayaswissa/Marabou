@@ -278,6 +278,7 @@ bool Engine::solve( double timeoutInSeconds, const std::string &trainedAgentPath
             // agent not trained.
             throw std::runtime_error( "Agent is not set" ); // todo
 
+    unsigned numSplits = 0;
     unsigned numPhases = 3; // todo change
     State currentDQNState = State( _plConstraints.size(), numPhases );
     updateToCurrentDQNState( currentDQNState );
@@ -290,6 +291,8 @@ bool Engine::solve( double timeoutInSeconds, const std::string &trainedAgentPath
     struct timespec mainLoopStart = TimeUtils::sampleMicro();
     while ( true )
     {
+        printf("numSplits:%u\n", numSplits );
+        fflush( stdout );
         struct timespec mainLoopEnd = TimeUtils::sampleMicro();
         _statistics.incLongAttribute( Statistics::TIME_MAIN_LOOP_MICRO,
                                       TimeUtils::timePassed( mainLoopStart, mainLoopEnd ) );
@@ -365,11 +368,12 @@ bool Engine::solve( double timeoutInSeconds, const std::string &trainedAgentPath
                     updateToCurrentDQNState( currentDQNState );
                     // agent take an action according to current state:
                     action = Action( agent->act( currentDQNState.toTensor(), _eps ) );
+                    numSplits++;
                     // perform split according to agent's action:
                     PiecewiseLinearConstraint *pl =
                         indexToConstraint( action.getPlConstraintAction() );
                     while ( pl->getPhaseStatus() != PHASE_NOT_FIXED ||
-                            action.getAssignmentIndex() == PHASE_NOT_FIXED ) // todo check?
+                            action.getAssignmentIndex() == PHASE_NOT_FIXED )
                     {
                         printf( "fixed constraint or action not fixed split\n" );
                         fflush( stdout );
@@ -567,7 +571,6 @@ void Engine::loadAgentNetworks( Agent &agent )
 std::unique_ptr<Agent> Engine::trainDQNAgent( double epsilon,
                                               std::unique_ptr<Agent> agent,
                                               double timeoutInSeconds,
-                                              double *score,
                                               const std::string &trainedAgentPath )
 {
     SignalHandler::getInstance()->initialize();
@@ -673,7 +676,6 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( double epsilon,
                 {
                     updateToCurrentDQNState( currentDQNState );
                     reward = 0;
-                    *score += reward;
                     agent->step( previousState,
                                  action,
                                  reward,
@@ -741,7 +743,6 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( double epsilon,
                     {
                         // currNumFixedPlConstraints = getNumFixedConstraints();
                         reward = 10;
-                        *score += reward;
                         mainLoopEnd = TimeUtils::sampleMicro();
                         _exitCode = Engine::SAT;
                         updateToCurrentDQNState( currentDQNState );
@@ -762,7 +763,6 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( double epsilon,
                     else if ( !hasBranchingCandidate() )
                     {
                         reward = -10;
-                        *score += reward;
                         mainLoopEnd = TimeUtils::sampleMicro();
                         _exitCode = Engine::UNKNOWN;
                         // agent done with failure - reward is (- num of plConstraints)
@@ -820,8 +820,19 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( double epsilon,
             if ( _produceUNSATProofs )
                 explainSimplexFailure();
             stackDepth = _smtCore.getStackDepth();
+
+            if (numInconsistent > 0)
+            {
+                printf( "Inconsistent solution found!\n" );
+                fflush( stdout );
+                // splitsCounter++;
+                // updateToCurrentDQNState( stateAfterSplit );
+                // agent->addAlternativeAction(
+                //     stateAfterSplit, stackDepth, splitsCounter, numInconsistent );
+                // splitAlternative = false;
+
+            }
             updateToCurrentDQNState( stateBeforeSplit );
-            numInconsistent = 0;
             if ( !_smtCore.popSplit( &numInconsistent ) )
             {
                 mainLoopEnd = TimeUtils::sampleMicro();
@@ -835,7 +846,7 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( double epsilon,
                 _exitCode = Engine::UNSAT;
                 return agent;
             }
-
+            printf("inconsistent after pop: %u\n", numInconsistent);
             splitJustPerformed = true;
             splitAlternative = true;
             stackDepth = _smtCore.getStackDepth();

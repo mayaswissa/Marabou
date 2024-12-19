@@ -81,15 +81,13 @@ void Marabou::run()
 
 std::unique_ptr<Agent> Marabou::runAgentTraining( double epsilon,
                                 const bool training,
-                                std::unique_ptr<Agent> agent,
-                                double *episodeScore,
-                                double *maxEpisodeScore )
+                                std::unique_ptr<Agent> agent)
 {
     struct timespec start = TimeUtils::sampleMicro();
 
     prepareInputQuery();
 
-    agent = solveQueryWithAgent( epsilon, training, std::move( agent ), episodeScore, maxEpisodeScore );
+    agent = solveQueryWithAgent( epsilon, training, std::move( agent ));
 
     struct timespec end = TimeUtils::sampleMicro();
 
@@ -255,9 +253,7 @@ void Marabou::exportAssignment() const
 
 std::unique_ptr<Agent> Marabou::solveQueryWithAgent( double epsilon,
                                                      bool training,
-                                                     std::unique_ptr<Agent> agent,
-                                                     double *episodeScore,
-                                                     double *maxEpisodeScore )
+                                                     std::unique_ptr<Agent> agent)
 {
     enum {
         MICROSECONDS_IN_SECOND = 1000000
@@ -272,14 +268,8 @@ std::unique_ptr<Agent> Marabou::solveQueryWithAgent( double epsilon,
         if ( training )
         {
             agent = _engine->trainDQNAgent(
-                epsilon, std::move( agent ), timeoutInSeconds, episodeScore, filePath );
-
-
-            // if ( *episodeScore > *maxEpisodeScore )
-            // {
+                epsilon, std::move( agent ), timeoutInSeconds, filePath );
                 agent->saveNetworks();
-                *maxEpisodeScore = *episodeScore;
-            // }
         }
         else
             _engine->solve( timeoutInSeconds, filePath );

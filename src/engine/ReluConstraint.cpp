@@ -571,7 +571,6 @@ List<PiecewiseLinearCaseSplit> ReluConstraint::getCaseSplitsByAgent(PhaseStatus 
         splits.append( getInactiveSplit() );
         return splits;
     }
-    // todo : random ?
     // Default: start with the inactive case, because it doesn't
         // introduce a new equation and is hence computationally cheaper.
         splits.append( getInactiveSplit() );

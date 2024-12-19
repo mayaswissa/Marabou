@@ -297,7 +297,8 @@ bool SmtCore::popSplit( unsigned *numInconsistent )
     {
         // Remove any entries that have no alternatives
         String error;
-        (*numInconsistent)++;
+        if (numInconsistent != nullptr)
+            (*numInconsistent)++;
         while ( _stack.back()->_alternativeSplits.empty() )
         {
             if ( checkSkewFromDebuggingSolution() )
