@@ -21,14 +21,14 @@ struct Experience
     bool _changeReward;
 
     // Existing constructor
-    Experience( State stateBeforeAction,
-                Action action,
-                double reward,
-                State stateAfterAction,
+    Experience( const State &stateBeforeAction,
+                const Action &action,
+                const double reward,
+                const State &stateAfterAction,
                 const bool done,
-                unsigned depth,
-                unsigned numSplits = 0,
-                bool changeReward = true )
+                const unsigned depth,
+                const unsigned numSplits = 0,
+                const bool changeReward = true )
         : _stateBeforeAction( stateBeforeAction )
         , _action( action )
         , _reward( reward )
@@ -79,7 +79,6 @@ struct Experience
         }
         return *this;
     }
-    void updateReward( double newReward );
 };
 
 struct ActiveAction
@@ -89,9 +88,9 @@ struct ActiveAction
     State _stateAfterAction;
     unsigned _depthBeforeAction;
     unsigned _splitsBeforeActiveAction;
-    ActiveAction( Action action,
-                  State stateBeforeAction,
-                  State stateAfterAction,
+    ActiveAction( const Action &action,
+                  const State &stateBeforeAction,
+                  const State &stateAfterAction,
                   unsigned depthBeforeAction,
                   unsigned splitsBeforeAction )
         : _action( action )
@@ -111,26 +110,28 @@ struct ActionsStack
     State _stateBeforeAction;
     unsigned _depthBeforeAction;
 
-    ActionsStack( Action action,
-                  State stateBeforeAction,
-                  State stateAfterAction,
-                  unsigned depthBeforeAction,
-                  unsigned splitsBeforeAction )
+    ActionsStack( const Action &action,
+                  const State &stateBeforeAction,
+                  const State &stateAfterAction,
+                  const unsigned depthBeforeAction,
+                  const unsigned splitsBeforeAction )
         : _stateBeforeAction( stateBeforeAction )
         , _depthBeforeAction( depthBeforeAction )
 
     {
         _activeActions = List<ActiveAction>();
         _activeActions.append( ActiveAction( action,
-                                             std::move( stateBeforeAction ),
-                                             std::move( stateAfterAction ),
+                                             stateBeforeAction ,
+                                             stateAfterAction,
                                              _depthBeforeAction,
                                              splitsBeforeAction ) );
         _alternativeActions = List<Action>();
 
-        unsigned actionPhase = action.getAssignmentIndex() == 2 ? 1 : 2;
-        auto alternateAction =
-            Action( action.getNumPhases(), action.getPlConstraintActionIndex(), actionPhase );
+        const unsigned actionPhase = action.getAssignmentIndex() == 2 ? 1 : 2;
+        const auto alternateAction =
+            Action( action.getNumPhases(), action.getNumPlConstraints(), action.getPlConstraintActionIndex(), actionPhase );
+        printf("alternateAction = %d, depth: %d\n", alternateAction.getAssignmentIndex(), depthBeforeAction);
+        fflush(stdout);
         _alternativeActions.append( alternateAction );
     }
 };

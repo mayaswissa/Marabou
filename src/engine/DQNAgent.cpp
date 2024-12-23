@@ -1,6 +1,4 @@
 #include "DQNAgent.h"
-
-#include <boost/exception/detail/clone_current_exception.hpp>
 #include <random>
 #include <utility>
 
@@ -87,11 +85,11 @@ Action Agent::tensorToAction( const torch::Tensor &tensor ) const
     int plConstraintActionIndex = combinedIndex / _numPhaseStatuses;
     int assignmentIndex = combinedIndex % _numPhaseStatuses;
 
-    return Action( _numPhaseStatuses, plConstraintActionIndex, assignmentIndex );
+    return Action( _numPhaseStatuses, _numPlConstraints, plConstraintActionIndex, assignmentIndex );
 }
 
 
-void Agent::handleDone( State currentState, unsigned stackDepth, unsigned numSplits,bool success )
+void Agent::handleDone( const State &currentState, unsigned stackDepth, unsigned numSplits,bool success )
 {
     // needs to insert all actions in actions buffer to the replay buffer and learn.
     // The rewards of all steps in this branch, except of the last action remain the same.
@@ -100,8 +98,8 @@ void Agent::handleDone( State currentState, unsigned stackDepth, unsigned numSpl
 }
 
 void Agent::addAlternativeAction( const State &stateBeforeSplit,
-                                  unsigned depthBeforeSplit,
-                                  unsigned numSplits,
+                                  const unsigned depthBeforeSplit,
+                                  const unsigned numSplits,
                                   unsigned &numInconsistent)
 {
 
@@ -114,12 +112,12 @@ void Agent::addAlternativeAction( const State &stateBeforeSplit,
 
 void Agent::step( const State& previousState,
                   const Action& action,
-                  double reward,
+                  const double reward,
                   const State& currentState,
                   const bool done,
-                  unsigned depth,
-                  unsigned numSplits,
-                  bool changeReward )
+                  const unsigned depth,
+                  const unsigned numSplits,
+                  const bool changeReward )
 {
     // invalid step due to fixed pl constraint or not fixed phase in action.
     if ( !changeReward )
@@ -151,23 +149,7 @@ void Agent::step( const State& previousState,
         learn();
 }
 
-// Action Agent::act( const torch::Tensor &state, double eps )
-// {
-//     _qNetworkLocal.eval();
-//     torch::Tensor Qvalues = _qNetworkLocal.forward( state );
-//     _qNetworkLocal.train();
-//     unsigned actionIndex;
-//     if ( static_cast<double>( rand() ) / RAND_MAX > eps )
-//         // best action - maximum Q-value :
-//         actionIndex = Qvalues.argmax( 1 ).item<int>();
-//     else
-//         // random :
-//         actionIndex = rand() % _numActions;
-//
-//     auto actionIndices = _actionSpace.decodeActionIndex( actionIndex );
-//     return Action( _numPhaseStatuses, actionIndices.first, actionIndices.second );
-// }
-Action Agent::act(const State &state, double eps) {
+Action Agent::act(const State &state, const double eps) {
     _qNetworkLocal.eval();
     torch::Tensor QValues = _qNetworkLocal.forward(state.toTensor());
     _qNetworkLocal.train();
@@ -213,7 +195,7 @@ Action Agent::act(const State &state, double eps) {
     }
 
     auto actionIndices = _actionSpace.decodeActionIndex(actionIndex);
-    return Action(_numPhaseStatuses, actionIndices.first, actionIndices.second);
+    return Action(_numPhaseStatuses, _numPlConstraints, actionIndices.first, actionIndices.second);
 }
 
 
@@ -247,7 +229,7 @@ void Agent::learn()
     const auto nextStatesTensor = torch::cat( nextStates, 0 );
     const auto doneTensor = torch::tensor( dones, torch::dtype( torch::kUInt8 ) ).to( device );
 
-    // DDQN : Use local network to select the best action for next states
+    // Double DQN : Use local network to select the best action for next states
     const auto forwardLocalNet = _qNetworkLocal.forward( nextStatesTensor );
     const auto localQValuesNextState = forwardLocalNet.detach().argmax( 1 );
 

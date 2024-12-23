@@ -284,7 +284,7 @@ bool Engine::solve( double timeoutInSeconds, const std::string &trainedAgentPath
     updateToCurrentDQNState( currentDQNState );
     std::unique_ptr<Agent> agent =
         std::make_unique<Agent>( _plConstraints.size(), 3, trainedAgentPath, trainedAgentPath );
-    auto action = Action( numPhases );
+    auto action = Action( numPhases, _plConstraints.size() );
     auto previousState = State( _plConstraints.size(), numPhases );
 
     bool splitJustPerformed = true;
@@ -585,7 +585,7 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( double epsilon,
     {
         agent = std::make_unique<Agent>( _plConstraints.size(), 3, trainedAgentPath );
     }
-    auto action = Action( numPhases );
+    auto action = Action( numPhases, _plConstraints.size() );
     auto previousState = State( _plConstraints.size(), numPhases );
 
     double reward = 0;

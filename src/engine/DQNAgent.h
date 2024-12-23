@@ -30,7 +30,7 @@ public:
                bool changeReward );
 
     void
-    handleDone( State currentState, unsigned stackDepth, unsigned numSplits, bool success = false );
+    handleDone( const State &currentState, unsigned stackDepth, unsigned numSplits, bool success = false );
     Action act( const State &state, double eps = 0.1 );
     Action tensorToAction( const torch::Tensor &tensor ) const;
     void saveNetworks() const;
