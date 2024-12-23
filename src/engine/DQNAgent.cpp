@@ -99,23 +99,23 @@ void Agent::handleDone( State currentState, unsigned stackDepth, unsigned numSpl
     learn();
 }
 
-void Agent::addAlternativeAction( State stateBeforeSplit,
+void Agent::addAlternativeAction( const State &stateBeforeSplit,
                                   unsigned depthBeforeSplit,
                                   unsigned numSplits,
                                   unsigned &numInconsistent)
 {
 
-    _replayedBuffer.applyNextAction( std::move(stateBeforeSplit), depthBeforeSplit, numSplits, numInconsistent);
+    _replayedBuffer.applyNextAction( stateBeforeSplit, depthBeforeSplit, numSplits, numInconsistent);
     _tStep = ( _tStep + 1 ) % UPDATE_EVERY;
     if ( _tStep == 0 && _replayedBuffer.getNumRevisitExperiences() > BATCH_SIZE )
         learn();
 }
 
 
-void Agent::step( State previousState,
-                  Action action,
+void Agent::step( const State& previousState,
+                  const Action& action,
                   double reward,
-                  State currentState,
+                  const State& currentState,
                   const bool done,
                   unsigned depth,
                   unsigned numSplits,
@@ -135,7 +135,7 @@ void Agent::step( State previousState,
         return;
     }
 
-    if ( done ) // todo check what to do.
+    if ( done )
     {
         handleDone( currentState, depth, numSplits );
         return;
@@ -143,7 +143,7 @@ void Agent::step( State previousState,
 
     // add new _actionEntry and push it to ActionsStack.
     _replayedBuffer.pushActionEntry(
-        std::move( action ), std::move( previousState ), std::move(currentState), depth, numSplits );
+        action , previousState , currentState, depth, numSplits );
 
 
     _tStep = ( _tStep + 1 ) % UPDATE_EVERY;
@@ -151,21 +151,69 @@ void Agent::step( State previousState,
         learn();
 }
 
-Action Agent::act( const torch::Tensor &state, double eps )
-{
+// Action Agent::act( const torch::Tensor &state, double eps )
+// {
+//     _qNetworkLocal.eval();
+//     torch::Tensor Qvalues = _qNetworkLocal.forward( state );
+//     _qNetworkLocal.train();
+//     unsigned actionIndex;
+//     if ( static_cast<double>( rand() ) / RAND_MAX > eps )
+//         // best action - maximum Q-value :
+//         actionIndex = Qvalues.argmax( 1 ).item<int>();
+//     else
+//         // random :
+//         actionIndex = rand() % _numActions;
+//
+//     auto actionIndices = _actionSpace.decodeActionIndex( actionIndex );
+//     return Action( _numPhaseStatuses, actionIndices.first, actionIndices.second );
+// }
+Action Agent::act(const State &state, double eps) {
     _qNetworkLocal.eval();
-    torch::Tensor Qvalues = _qNetworkLocal.forward( state );
+    torch::Tensor QValues = _qNetworkLocal.forward(state.toTensor());
     _qNetworkLocal.train();
     unsigned actionIndex;
-    if ( static_cast<double>( rand() ) / RAND_MAX > eps )
-        // best action - maximum Q-value :
-        actionIndex = Qvalues.argmax( 1 ).item<int>();
-    else
-        // random :
-        actionIndex = rand() % _numActions;
 
-    auto actionIndices = _actionSpace.decodeActionIndex( actionIndex );
-    return Action( _numPhaseStatuses, actionIndices.first, actionIndices.second );
+    // Create a mask to invalidate actions with phase not fixed or already fixed pl-constraint
+    torch::Tensor mask = torch::zeros({_numActions});
+    for (unsigned i = 0; i < _numPlConstraints; i++) {
+        const unsigned index = i * _numPhaseStatuses;
+        mask[index] = -std::numeric_limits<float>::infinity();
+
+        if (state.getData()[i][PHASE_NOT_FIXED] == 0) // plConstraint in current state is fixed - invalid action.
+        {
+            for (unsigned j = 0; j < _numPhaseStatuses; j++)
+            {
+                mask[i * _numPhaseStatuses + j] = -std::numeric_limits<float>::infinity();
+            }
+
+        }
+    }
+
+    // Apply the mask
+    QValues += mask;
+
+    if (static_cast<double>( rand() ) / RAND_MAX > eps) {
+        // best action - maximum Q-value from the masked values
+        actionIndex = QValues.argmax().item<int>();
+    } else {
+        printf("chose randomly\n");
+        std::vector<unsigned> validConstraints;
+        for (unsigned i = 0; i < _numPlConstraints; ++i) {
+            if (state.getData()[i][PHASE_NOT_FIXED] != 0) {
+                validConstraints.push_back(i);
+            }
+        }
+        unsigned actionConstraint = validConstraints[rand() % validConstraints.size()];
+        std::random_device rd;
+        std::mt19937 gen( rd() );
+        std::uniform_int_distribution<> dist(RELU_PHASE_ACTIVE, RELU_PHASE_INACTIVE);
+        unsigned actionPhase = dist( gen );
+        actionIndex = _actionSpace.getActionIndex( actionConstraint, actionPhase );
+
+    }
+
+    auto actionIndices = _actionSpace.decodeActionIndex(actionIndex);
+    return Action(_numPhaseStatuses, actionIndices.first, actionIndices.second);
 }
 
 

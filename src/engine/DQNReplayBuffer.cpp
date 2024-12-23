@@ -19,23 +19,20 @@ ReplayBuffer::ReplayBuffer( const unsigned actionSize,
 {
 }
 
-void ReplayBuffer::pushActionEntry( Action action,
-                                    State stateBeforeAction,
-                                    State stateAfterAction,
-                                    unsigned depth,
-                                    unsigned numSplits )
+void ReplayBuffer::pushActionEntry( const Action &action,
+                                    const State &stateBeforeAction,
+                                    const State &stateAfterAction,
+                                    const unsigned depth,
+                                    const unsigned numSplits )
 {
-    ActionsStack *actionEntry = new ActionsStack( std::move( action ),
-                                                  std::move( stateBeforeAction ),
-                                                  std::move( stateAfterAction ),
-                                                  depth,
-                                                  numSplits );
+    auto *actionEntry =
+        new ActionsStack( action, stateBeforeAction, stateAfterAction, depth, numSplits );
     _actionsStack.append( actionEntry );
-    printf( "replay buffer: add action entry, depth %u\n", _actionsStack.size() );
-    fflush( stdout );
+    // printf( "replay buffer: add action entry, depth %u\n", _actionsStack.size() );
+    // fflush( stdout );
 }
 
-void ReplayBuffer::handleDone( State currentState,
+void ReplayBuffer::handleDone( const State &currentState,
                                bool success,
                                unsigned stackDepth,
                                unsigned numSplits )
@@ -47,90 +44,75 @@ void ReplayBuffer::handleDone( State currentState,
         ActionsStack *actionEntry = _actionsStack.back();
         while ( !actionEntry->_activeActions.empty() )
         {
-            auto activeAction = actionEntry->_activeActions.back();
-            double reward = 0;
-            auto progress = numSplits - activeAction._splitsBeforeActiveAction;
-            if ( progress > 0 )
-                reward = 1.0 / static_cast<double>( progress );
-            auto experience =
-                std::make_unique<Experience>( std::move( activeAction._stateBeforeAction ),
-                                              std::move( activeAction._action ),
-                                              reward,
-                                              currentState,
-                                              false,
-                                              stackDepth,
-                                              numSplits,
-                                              false );
-            if ( _revisitExperiences.size() > 0 )
-                _revisitExperiences.pop_front();
-            _revisitExperiences.push_back( std::move( experience ) );
-            actionEntry->_activeActions.popBack();
+            pushToRevisit( currentState, stackDepth, numSplits, actionEntry );
         }
         delete _actionsStack.back();
         _actionsStack.popBack();
-        printf( "replay buffer: pop action entry, depth %u\n", _actionsStack.size() );
-        fflush( stdout );
+        // printf( "replay buffer: pop action entry, depth %u\n", _actionsStack.size() );
+        // fflush( stdout );
     }
-
     _revisitExperiences.back().get()->_done = true;
     _revisitExperiences.back().get()->_reward = success ? 10 : -10;
 }
 
+void ReplayBuffer::pushToRevisit( const State &stateAfterAction,
+                                  const unsigned depth,
+                                  const unsigned numSplits,
+                                  ActionsStack *actionEntry )
+{
+    auto activeAction = actionEntry->_activeActions.back();
+    double reward = 1;
+    if ( const auto progress = numSplits - activeAction._splitsBeforeActiveAction; progress > 0 )
+        reward = 10.0 / static_cast<double>( progress );
+    addToRevisitExperiences( activeAction._stateBeforeAction,
+                             activeAction._action,
+                             reward,
+                             stateAfterAction,
+                             false,
+                             depth,
+                             numSplits,
+                             false );
+
+    actionEntry->_activeActions.popBack();
+}
+
 // go to next alternative action available in actionsStack.
-void ReplayBuffer::applyNextAction( State stateAfterAction,
-                                    unsigned depth,
-                                    unsigned numSplits,
+void ReplayBuffer::applyNextAction( const State& stateAfterAction,
+                                    const unsigned depth,
+                                    const unsigned numSplits,
                                     unsigned &numInconsistent )
 {
     if ( _actionsStack.empty() )
     {
-        handleDone( std::move( stateAfterAction ), true, depth, numSplits ); // todo check success -
+        handleDone(  stateAfterAction, true, depth, numSplits );
         return;
     }
 
-    // todo delete entries with numInconsistent - like in popSplit.
     ActionsStack *actionEntry;
     //  no alternative splits for previous actions - pop this entry and move activeActions to
     //  revisit Buffer.
-    printf("replay buffer: applyNextAction, depth %u\n", _actionsStack.size() );
-    fflush( stdout );
+
     while ( numInconsistent > 0 )
     {
-        printf("replay buffer: applyNextAction, inside numInconsistent %u\n", numInconsistent );
-        fflush( stdout );
+        // printf( "replay buffer: applyNextAction, inside numInconsistent %u\n", numInconsistent );
+        // fflush( stdout );
         while ( _actionsStack.back()->_alternativeActions.empty() )
         {
-            printf("replay buffer: applyNextAction, inside no alternative %u\n", _actionsStack.size() );
-            fflush( stdout );
+            // printf( "replay buffer: applyNextAction, inside no alternative %u\n",
+            //         _actionsStack.size() );
+            // fflush( stdout );
             actionEntry = _actionsStack.back();
             // move activeSplit to revisit buffer.
             while ( !actionEntry->_activeActions.empty() )
             {
-                auto activeAction = actionEntry->_activeActions.back();
-                double reward = 0;
-                auto progress = numSplits - activeAction._splitsBeforeActiveAction;
-                if ( progress > 0 )
-                    reward = 1.0 / static_cast<double>( progress );
-                auto experience =
-                    std::make_unique<Experience>( std::move( activeAction._stateBeforeAction ),
-                                                  std::move( activeAction._action ),
-                                                  reward,
-                                                  stateAfterAction,
-                                                  false,
-                                                  depth,
-                                                  numSplits,
-                                                  false );
-                if ( _revisitExperiences.size() >= _bufferSize )
-                    _revisitExperiences.pop_front();
-                _revisitExperiences.push_back( std::move( experience ) );
-                actionEntry->_activeActions.popBack();
-                printf("replay buffer: applyNextAction, pop activeAction\n" );
-                fflush( stdout );
+                pushToRevisit( stateAfterAction, depth, numSplits, actionEntry );
+                // printf( "replay buffer: applyNextAction, pop activeAction\n" );
+                // fflush( stdout );
             }
             delete _actionsStack.back();
             _actionsStack.popBack();
-            printf( "replay buffer: pop entry, depth after pop: %u\n", _actionsStack.size() );
-            fflush( stdout );
+            // printf( "replay buffer: pop entry, depth after pop: %u\n", _actionsStack.size() );
+            // fflush( stdout );
 
             if ( _actionsStack.empty() )
             {
@@ -142,28 +124,25 @@ void ReplayBuffer::applyNextAction( State stateAfterAction,
         // alternative action exists - push it to activeSplits with current numSplits:
         actionEntry = _actionsStack.back();
         auto action = actionEntry->_alternativeActions.begin();
-        actionEntry->_activeActions.append( ActiveAction( std::move( *action ),
+        actionEntry->_activeActions.append( ActiveAction( *action ,
                                                           actionEntry->_stateBeforeAction,
-                                                          std::move( stateAfterAction ),
+                                                          stateAfterAction ,
                                                           actionEntry->_depthBeforeAction,
                                                           numSplits ) );
         actionEntry->_alternativeActions.erase( action );
         numInconsistent--;
-        printf( "replay buffer: erased alternative, move it to active, depth: %u\n", _actionsStack.size() );
-        fflush( stdout );
+        // printf( "replay buffer: erased alternative, move it to active, depth: %u\n",
+        //         _actionsStack.size() );
+        // fflush( stdout );
     }
-    if ( depth != _actionsStack.size() )
-    {
-        printf( "problem! ReplayBuffer::applyNextAction, depth %u\n", depth );
-        fflush( stdout );
-    }
+    ASSERT( depth == _actionsStack.size() )
 }
 
 
-void ReplayBuffer::addToRevisitExperiences( State state,
-                                            Action action,
+void ReplayBuffer::addToRevisitExperiences( const State &state,
+                                            const Action &action,
                                             double reward,
-                                            State nextState,
+                                            const State &nextState,
                                             const bool done,
                                             unsigned depth,
                                             unsigned numSplits,
@@ -173,14 +152,8 @@ void ReplayBuffer::addToRevisitExperiences( State state,
         _revisitExperiences.pop_front();
 
 
-    auto experience = std::make_unique<Experience>( std::move( state ),
-                                                    std::move( action ),
-                                                    reward,
-                                                    std::move( nextState ),
-                                                    done,
-                                                    depth,
-                                                    numSplits,
-                                                    changeReward );
+    auto experience = std::make_unique<Experience>(
+        state, action, reward, nextState, done, depth, numSplits, changeReward );
     _revisitExperiences.push_back( std::move( experience ) );
 }
 
@@ -196,7 +169,7 @@ Vector<unsigned> ReplayBuffer::sample() const
 {
     Vector<unsigned> sampledIndices;
 
-    if ( _batchSize == 0 || _revisitExperiences.size() == 0 )
+    if ( _batchSize == 0 || _revisitExperiences.empty() )
     {
         printf( "revisit experiences empty\n" );
         fflush( stdout );

@@ -133,7 +133,7 @@ int marabouMain( int argc, char **argv )
 #endif
             if ( GlobalConfiguration::USE_DQN )
             {
-                unsigned _nEpisodes = 20; // todo make argument
+                unsigned _nEpisodes = 20;
                 double currEpisodeScore = 0;
                 std::unique_ptr<Agent> agent = nullptr;
                 double epsilon = GlobalConfiguration::DQN_EPSILON_START;

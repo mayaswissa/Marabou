@@ -145,8 +145,6 @@ bool SmtCore::performSplit( PiecewiseLinearConstraint *plConstraint,
         _needToSplit = false;
         _constraintToViolationCount[_constraintForSplitting] = 0;
         _constraintForSplitting = NULL;
-        printf( "skipping split \n" );
-        fflush( stdout );
         return false;
     }
 

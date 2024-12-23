@@ -143,10 +143,10 @@ public:
     Vector<unsigned> sample() const;
     unsigned getNumRevisitExperiences() const;
     unsigned getBatchSize() const;
-    void addToRevisitExperiences( State state,
-                                  Action action,
+    void addToRevisitExperiences( const State& state,
+                                  const Action& action,
                                   double reward,
-                                  State nextState,
+                                  const State& nextState,
                                   const bool done,
                                   unsigned depth,
                                   unsigned numSplits = 0,
@@ -154,13 +154,17 @@ public:
 
     bool compareStateWithAlternative( State &state ) const;
 
-    void pushActionEntry( Action action,
-                          State stateBeforeAction,
-                          State stateAfterAction,
+    void pushActionEntry( const Action& action,
+                          const State& stateBeforeAction,
+                          const State& stateAfterAction,
                           unsigned depth,
                           unsigned numSplits );
-    void handleDone( State currentState, bool success, unsigned stackDepth, unsigned numSplits );
-    void applyNextAction( State state,
+    void handleDone( const State &currentState, bool success, unsigned stackDepth, unsigned numSplits );
+    void pushToRevisit( const State& stateAfterAction,
+                        unsigned depth,
+                        unsigned numSplits,
+                        ActionsStack *actionEntry );
+    void applyNextAction( const State& state,
                           unsigned depth,
                           unsigned numSplits,
                           unsigned &numInconsistent  );
