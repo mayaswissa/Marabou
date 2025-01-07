@@ -1,9 +1,10 @@
 #include "DQNAgent.h"
+
 #include <random>
 #include <utility>
 
-Agent::Agent( unsigned numPlConstraints,
-              unsigned numPhases,
+Agent::Agent( const unsigned numPlConstraints,
+              const unsigned numPhases,
               const std::string &saveAgentPath,
               const std::string &trainedAgentPath )
     : _actionSpace( ActionSpace( numPlConstraints, numPhases ) )
@@ -11,9 +12,9 @@ Agent::Agent( unsigned numPlConstraints,
     , _numPhaseStatuses( numPhases )
     , _embeddingDim( 4 ) // todo change
     , _numActions( _actionSpace.getSpaceSize() )
-    , _qNetworkLocal( _numPlConstraints, _numPhaseStatuses, _embeddingDim, _numActions )
-    , _qNetworkTarget( _numPlConstraints, _numPhaseStatuses, _embeddingDim, _numActions )
-    // todo adaptive learning rate
+    , _qNetworkLocal( QNetwork( _numPlConstraints, _numPhaseStatuses, _embeddingDim, _numActions ) )
+    , _qNetworkTarget(
+          QNetwork( _numPlConstraints, _numPhaseStatuses, _embeddingDim, _numActions ) )
     , optimizer( _qNetworkLocal.parameters(), torch::optim::AdamOptions( LR ).weight_decay( 1e-4 ) )
     , _replayedBuffer(
           ReplayBuffer( _numPlConstraints * _numPhaseStatuses, _numPlConstraints, BATCH_SIZE ) )
@@ -41,6 +42,7 @@ void Agent::saveNetworks() const
     _qNetworkTarget.save( output_archive );
     output_archive.save_to( _saveAgentFilePath + "_target.pth" );
 }
+
 
 void Agent::loadNetworks()
 {
@@ -89,7 +91,10 @@ Action Agent::tensorToAction( const torch::Tensor &tensor ) const
 }
 
 
-void Agent::handleDone( const State &currentState, unsigned stackDepth, unsigned numSplits,bool success )
+void Agent::handleDone( const State &currentState,
+                        unsigned stackDepth,
+                        unsigned numSplits,
+                        bool success )
 {
     // needs to insert all actions in actions buffer to the replay buffer and learn.
     // The rewards of all steps in this branch, except of the last action remain the same.
@@ -100,20 +105,20 @@ void Agent::handleDone( const State &currentState, unsigned stackDepth, unsigned
 void Agent::addAlternativeAction( const State &stateBeforeSplit,
                                   const unsigned depthBeforeSplit,
                                   const unsigned numSplits,
-                                  unsigned &numInconsistent)
+                                  unsigned &numInconsistent )
 {
-
-    _replayedBuffer.applyNextAction( stateBeforeSplit, depthBeforeSplit, numSplits, numInconsistent);
+    _replayedBuffer.applyNextAction(
+        stateBeforeSplit, depthBeforeSplit, numSplits, numInconsistent );
     _tStep = ( _tStep + 1 ) % UPDATE_EVERY;
     if ( _tStep == 0 && _replayedBuffer.getNumRevisitExperiences() > BATCH_SIZE )
         learn();
 }
 
 
-void Agent::step( const State& previousState,
-                  const Action& action,
+void Agent::step( const State &previousState,
+                  const Action &action,
                   const double reward,
-                  const State& currentState,
+                  const State &currentState,
                   const bool done,
                   const unsigned depth,
                   const unsigned numSplits,
@@ -130,6 +135,9 @@ void Agent::step( const State& previousState,
                                                  depth,
                                                  numSplits,
                                                  changeReward );
+        _tStep = ( _tStep + 1 ) % UPDATE_EVERY;
+        if ( _tStep == 0 && _replayedBuffer.getNumRevisitExperiences() > BATCH_SIZE )
+            learn();
         return;
     }
 
@@ -140,62 +148,72 @@ void Agent::step( const State& previousState,
     }
 
     // add new _actionEntry and push it to ActionsStack.
-    _replayedBuffer.pushActionEntry(
-        action , previousState , currentState, depth, numSplits );
-
+    _replayedBuffer.pushActionEntry( action, previousState, currentState, depth, numSplits );
 
     _tStep = ( _tStep + 1 ) % UPDATE_EVERY;
     if ( _tStep == 0 && _replayedBuffer.getNumRevisitExperiences() > BATCH_SIZE )
         learn();
 }
 
-Action Agent::act(const State &state, const double eps) {
+Action Agent::act( const State &state, const double eps )
+{
     _qNetworkLocal.eval();
-    torch::Tensor QValues = _qNetworkLocal.forward(state.toTensor());
+    torch::Tensor QValues = _qNetworkLocal.forward( state.toTensor() );
     _qNetworkLocal.train();
     unsigned actionIndex;
 
     // Create a mask to invalidate actions with phase not fixed or already fixed pl-constraint
-    torch::Tensor mask = torch::zeros({_numActions});
-    for (unsigned i = 0; i < _numPlConstraints; i++) {
+    torch::Tensor mask = torch::zeros( { _numActions } );
+    for ( unsigned i = 0; i < _numPlConstraints; i++ )
+    {
         const unsigned index = i * _numPhaseStatuses;
         mask[index] = -std::numeric_limits<float>::infinity();
 
-        if (state.getData()[i][PHASE_NOT_FIXED] == 0) // plConstraint in current state is fixed - invalid action.
+        if ( state.getData()[i][PHASE_NOT_FIXED] == 0 ) // plConstraint in current state is fixed -
+                                                        // invalid action.
         {
-            for (unsigned j = 0; j < _numPhaseStatuses; j++)
+            for ( unsigned j = 0; j < _numPhaseStatuses; j++ )
             {
                 mask[i * _numPhaseStatuses + j] = -std::numeric_limits<float>::infinity();
             }
-
         }
     }
 
     // Apply the mask
     QValues += mask;
 
-    if (static_cast<double>( rand() ) / RAND_MAX > eps) {
-        // best action - maximum Q-value from the masked values
-        actionIndex = QValues.argmax().item<int>();
-    } else {
-        printf("chose randomly\n");
+    if ( static_cast<double>( rand() ) / RAND_MAX > eps )
+    {
+        {
+            // best action - maximum Q-value from the masked values
+            actionIndex = QValues.argmax().item<int>();
+            printf( "chose by agent\n" );
+            fflush( stdout );
+        }
+    }
+    else
+    {
+        printf( "chose randomly\n" );
+        fflush( stdout );
         std::vector<unsigned> validConstraints;
-        for (unsigned i = 0; i < _numPlConstraints; ++i) {
-            if (state.getData()[i][PHASE_NOT_FIXED] != 0) {
-                validConstraints.push_back(i);
+        for ( unsigned i = 0; i < _numPlConstraints; ++i )
+        {
+            if ( state.getData()[i][PHASE_NOT_FIXED] != 0 )
+            {
+                validConstraints.push_back( i );
             }
         }
         unsigned actionConstraint = validConstraints[rand() % validConstraints.size()];
         std::random_device rd;
         std::mt19937 gen( rd() );
-        std::uniform_int_distribution<> dist(RELU_PHASE_ACTIVE, RELU_PHASE_INACTIVE);
+        std::uniform_int_distribution<> dist( RELU_PHASE_ACTIVE, RELU_PHASE_INACTIVE );
         unsigned actionPhase = dist( gen );
         actionIndex = _actionSpace.getActionIndex( actionConstraint, actionPhase );
-
     }
 
-    auto actionIndices = _actionSpace.decodeActionIndex(actionIndex);
-    return Action(_numPhaseStatuses, _numPlConstraints, actionIndices.first, actionIndices.second);
+    auto actionIndices = _actionSpace.decodeActionIndex( actionIndex );
+    return Action(
+        _numPhaseStatuses, _numPlConstraints, actionIndices.first, actionIndices.second );
 }
 
 

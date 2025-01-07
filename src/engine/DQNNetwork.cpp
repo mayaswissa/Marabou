@@ -6,13 +6,13 @@ QNetwork::QNetwork( unsigned numPlConstraints,
                     unsigned numActions )
     : _statusEmbedding( register_module( "statusEmbedding",
                                          torch::nn::Embedding( numPhaseStatuses, embeddingDim ) ) )
-    , dropout( register_module( "dropout", torch::nn::Dropout( 0.5 ) ) )
+    , dropout( register_module( "dropout", torch::nn::Dropout( 0.3 ) ) )
 {
     _inputDim = numPlConstraints * numPhaseStatuses * embeddingDim;
     _outputDim = numActions;
-    fc1 = register_module( "fc1", torch::nn::Linear( _inputDim, 64 ) );
-    fc2 = register_module( "fc2", torch::nn::Linear( 64, 128 ) );
-    fc3 = register_module( "fc3", torch::nn::Linear( 128, _outputDim ) );
+    fc1 = register_module( "fc1", torch::nn::Linear( _inputDim, 128 ) );
+    fc2 = register_module( "fc2", torch::nn::Linear( 128, 256 ) );
+    fc3 = register_module( "fc3", torch::nn::Linear( 256, _outputDim ) );
     initWeights();
 }
 
@@ -59,10 +59,7 @@ torch::Tensor QNetwork::forward( const torch::Tensor &state )
     }
 
     auto x = torch::relu( fc1( flattened ) );
-    // x = dropout(x);
     x = torch::relu( fc2( x ) );
-    // x = dropout(x);
-    // auto output = torch::tanh(fc3(x)) * 10;
     auto output = fc3( x );
     return output;
 }
@@ -70,6 +67,16 @@ torch::Tensor QNetwork::forward( const torch::Tensor &state )
 std::vector<torch::Tensor> QNetwork::getParameters() const
 {
     return this->parameters();
+}
+void check_weights(const torch::nn::Linear& layer, const std::string& name)
+{
+    auto weights = layer->weight;
+    auto bias = layer->bias;
+
+    printf("new weights: \n");
+    printf("%s - Weight norm: %f\n ",  name.c_str(), weights.norm().item<float>());
+    printf("%s - Bias norm: %f\n ",  name.c_str(), weights.norm().item<float>());
+    fflush(stdout);
 }
 
 std::pair<int, int> QNetwork::getDims() const {
@@ -86,7 +93,12 @@ void QNetwork::save(torch::serialize::OutputArchive& archive) const {
     archive.write("fc2_bias", fc2->bias);
     archive.write("fc3_weight", fc3->weight);
     archive.write("fc3_bias", fc3->bias);
+    check_weights(fc1, "FC1");
+    check_weights(fc2, "FC2");
+    check_weights(fc3, "FC3");
 }
+
+
 
 void QNetwork::load(torch::serialize::InputArchive& archive) {
     // Load weights and biases of the embedding and linear layers
@@ -98,4 +110,7 @@ void QNetwork::load(torch::serialize::InputArchive& archive) {
     archive.read("fc2_bias", fc2->bias);
     archive.read("fc3_weight", fc3->weight);
     archive.read("fc3_bias", fc3->bias);
+    check_weights(fc1, "FC1");
+    check_weights(fc2, "FC2");
+    check_weights(fc3, "FC3");
 }

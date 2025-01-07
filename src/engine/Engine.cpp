@@ -931,7 +931,7 @@ bool Engine::adjustAssignmentToSatisfyNonLinearConstraints()
         else
             return true;
     }
-    else if ( !GlobalConfiguration::USE_DEEPSOI_LOCAL_SEARCH )
+    else if ( !GlobalConfiguration::USE_DEEPSOI_LOCAL_SEARCH  || GlobalConfiguration::USE_DQN)
     {
         // We have violated piecewise-linear constraints.
         performConstraintFixingStep();

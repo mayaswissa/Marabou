@@ -150,6 +150,7 @@ int marabouMain( int argc, char **argv )
 
                 printf( "start solving with trained agent\n" );
                 fflush( stdout );
+                agent->saveNetworks();
                 Marabou().runAgentTraining( 1, false );
                 return 0;
             }
