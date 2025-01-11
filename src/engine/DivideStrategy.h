@@ -25,6 +25,7 @@ enum class DivideStrategy {
                      // steps
     PseudoImpact,    // The pseudo-impact heuristic associated with SoI.
     Auto,            // See decideBranchingHeursitics() in Engine.h
+    Random,
 };
 
 #endif // __DivideStrategy_h__

@@ -196,6 +196,7 @@ public:
     */
     virtual List<PiecewiseLinearCaseSplit> getCaseSplits() const = 0;
 
+    virtual List<PiecewiseLinearCaseSplit> getRandomCaseSplits();
     /*
       Check if the constraint's phase has been fixed.
     */

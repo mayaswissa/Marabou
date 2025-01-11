@@ -105,6 +105,7 @@ public:
 
     Query prepareSnCQuery();
     void exportQueryWithError( String errorMessage );
+    PiecewiseLinearConstraint *indexToConstraint( unsigned index );
 
     /*
       Methods for calculating bounds.
@@ -756,6 +757,7 @@ private:
       K is equal to GlobalConfiguration::POLARITY_CANDIDATES_THRESHOLD
     */
     PiecewiseLinearConstraint *pickSplitPLConstraintBasedOnPolarity();
+    PiecewiseLinearConstraint *pickSplitPLConstraintRandomly();
 
     /*
       Pick the first unfixed ReLU in the topological order

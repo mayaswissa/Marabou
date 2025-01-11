@@ -187,6 +187,18 @@ void Engine::exportQueryWithError( String errorMessage )
             ipqFileName.ascii() );
 }
 
+PiecewiseLinearConstraint *Engine::indexToConstraint( unsigned index )
+{
+    if ( index >= _plConstraints.size() )
+    {
+        throw std::out_of_range( "Index is out of bounds" );
+    }
+
+    auto it = _plConstraints.begin();
+    std::advance( it, index );
+    return *it;
+}
+
 bool Engine::solve( double timeoutInSeconds )
 {
     SignalHandler::getInstance()->initialize();
@@ -228,6 +240,7 @@ bool Engine::solve( double timeoutInSeconds )
 
     bool splitJustPerformed = true;
     struct timespec mainLoopStart = TimeUtils::sampleMicro();
+    unsigned numSplits = 0;
     while ( true )
     {
         struct timespec mainLoopEnd = TimeUtils::sampleMicro();
@@ -300,9 +313,12 @@ bool Engine::solve( double timeoutInSeconds )
             // Perform any SmtCore-initiated case splits
             if ( _smtCore.needToSplit() )
             {
-                _smtCore.performSplit();
-                splitJustPerformed = true;
-                continue;
+                    printf("number of splits: %u\n", numSplits);
+                    fflush(stdout);
+                    numSplits++;
+                    _smtCore.performSplit();
+                    splitJustPerformed = true;
+                    continue;
             }
 
             if ( !_tableau->allBoundsValid() )
@@ -1864,7 +1880,6 @@ bool Engine::attemptToMergeVariables( unsigned x1, unsigned x2 )
     /*
       First, we need to ensure that the variables are both non-basic.
     */
-
     unsigned n = _tableau->getN();
     unsigned m = _tableau->getM();
 
@@ -2736,6 +2751,22 @@ PiecewiseLinearConstraint *Engine::pickSplitPLConstraintBasedOnPolarity()
         return NULL;
 }
 
+
+PiecewiseLinearConstraint *Engine::pickSplitPLConstraintRandomly()
+{
+
+    int constraintIndex = rand() % _plConstraints.size() ;
+    PiecewiseLinearConstraint *plConstraint = indexToConstraint( constraintIndex );
+    while ( !plConstraint->isActive() || plConstraint->phaseFixed() )
+    {
+        constraintIndex = rand() % _plConstraints.size() ;
+        plConstraint = indexToConstraint( constraintIndex );
+    }
+    printf(" random plConstraint: %d\n", constraintIndex);
+    fflush(stdout);
+    return plConstraint;
+
+}
 PiecewiseLinearConstraint *Engine::pickSplitPLConstraintBasedOnTopology()
 {
     // We push the first unfixed ReLU in the topology order to the _candidatePlConstraints
@@ -2827,6 +2858,8 @@ PiecewiseLinearConstraint *Engine::pickSplitPLConstraint( DivideStrategy strateg
         // Conduct interval splitting periodically.
         candidatePLConstraint = pickSplitPLConstraintBasedOnIntervalWidth();
     }
+    else if (strategy == DivideStrategy::Random)
+        candidatePLConstraint = pickSplitPLConstraintRandomly();
     ENGINE_LOG(
         Stringf( ( candidatePLConstraint ? "Picked..."
                                          : "Unable to pick using the current strategy..." ) )

@@ -198,3 +198,9 @@ void PiecewiseLinearConstraint::setStatistics( Statistics *statistics )
 {
     _statistics = statistics;
 }
+
+List<PiecewiseLinearCaseSplit>
+PiecewiseLinearConstraint::getRandomCaseSplits()
+{
+    return List<PiecewiseLinearCaseSplit>();
+}

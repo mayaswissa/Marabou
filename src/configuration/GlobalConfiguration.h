@@ -30,6 +30,7 @@ public:
     // Whether to use SoI instead of Reluplex for local search for satisfying assignments
     // to non-linear constraint.
     static bool USE_DEEPSOI_LOCAL_SEARCH;
+    static bool USE_RANDOM_SEARCH;
 
     // The quantity by which the score is bumped up for PLContraints not
     // participating in the SoI. This promotes those constraints in the branching
