@@ -566,7 +566,7 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( double epsilon,
     updateToCurrentDQNState( *_currentDQNState );
     if ( agent == nullptr )
     {
-        printf( "no agent provided! creating new " );
+        printf( "no agent provided! creating new\n" );
         fflush( stdout );
         _agent = std::make_unique<Agent>( _plConstraints.size(), 3, trainedAgentPath );
     }
@@ -822,8 +822,6 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( double epsilon,
             ;
         }
     }
-    // todo add done somehow
-
     updateToCurrentDQNState( *_currentDQNState );
     _agent->handleDone( *_currentDQNState, _smtCore.getStackDepth(), splitsCounter );
     printf( "done iters!\n" );
