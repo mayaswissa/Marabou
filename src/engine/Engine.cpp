@@ -562,8 +562,8 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( double epsilon,
     // DQN CODE:
     _eps = epsilon;
     unsigned numPhases = 3; // todo change
-    State currentDQNState = State( _plConstraints.size(), numPhases );
-    updateToCurrentDQNState( currentDQNState );
+    _currentDQNState = std::make_unique<State>( _plConstraints.size(), numPhases );
+    updateToCurrentDQNState( *_currentDQNState );
     if ( agent == nullptr )
     {
         printf( "no agent provided! creating new " );
@@ -574,6 +574,7 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( double epsilon,
         _agent = std::move( agent );
     _action = std::make_unique<Action>( numPhases, _plConstraints.size() );
     auto previousState = State( _plConstraints.size(), numPhases );
+    updateToCurrentDQNState( previousState );
     double reward = 0;
     unsigned maxIterations = 100000;
     unsigned iterations = 0;
@@ -583,29 +584,28 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( double epsilon,
     struct timespec mainLoopStart = TimeUtils::sampleMicro();
     bool splitAlternative = false;
     bool splitAction = false;
-    State stateBeforeSplit = State( *_currentDQNState );
-    updateToCurrentDQNState( stateBeforeSplit );
     unsigned numInconsistent = 0;
     while ( iterations <= maxIterations )
     {
         stackDepth = _smtCore.getStackDepth();
-        iterations++; // todo here?
+        iterations++;
         struct timespec mainLoopEnd = TimeUtils::sampleMicro();
         mainLoopStart = mainLoopEnd;
 
         if ( shouldExitDueToTimeout( timeoutInSeconds ) )
         {
             stackDepth = _smtCore.getStackDepth();
-            updateToCurrentDQNState( currentDQNState );
-            _agent->handleDone( currentDQNState, _smtCore.getStackDepth(), splitsCounter );
+            updateToCurrentDQNState( *_currentDQNState );
+            _agent->handleDone( *_currentDQNState, _smtCore.getStackDepth(), splitsCounter );
             _exitCode = Engine::TIMEOUT;
-            return std::move(_agent);;
+            return std::move( _agent );
+            ;
         }
 
         if ( _quitRequested )
         {
             _exitCode = Engine::QUIT_REQUESTED;
-            return std::move(_agent);
+            return std::move( _agent );
         }
 
         try
@@ -626,7 +626,7 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( double epsilon,
                     applyAllValidConstraintCaseSplits();
                 }
             }
-            updateToCurrentDQNState( currentDQNState );
+            updateToCurrentDQNState( *_currentDQNState );
             if ( splitJustPerformed )
             {
                 performBoundTighteningAfterCaseSplit();
@@ -638,23 +638,23 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( double epsilon,
             {
                 if ( splitAlternative )
                 {
-                    updateToCurrentDQNState( currentDQNState );
+                    updateToCurrentDQNState( *_currentDQNState );
                     splitsCounter++;
                     _agent->addAlternativeAction(
-                        currentDQNState, stackDepth, splitsCounter, numInconsistent );
+                        *_currentDQNState, stackDepth, splitsCounter, numInconsistent );
                     splitAlternative = false;
                 }
                 else if ( splitAction )
                 {
-                    updateToCurrentDQNState( currentDQNState );
+                    updateToCurrentDQNState( *_currentDQNState );
                     _agent->step( previousState,
-                                 *_action,
-                                 0,
-                                 currentDQNState,
-                                 false,
-                                 stackDepth,
-                                 splitsCounter,
-                                 true );
+                                  *_action,
+                                  0,
+                                  *_currentDQNState,
+                                  false,
+                                  stackDepth,
+                                  splitsCounter,
+                                  true );
                     splitAction = false;
                 }
 
@@ -688,20 +688,21 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( double epsilon,
                         reward = 10;
                         mainLoopEnd = TimeUtils::sampleMicro();
                         _exitCode = Engine::SAT;
-                        updateToCurrentDQNState( currentDQNState );
+                        updateToCurrentDQNState( *_currentDQNState );
                         _agent->step( previousState,
-                                     *_action,
-                                     reward,
-                                     currentDQNState,
-                                     true,
-                                     stackDepth,
-                                     splitsCounter,
-                                     true );
+                                      *_action,
+                                      reward,
+                                      *_currentDQNState,
+                                      true,
+                                      stackDepth,
+                                      splitsCounter,
+                                      true );
                         _agent->handleDone(
-                            currentDQNState, _smtCore.getStackDepth(), splitsCounter, true );
+                            *_currentDQNState, _smtCore.getStackDepth(), splitsCounter, true );
                         printf( "success!" );
                         fflush( stdout );
-                        return std::move(_agent);;
+                        return std::move( _agent );
+                        ;
                     }
                     else if ( !hasBranchingCandidate() )
                     {
@@ -709,20 +710,21 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( double epsilon,
                         mainLoopEnd = TimeUtils::sampleMicro();
                         _exitCode = Engine::UNKNOWN;
                         // agent done with failure - reward is (- num of plConstraints)
-                        updateToCurrentDQNState( currentDQNState );
+                        updateToCurrentDQNState( *_currentDQNState );
                         _agent->step( previousState,
-                                     *_action,
-                                     reward,
-                                     currentDQNState,
-                                     true,
-                                     stackDepth,
-                                     splitsCounter,
-                                     false );
+                                      *_action,
+                                      reward,
+                                      *_currentDQNState,
+                                      true,
+                                      stackDepth,
+                                      splitsCounter,
+                                      false );
                         _agent->handleDone(
-                            currentDQNState, _smtCore.getStackDepth(), splitsCounter );
+                            *_currentDQNState, _smtCore.getStackDepth(), splitsCounter );
                         printf( "fail!" );
                         fflush( stdout );
-                        return std::move(_agent);;
+                        return std::move( _agent );
+                        ;
                     }
                     else
                     {
@@ -754,7 +756,8 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( double epsilon,
                 mainLoopEnd = TimeUtils::sampleMicro();
                 _statistics.incLongAttribute( Statistics::TIME_MAIN_LOOP_MICRO,
                                               TimeUtils::timePassed( mainLoopStart, mainLoopEnd ) );
-                return std::move(_agent);;
+                return std::move( _agent );
+                ;
             }
         }
         catch ( const InfeasibleQueryException & )
@@ -771,7 +774,6 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( double epsilon,
                 printf( "Inconsistent solution found!\n" );
                 fflush( stdout );
             }
-            updateToCurrentDQNState( stateBeforeSplit );
             if ( !_smtCore.popSplit( &numInconsistent ) )
             {
                 mainLoopEnd = TimeUtils::sampleMicro();
@@ -780,10 +782,12 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( double epsilon,
 
                 printf( "done unsat!\n" );
                 fflush( stdout );
-                updateToCurrentDQNState( currentDQNState );
-                _agent->handleDone( currentDQNState, _smtCore.getStackDepth(), splitsCounter, true );
+                updateToCurrentDQNState( *_currentDQNState );
+                _agent->handleDone(
+                    *_currentDQNState, _smtCore.getStackDepth(), splitsCounter, true );
                 _exitCode = Engine::UNSAT;
-                return std::move(_agent);;
+                return std::move( _agent );
+                ;
             }
             printf( "inconsistent after pop: %u\n", numInconsistent );
             splitJustPerformed = true;
@@ -804,7 +808,8 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( double epsilon,
             mainLoopEnd = TimeUtils::sampleMicro();
             _statistics.incLongAttribute( Statistics::TIME_MAIN_LOOP_MICRO,
                                           TimeUtils::timePassed( mainLoopStart, mainLoopEnd ) );
-            return std::move(_agent);;
+            return std::move( _agent );
+            ;
         }
         catch ( ... )
         {
@@ -813,17 +818,19 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( double epsilon,
             mainLoopEnd = TimeUtils::sampleMicro();
             _statistics.incLongAttribute( Statistics::TIME_MAIN_LOOP_MICRO,
                                           TimeUtils::timePassed( mainLoopStart, mainLoopEnd ) );
-            return std::move(_agent);;
+            return std::move( _agent );
+            ;
         }
     }
     // todo add done somehow
 
-    updateToCurrentDQNState( currentDQNState );
-    _agent->handleDone( currentDQNState, _smtCore.getStackDepth(), splitsCounter );
+    updateToCurrentDQNState( *_currentDQNState );
+    _agent->handleDone( *_currentDQNState, _smtCore.getStackDepth(), splitsCounter );
     printf( "done iters!\n" );
     fflush( stdout );
     _exitCode = Engine::MAX_ITERATIONS;
-    return std::move(_agent);;
+    return std::move( _agent );
+    ;
 }
 
 
@@ -3064,7 +3071,13 @@ void Engine::updateDirections()
 void Engine::decideBranchingHeuristics()
 {
     DivideStrategy divideStrategy = Options::get()->getDivideStrategy();
-    if ( divideStrategy == DivideStrategy::Auto )
+    if ( GlobalConfiguration::USE_DQN )
+    {
+        divideStrategy = DivideStrategy::DQN;
+        if ( _verbosity >= 2 )
+            printf( "Branching heuristics set to DQN\n" );
+    }
+    else if ( divideStrategy == DivideStrategy::Auto )
     {
         if ( !_produceUNSATProofs && !_preprocessedQuery->getInputVariables().empty() &&
              _preprocessedQuery->getInputVariables().size() <
@@ -3084,12 +3097,6 @@ void Engine::decideBranchingHeuristics()
                 divideStrategy = DivideStrategy::PseudoImpact;
                 if ( _verbosity >= 2 )
                     printf( "Branching heuristics set to PseudoImpact\n" );
-            }
-            else if ( GlobalConfiguration::USE_DQN )
-            {
-                divideStrategy = DivideStrategy::DQN;
-                if ( _verbosity >= 2 )
-                    printf( "Branching heuristics set to DQN\n" );
             }
             else
             {
@@ -3143,7 +3150,8 @@ PiecewiseLinearConstraint *Engine::pickSplitPLConstraintByAgent()
     _action = std::make_unique<Action>( _agent->act( *_currentDQNState, _eps ) );
     // perform split according to agent's action:
     PiecewiseLinearConstraint *plConstraint = indexToConstraint( _action->getPlConstraintAction() );
-    while ( !plConstraint->isActive() || plConstraint->isActive() || plConstraint->getPhaseStatus() != PHASE_NOT_FIXED ||
+    while ( !plConstraint->isActive() ||
+            plConstraint->getPhaseStatus() != PHASE_NOT_FIXED ||
             _action->getAssignmentIndex() == PHASE_NOT_FIXED )
     {
         printf( "fixed constraint or action not fixed split\n" );
@@ -3239,6 +3247,8 @@ PiecewiseLinearConstraint *Engine::pickSplitPLConstraint( DivideStrategy strateg
         candidatePLConstraint = pickSplitPLConstraintBasedOnPolarity();
     else if ( strategy == DivideStrategy::EarliestReLU )
         candidatePLConstraint = pickSplitPLConstraintBasedOnTopology();
+    else if ( strategy == DivideStrategy::DQN )
+        candidatePLConstraint = pickSplitPLConstraintByAgent();
     else if ( strategy == DivideStrategy::LargestInterval &&
               ( ( _smtCore.getStackDepth() + 1 ) %
                     GlobalConfiguration::INTERVAL_SPLITTING_FREQUENCY !=
@@ -3247,8 +3257,7 @@ PiecewiseLinearConstraint *Engine::pickSplitPLConstraint( DivideStrategy strateg
         // Conduct interval splitting periodically.
         candidatePLConstraint = pickSplitPLConstraintBasedOnIntervalWidth();
     }
-    else if ( strategy == DivideStrategy::DQN )
-        candidatePLConstraint = pickSplitPLConstraintByAgent();
+
     ENGINE_LOG(
         Stringf( ( candidatePLConstraint ? "Picked..."
                                          : "Unable to pick using the current strategy..." ) )
