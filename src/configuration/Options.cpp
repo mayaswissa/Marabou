@@ -166,6 +166,8 @@ DivideStrategy Options::getDivideStrategy() const
         return DivideStrategy::LargestInterval;
     else if ( strategyString == "pseudo-impact" )
         return DivideStrategy::PseudoImpact;
+    else if ( strategyString == "DQN-agent" )
+        return DivideStrategy::DQN;
     else
         return DivideStrategy::Auto;
 }

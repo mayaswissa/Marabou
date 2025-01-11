@@ -105,8 +105,7 @@ public:
       Perform the split according to the constraint marked for
       splitting. Update bounds, add equations and update the stack.
     */
-    bool performSplit( PiecewiseLinearConstraint *plConstraint = nullptr,
-                       const PhaseStatus *directionByAgent = nullptr );
+    bool performSplit( const PhaseStatus *directionByAgent = nullptr );
 
     /*
       Pop an old split from the stack, and perform a new split as

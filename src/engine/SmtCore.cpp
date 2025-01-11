@@ -131,13 +131,10 @@ bool SmtCore::needToSplit() const
     return _needToSplit;
 }
 
-bool SmtCore::performSplit( PiecewiseLinearConstraint *plConstraint,
-                            const PhaseStatus *directionByAgent )
+bool SmtCore::performSplit( const PhaseStatus *directionByAgent )
 {
     ASSERT( _needToSplit );
 
-    if ( GlobalConfiguration::USE_DQN )
-        _constraintForSplitting = plConstraint;
     _numRejectedPhasePatternProposal = 0;
     // Maybe the constraint has already become inactive - if so, ignore
     if ( !_constraintForSplitting->isActive() )
@@ -295,8 +292,8 @@ bool SmtCore::popSplit( unsigned *numInconsistent )
     {
         // Remove any entries that have no alternatives
         String error;
-        if (numInconsistent != nullptr)
-            (*numInconsistent)++;
+        if ( numInconsistent != nullptr )
+            ( *numInconsistent )++;
         while ( _stack.back()->_alternativeSplits.empty() )
         {
             if ( checkSkewFromDebuggingSolution() )
@@ -310,7 +307,9 @@ bool SmtCore::popSplit( unsigned *numInconsistent )
             delete _stack.back();
             _stack.popBack();
 
-            printf( "smt popSplit: delete entry, depth %u\n, inconsistent %u\n", _stack.size(), inconsistent );
+            printf( "smt popSplit: delete entry, depth %u\n, inconsistent %u\n",
+                    _stack.size(),
+                    inconsistent );
             fflush( stdout );
             popContext();
 

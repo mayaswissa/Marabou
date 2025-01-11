@@ -60,7 +60,7 @@ private:
     static constexpr double TAU = 1e-3;
     static constexpr double LR = 5e-4;
     static constexpr unsigned UPDATE_EVERY = 4;
-    static constexpr unsigned BATCH_SIZE = 20;
+    static constexpr unsigned BATCH_SIZE = 50;
     torch::Device device;
     const std::string _saveAgentFilePath;
     const std::string _trainedAgentFilePath;

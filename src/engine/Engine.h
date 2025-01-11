@@ -310,9 +310,9 @@ public:
     void loadAgentNetworks( Agent &agent );
 
     std::unique_ptr<Agent> trainDQNAgent( double epsilon,
-                        std::unique_ptr<Agent> agent,
-                        double timeoutInSeconds,
-                        const std::string &trainedAgentPath = "trainedAgent" );
+                                          std::unique_ptr<Agent> agent,
+                                          double timeoutInSeconds,
+                                          const std::string &trainedAgentPath = "trainedAgent" );
 
 private:
     enum BasisRestorationRequired {
@@ -766,6 +766,7 @@ private:
       K is equal to GlobalConfiguration::POLARITY_CANDIDATES_THRESHOLD
     */
     PiecewiseLinearConstraint *pickSplitPLConstraintBasedOnPolarity();
+    PiecewiseLinearConstraint *pickSplitPLConstraintByAgent();
 
     /*
       Pick the first unfixed ReLU in the topological order
@@ -851,6 +852,10 @@ private:
      DQN
      */
     double _eps;
+    std::unique_ptr<Agent> _agent;
+    std::unique_ptr<Action> _action;
+    std::unique_ptr<State> _currentDQNState;
+    std::unique_ptr<State> _previousState;
 
     /*
       Returns true iff there is a variable with bounds that can explain infeasibility of the tableau
@@ -926,7 +931,7 @@ private:
     void updateToCurrentDQNState( State &state );
     unsigned getNumFixedConstraints() const;
     PiecewiseLinearConstraint *indexToConstraint( unsigned index );
-    PhaseStatus valueToPhase( unsigned index );   // todo this is not really the value but the index
+    PhaseStatus valueToPhase( unsigned index ); // todo this is not really the value but the index
 };
 
 #endif // __Engine_h__

@@ -551,7 +551,7 @@ List<PiecewiseLinearConstraint::Fix> ReluConstraint::getSmartFixes( ITableau *ta
     return fixes;
 }
 
-List<PiecewiseLinearCaseSplit> ReluConstraint::getCaseSplitsByAgent(PhaseStatus DQNDirection) const
+List<PiecewiseLinearCaseSplit> ReluConstraint::getCaseSplitsByAgent(PhaseStatus DQNDirection )
 {
 
     if ( _phaseStatus != PHASE_NOT_FIXED )
@@ -561,12 +561,14 @@ List<PiecewiseLinearCaseSplit> ReluConstraint::getCaseSplitsByAgent(PhaseStatus 
 
     if ( DQNDirection == RELU_PHASE_INACTIVE )
     {
+        _direction = RELU_PHASE_INACTIVE;
         splits.append( getInactiveSplit() );
         splits.append( getActiveSplit() );
         return splits;
     }
     if ( DQNDirection == RELU_PHASE_ACTIVE )
     {
+        _direction = RELU_PHASE_ACTIVE;
         splits.append( getActiveSplit() );
         splits.append( getInactiveSplit() );
         return splits;
@@ -594,9 +596,6 @@ List<PiecewiseLinearCaseSplit> ReluConstraint::getCaseSplitsByAgent(PhaseStatus 
         splits.append( getInactiveSplit() );
         splits.append( getActiveSplit() );
     }
-
-
-
     return splits;
 }
 

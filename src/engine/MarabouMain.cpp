@@ -133,7 +133,7 @@ int marabouMain( int argc, char **argv )
 #endif
             if ( GlobalConfiguration::USE_DQN )
             {
-                unsigned _nEpisodes = 20;
+                unsigned _nEpisodes = 10;
                 double currEpisodeScore = 0;
                 std::unique_ptr<Agent> agent = nullptr;
                 double epsilon = GlobalConfiguration::DQN_EPSILON_START;
@@ -146,7 +146,6 @@ int marabouMain( int argc, char **argv )
                     epsilon = std::max( GlobalConfiguration::DQN_EPSILON_END,
                                         epsilon * GlobalConfiguration::DQN_EPSILON_DECAY );
                 }
-
 
                 printf( "start solving with trained agent\n" );
                 fflush( stdout );
