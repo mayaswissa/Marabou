@@ -561,6 +561,7 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( double epsilon,
 
     // DQN CODE:
     _eps = epsilon;
+    std::deque<int> smtSteps;
     unsigned numPhases = 3; // todo change
     _currentDQNState = std::make_unique<State>( _plConstraints.size(), numPhases );
     updateToCurrentDQNState( *_currentDQNState );
@@ -582,8 +583,8 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( double epsilon,
     bool splitJustPerformed = true;
     int stackDepth = _smtCore.getStackDepth();
     struct timespec mainLoopStart = TimeUtils::sampleMicro();
-    bool splitAlternative = false;
-    bool splitAction = false;
+    // bool splitAlternative = false;
+    // bool splitAction = false;
     unsigned numInconsistent = 0;
     while ( iterations <= maxIterations )
     {
@@ -636,35 +637,43 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( double epsilon,
 
             if ( _smtCore.needToSplit() )
             {
-                if ( splitAlternative )
+                while (!smtSteps.empty())
                 {
-                    updateToCurrentDQNState( *_currentDQNState );
-                    splitsCounter++;
-                    _agent->addAlternativeAction(
-                        *_currentDQNState, stackDepth, splitsCounter, numInconsistent );
-                    splitAlternative = false;
+                    const auto smtStep = smtSteps.front();
+                    smtSteps.pop_front();
+                    if ( smtStep == 1 )
+                    {
+                        updateToCurrentDQNState( *_currentDQNState );
+                        splitsCounter++;
+                        _agent->addAlternativeAction(
+                            *_currentDQNState, stackDepth, splitsCounter, numInconsistent );
+                        // splitAlternative = false;
+                    }
+                    else if ( smtStep == 2 )
+                    {
+                        updateToCurrentDQNState( *_currentDQNState );
+                        _agent->step( previousState,
+                                      *_action,
+                                      0,
+                                      *_currentDQNState,
+                                      false,
+                                      stackDepth,
+                                      splitsCounter,
+                                      true );
+                        // splitAction = false;
+                    }
                 }
-                else if ( splitAction )
-                {
-                    updateToCurrentDQNState( *_currentDQNState );
-                    _agent->step( previousState,
-                                  *_action,
-                                  0,
-                                  *_currentDQNState,
-                                  false,
-                                  stackDepth,
-                                  splitsCounter,
-                                  true );
-                    splitAction = false;
-                }
+                ASSERT(_agent->getActionStackSize() == stackDepth)
 
-                PhaseStatus phaseStatus = valueToPhase( _action->getAssignmentIndex() );
-                if ( _smtCore.performSplit( &phaseStatus ) )
-                    splitAction = true;
-                splitJustPerformed = true;
-                splitsCounter++;
-                updateToCurrentDQNState( previousState );
-                continue;
+
+                      PhaseStatus phaseStatus = valueToPhase( _action->getAssignmentIndex() );
+                    if ( _smtCore.performSplit( &phaseStatus ) )
+                        // splitAction = true;
+                            smtSteps.push_back( 2 );
+                    splitJustPerformed = true;
+                    splitsCounter++;
+                    updateToCurrentDQNState( previousState );
+
             }
 
             if ( !_tableau->allBoundsValid() )
@@ -769,11 +778,6 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( double epsilon,
                 explainSimplexFailure();
             stackDepth = _smtCore.getStackDepth();
 
-            if ( numInconsistent > 0 )
-            {
-                printf( "Inconsistent solution found!\n" );
-                fflush( stdout );
-            }
             if ( !_smtCore.popSplit( &numInconsistent ) )
             {
                 mainLoopEnd = TimeUtils::sampleMicro();
@@ -787,11 +791,11 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( double epsilon,
                     *_currentDQNState, _smtCore.getStackDepth(), splitsCounter, true );
                 _exitCode = Engine::UNSAT;
                 return std::move( _agent );
-                ;
+
             }
-            printf( "inconsistent after pop: %u\n", numInconsistent );
             splitJustPerformed = true;
-            splitAlternative = true;
+            // splitAlternative = true;
+            smtSteps.push_back( 1 );
             stackDepth = _smtCore.getStackDepth();
         }
         catch ( const VariableOutOfBoundDuringOptimizationException & )
@@ -3152,13 +3156,9 @@ PiecewiseLinearConstraint *Engine::pickSplitPLConstraintByAgent()
             plConstraint->getPhaseStatus() != PHASE_NOT_FIXED ||
             _action->getAssignmentIndex() == PHASE_NOT_FIXED )
     {
-        printf( "fixed constraint or action not fixed split\n" );
-        fflush( stdout );
         _action = std::make_unique<Action>( _agent->act( *_currentDQNState, 0.5 ) );
         plConstraint = indexToConstraint( _action->getPlConstraintAction() );
     }
-    printf( "continue\n" );
-    fflush( stdout );
     return plConstraint;
 }
 

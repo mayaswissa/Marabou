@@ -35,20 +35,12 @@ public:
     Action tensorToAction( const torch::Tensor &tensor ) const;
     void saveNetworks() const;
     void loadNetworks();
-    void moveRevisitExperience( unsigned currentNumSplits, unsigned depth, State *state );
-    bool compareStateWithAlternative( const State &state );
-    void moveAlternativeSplitToExperience( State stateAfterSplit,
-                                           unsigned numSplits,
-                                           unsigned currentDepth,
-                                           Action &action );
+    int getActionStackSize() const;
 
 private:
     static void softUpdate( const QNetwork &localModel, const QNetwork &targetModel );
     void learn();
     torch::Device getDevice() const;
-    bool isEqualState( const State *state, const State *other ) const;
-    void moveExperiencesToRevisitBuffer( unsigned currentNumSplits, unsigned depth, State *state );
-
 
     ActionSpace _actionSpace;
     unsigned _numPlConstraints, _numPhaseStatuses, _embeddingDim, _numActions;

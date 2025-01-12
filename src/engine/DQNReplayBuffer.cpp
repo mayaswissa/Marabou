@@ -55,14 +55,9 @@ void ReplayBuffer::pushToRevisit( const State &stateAfterAction,
                                   ActionsStack *actionEntry )
 {
     auto activeAction = actionEntry->_activeActions.back();
-    printf( "replay buffer: push action entry, constraints: %u\n",
-            activeAction._action.getNumPlConstraints() );
-    fflush( stdout );
     double reward = ( static_cast<double>( activeAction._splitsBeforeActiveAction ) -
                       static_cast<double>( numSplits ) ) /
                     activeAction._action.getNumPlConstraints();
-    printf( "reward = %f\n", reward );
-    fflush( stdout );
     addToRevisitExperiences( activeAction._stateBeforeAction,
                              activeAction._action,
                              reward,
@@ -90,17 +85,12 @@ void ReplayBuffer::applyNextAction( const State &stateAfterAction,
     ActionsStack *actionEntry;
     //  no alternative splits for previous actions - pop this entry and move activeActions to
     //  revisit Buffer.
-    printf( "applyNextAction\n" );
+    printf( "ReplayBuffer::applyNextAction\n" );
     fflush( stdout );
     while ( numInconsistent > 0 )
     {
-        printf( "replay buffer: applyNextAction, inside numInconsistent %u\n", numInconsistent );
-        fflush( stdout );
         while ( _actionsStack.back()->_alternativeActions.empty() )
         {
-            printf( "replay buffer: applyNextAction, inside no alternative %u\n",
-                    _actionsStack.size() );
-            fflush( stdout );
             actionEntry = _actionsStack.back();
             // move activeSplit to revisit buffer.
             while ( !actionEntry->_activeActions.empty() )
@@ -135,7 +125,6 @@ void ReplayBuffer::applyNextAction( const State &stateAfterAction,
                 _actionsStack.size() );
         fflush( stdout );
     }
-    ASSERT( depth == _actionsStack.size() )
 }
 
 
@@ -206,3 +195,11 @@ unsigned ReplayBuffer::getBatchSize() const
 {
     return _batchSize;
 }
+
+int ReplayBuffer::getActionStackSize() const
+{
+    if (_actionSize)
+        return _actionsStack.size();
+    return 0;
+}
+

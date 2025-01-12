@@ -169,6 +169,8 @@ public:
                           unsigned depth,
                           unsigned numSplits,
                           unsigned &numInconsistent  );
+    int getActionStackSize() const;
+
 
 private:
     unsigned _actionSize;

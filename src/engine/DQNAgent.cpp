@@ -300,3 +300,8 @@ torch::Device Agent::getDevice() const
 {
     return device;
 }
+
+int Agent::getActionStackSize() const
+{
+    return _replayedBuffer.getActionStackSize();
+}

@@ -133,6 +133,8 @@ bool SmtCore::needToSplit() const
 
 bool SmtCore::performSplit( const PhaseStatus *directionByAgent )
 {
+    printf("entering SmtCore::performSplit\n");
+    fflush(stdout);
     ASSERT( _needToSplit );
 
     _numRejectedPhasePatternProposal = 0;
@@ -208,6 +210,8 @@ bool SmtCore::performSplit( const PhaseStatus *directionByAgent )
     // Store the remaining splits on the stack, for later
     stackEntry->_engineState = stateBeforeSplits;
     ++split;
+    printf( "smt: create and add a new entry : %u\n", _stack.size() + 1 );
+    fflush( stdout );
     while ( split != splits.end() )
     {
         printf( "smt: append alternative to stack entry, depth : %u\n", _stack.size() + 1 );
@@ -217,8 +221,6 @@ bool SmtCore::performSplit( const PhaseStatus *directionByAgent )
     }
 
     _stack.append( stackEntry );
-    printf( "smt: add entry, depth %u\n", _stack.size() );
-    fflush( stdout );
     if ( _statistics )
     {
         unsigned level = getStackDepth();
@@ -306,7 +308,6 @@ bool SmtCore::popSplit( unsigned *numInconsistent )
             delete _stack.back()->_engineState;
             delete _stack.back();
             _stack.popBack();
-
             printf( "smt popSplit: delete entry, depth %u\n, inconsistent %u\n",
                     _stack.size(),
                     inconsistent );
@@ -330,7 +331,6 @@ bool SmtCore::popSplit( unsigned *numInconsistent )
             printf( "Error! Popping from a compliant stack\n" );
             throw MarabouError( MarabouError::DEBUGGING_ERROR );
         }
-        // todo insert new action here?
         SmtStackEntry *stackEntry = _stack.back();
 
         popContext();
