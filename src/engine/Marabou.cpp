@@ -78,7 +78,6 @@ void Marabou::run()
     std::cout << "end run time: " << TimeUtils::now().ascii() << std::endl;
 }
 
-
 std::unique_ptr<Agent> Marabou::runAgentTraining( double epsilon,
                                 const bool training,
                                 std::unique_ptr<Agent> agent)

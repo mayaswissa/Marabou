@@ -130,8 +130,6 @@ struct ActionsStack
         const unsigned actionPhase = action.getAssignmentIndex() == 2 ? 1 : 2;
         const auto alternateAction =
             Action( action.getNumPhases(), action.getNumPlConstraints(), action.getPlConstraintActionIndex(), actionPhase );
-        printf("alternateAction = %d, depth: %d\n", alternateAction.getAssignmentIndex(), depthBeforeAction);
-        fflush(stdout);
         _alternativeActions.append( alternateAction );
     }
 };

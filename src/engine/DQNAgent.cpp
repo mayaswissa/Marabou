@@ -199,9 +199,7 @@ Action Agent::act( const State &state, const double eps )
         for ( unsigned i = 0; i < _numPlConstraints; ++i )
         {
             if ( state.getData()[i][PHASE_NOT_FIXED] != 0 )
-            {
                 validConstraints.push_back( i );
-            }
         }
         unsigned actionConstraint = validConstraints[rand() % validConstraints.size()];
         std::random_device rd;

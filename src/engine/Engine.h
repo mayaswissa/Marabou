@@ -86,7 +86,7 @@ public:
       Attempt to find a feasible solution for the input within a time limit
       (a timeout of 0 means no time limit). Returns true if found, false if infeasible.
     */
-    bool solve( double timeoutInSeconds = 0, const std::string &trainedAgentPath = nullptr );
+    bool solve( double timeoutInSeconds = 0, const std::string &trainedAgentPath = "" );
     void beforeSplitingLoop();
 
     /*

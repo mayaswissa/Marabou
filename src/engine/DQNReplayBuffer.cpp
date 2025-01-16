@@ -45,8 +45,12 @@ void ReplayBuffer::handleDone( const State &currentState,
         printf( "replay buffer: pop action entry, depth %u\n", _actionsStack.size() );
         fflush( stdout );
     }
-    _revisitExperiences.back().get()->_done = true;
-    _revisitExperiences.back().get()->_reward = success ? 1 : -1;
+    if (!_revisitExperiences.empty())
+    {
+        _revisitExperiences.back().get()->_done = true;
+        _revisitExperiences.back().get()->_reward = success ? 1 : -1;
+    }
+
 }
 
 void ReplayBuffer::pushToRevisit( const State &stateAfterAction,

@@ -217,14 +217,14 @@ void Engine::exportInputQueryWithError( String errorMessage )
             errorMessage.ascii(),
             ipqFileName.ascii() );
 }
-PiecewiseLinearConstraint *Engine::indexToConstraint( unsigned index )
+PiecewiseLinearConstraint *Engine::indexToConstraint( int index, List<PiecewiseLinearConstraint *>* constraints )
 {
-    if ( index >= _plConstraints.size() )
+    if ( index < 0 || index >= static_cast<int>(constraints->size()) )
     {
-        throw std::out_of_range( "Index is out of bounds" ); // todo change to marabou error
+        return nullptr;
     }
 
-    auto it = _plConstraints.begin();
+    auto it = constraints->begin();
     std::advance( it, index );
     return *it;
 }
@@ -287,12 +287,21 @@ bool Engine::solve( double timeoutInSeconds, const std::string &trainedAgentPath
         _previousState = std::make_unique<State>( _plConstraints.size(), numPhases );
     }
     unsigned numSplits = 0;
-
+    unsigned DQNIterations = 10;
 
     bool splitJustPerformed = true;
     struct timespec mainLoopStart = TimeUtils::sampleMicro();
+    GlobalConfiguration::USE_DEEPSOI_LOCAL_SEARCH = false;
     while ( true )
     {
+        if (GlobalConfiguration::USE_DQN && numSplits == DQNIterations)
+        {
+            numSplits ++;
+            GlobalConfiguration::USE_DQN = false;
+            GlobalConfiguration::USE_DEEPSOI_LOCAL_SEARCH = true;
+            decideBranchingHeuristics();
+        }
+
         printf( "numSplits:%u\n", numSplits );
         fflush( stdout );
         struct timespec mainLoopEnd = TimeUtils::sampleMicro();
@@ -637,20 +646,22 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( double epsilon,
 
             if ( _smtCore.needToSplit() )
             {
-                while (!smtSteps.empty())
+                while ( !smtSteps.empty() )
                 {
+                    printf("smtSteps size : %lu\n", smtSteps.size() );
                     const auto smtStep = smtSteps.front();
                     smtSteps.pop_front();
                     if ( smtStep == 1 )
                     {
+                        printf("enters addAlternativeAction because smtStep = 1 \n");
                         updateToCurrentDQNState( *_currentDQNState );
                         splitsCounter++;
                         _agent->addAlternativeAction(
                             *_currentDQNState, stackDepth, splitsCounter, numInconsistent );
-                        // splitAlternative = false;
                     }
                     else if ( smtStep == 2 )
                     {
+                        printf("enters step because smtStep = 2 \n");
                         updateToCurrentDQNState( *_currentDQNState );
                         _agent->step( previousState,
                                       *_action,
@@ -660,20 +671,21 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( double epsilon,
                                       stackDepth,
                                       splitsCounter,
                                       true );
-                        // splitAction = false;
                     }
                 }
                 ASSERT(_agent->getActionStackSize() == stackDepth)
 
 
-                      PhaseStatus phaseStatus = valueToPhase( _action->getAssignmentIndex() );
-                    if ( _smtCore.performSplit( &phaseStatus ) )
-                        // splitAction = true;
-                            smtSteps.push_back( 2 );
-                    splitJustPerformed = true;
-                    splitsCounter++;
-                    updateToCurrentDQNState( previousState );
-
+                PhaseStatus phaseStatus = valueToPhase( _action->getAssignmentIndex() );
+                if ( _smtCore.performSplit( &phaseStatus ) )
+                {
+                    smtSteps.push_back( 2 );
+                    printf("pushed 2 to smtSteps");
+                    fflush( stdout );
+                }
+                splitJustPerformed = true;
+                splitsCounter++;
+                updateToCurrentDQNState( previousState );
             }
 
             if ( !_tableau->allBoundsValid() )
@@ -711,7 +723,6 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( double epsilon,
                         printf( "success!" );
                         fflush( stdout );
                         return std::move( _agent );
-                        ;
                     }
                     else if ( !hasBranchingCandidate() )
                     {
@@ -733,7 +744,6 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( double epsilon,
                         printf( "fail!" );
                         fflush( stdout );
                         return std::move( _agent );
-                        ;
                     }
                     else
                     {
@@ -766,7 +776,6 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( double epsilon,
                 _statistics.incLongAttribute( Statistics::TIME_MAIN_LOOP_MICRO,
                                               TimeUtils::timePassed( mainLoopStart, mainLoopEnd ) );
                 return std::move( _agent );
-                ;
             }
         }
         catch ( const InfeasibleQueryException & )
@@ -791,11 +800,11 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( double epsilon,
                     *_currentDQNState, _smtCore.getStackDepth(), splitsCounter, true );
                 _exitCode = Engine::UNSAT;
                 return std::move( _agent );
-
             }
             splitJustPerformed = true;
-            // splitAlternative = true;
             smtSteps.push_back( 1 );
+            printf("pushed 1 to smtSteps");
+            fflush( stdout );
             stackDepth = _smtCore.getStackDepth();
         }
         catch ( const VariableOutOfBoundDuringOptimizationException & )
@@ -3145,19 +3154,48 @@ PiecewiseLinearConstraint *Engine::pickSplitPLConstraintBasedOnPolarity()
         return NULL;
 }
 
+int Engine::findPlConstraintsIndex( const int index, List<PiecewiseLinearConstraint *>* constraints)
+{
+    PiecewiseLinearConstraint *plConstraintFromIndex = indexToConstraint( index, &_plConstraints );
+    if ( plConstraintFromIndex != nullptr )
+    {
+        int i = 0;
+        for ( const auto &plConstraint : *constraints )
+        {
+            if (plConstraint == plConstraintFromIndex)
+                return i;
+            i++;
+        }
+    }
+    return -1;
+}
+
 PiecewiseLinearConstraint *Engine::pickSplitPLConstraintByAgent()
 {
+    List<PiecewiseLinearConstraint *> constraints =
+        _networkLevelReasoner->getConstraintsInTopologicalOrder();
     updateToCurrentDQNState( *_currentDQNState );
     // agent take an action according to current state:
     _action = std::make_unique<Action>( _agent->act( *_currentDQNState, _eps ) );
     // perform split according to agent's action:
-    PiecewiseLinearConstraint *plConstraint = indexToConstraint( _action->getPlConstraintAction() );
-    while ( !plConstraint->isActive() ||
-            plConstraint->getPhaseStatus() != PHASE_NOT_FIXED ||
-            _action->getAssignmentIndex() == PHASE_NOT_FIXED )
+    int topologicalOrderIndex = findPlConstraintsIndex( _action->getPlConstraintAction(), &constraints );
+    PiecewiseLinearConstraint *plConstraint = indexToConstraint( topologicalOrderIndex, &constraints );
+    // can not split on fixed or inactive plConstraint
+    while ( plConstraint == nullptr ||!plConstraint->isActive() || plConstraint->phaseFixed() )
     {
+        printf("inserting bad step\n");
+        fflush(stdout);
         _action = std::make_unique<Action>( _agent->act( *_currentDQNState, 0.5 ) );
-        plConstraint = indexToConstraint( _action->getPlConstraintAction() );
+        _agent->step( *_currentDQNState,
+                      *_action,
+                      -1,
+                      *_currentDQNState,
+                      false,
+                      _smtCore.getStackDepth(),
+                      0,
+                      false );
+        topologicalOrderIndex = findPlConstraintsIndex( _action->getPlConstraintAction(), &constraints );
+        plConstraint = indexToConstraint( topologicalOrderIndex, &constraints );
     }
     return plConstraint;
 }

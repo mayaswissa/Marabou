@@ -19,7 +19,7 @@ public:
   void load(torch::serialize::InputArchive& archive);
 
 private:
-    torch::nn::Linear fc1{ nullptr }, fc2{ nullptr }, fc3{ nullptr };
+    torch::nn::Linear fc1{ nullptr }, fc2{ nullptr }, fc3{ nullptr }, fc4{ nullptr };
     torch::nn::Embedding _statusEmbedding{ nullptr };
     torch::nn::Dropout dropout;
     void initWeights();
