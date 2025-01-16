@@ -766,6 +766,7 @@ private:
       K is equal to GlobalConfiguration::POLARITY_CANDIDATES_THRESHOLD
     */
     PiecewiseLinearConstraint *pickSplitPLConstraintBasedOnPolarity();
+    int findPlConstraintsIndex( int index, List<PiecewiseLinearConstraint *> *constraints );
     PiecewiseLinearConstraint *pickSplitPLConstraintByAgent();
 
     /*
@@ -930,7 +931,7 @@ private:
      */
     void updateToCurrentDQNState( State &state );
     unsigned getNumFixedConstraints() const;
-    PiecewiseLinearConstraint *indexToConstraint( unsigned index );
+    PiecewiseLinearConstraint *indexToConstraint( int index, List<PiecewiseLinearConstraint *>* constraints );
     PhaseStatus valueToPhase( unsigned index ); // todo this is not really the value but the index
 };
 
