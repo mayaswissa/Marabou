@@ -94,11 +94,12 @@ Action Agent::tensorToAction( const torch::Tensor &tensor ) const
 void Agent::handleDone( const State &currentState,
                         unsigned stackDepth,
                         unsigned numSplits,
+                        const double rewardForDone,
                         bool success )
 {
     // needs to insert all actions in actions buffer to the replay buffer and learn.
     // The rewards of all steps in this branch, except of the last action remain the same.
-    _replayedBuffer.handleDone( currentState, success, stackDepth, numSplits );
+    _replayedBuffer.handleDone( currentState, success, stackDepth, numSplits, rewardForDone );
     learn();
 }
 
@@ -142,11 +143,7 @@ void Agent::step( const State &previousState,
     }
 
     if ( done )
-    {
-        handleDone( currentState, depth, numSplits );
         return;
-    }
-
     // add new _actionEntry and push it to ActionsStack.
     _replayedBuffer.pushActionEntry( action, previousState, currentState, depth, numSplits );
 
@@ -214,6 +211,17 @@ Action Agent::act( const State &state, const double eps )
         _numPhaseStatuses, _numPlConstraints, actionIndices.first, actionIndices.second );
 }
 
+double Agent::updateLR() {
+    learningSteps++;
+
+    auto newLR =  LR * pow(GAMMA, learningSteps);
+    for (auto& param_group : optimizer.param_groups()) {
+        auto& options = static_cast<torch::optim::AdamOptions&>(param_group.options());
+        options.lr(newLR);
+    }
+    return newLR;
+}
+
 
 void Agent::learn()
 {
@@ -245,41 +253,53 @@ void Agent::learn()
     const auto nextStatesTensor = torch::cat( nextStates, 0 );
     const auto doneTensor = torch::tensor( dones, torch::dtype( torch::kUInt8 ) ).to( device );
 
-    // Double DQN : Use local network to select the best action for next states
-    const auto forwardLocalNet = _qNetworkLocal.forward( nextStatesTensor );
-    const auto localQValuesNextState = forwardLocalNet.detach().argmax( 1 );
-
-    // Use target network to calculate the Q-value of these actions
-    const auto forwardTargetNet = _qNetworkTarget.forward( nextStatesTensor );
-    const auto targetQValuesNextState =
-        forwardTargetNet.detach().gather( 1, localQValuesNextState.unsqueeze( -1 ) ).squeeze( -1 );
-    // Calculate Q targets for current states
-    const auto QTargets =
-        rewardsTensor + GAMMA * targetQValuesNextState * ( 1 - doneTensor.to( torch::kFloat64 ) );
-
-    const auto QExpected = _qNetworkLocal.forward( statesTensor )
-                               .gather( 1, actionsTensor.unsqueeze( -1 ) )
-                               .squeeze( -1 )
-                               .to( torch::kDouble );
-
-
-    const auto loss = torch::mse_loss( QExpected, QTargets );
-    printf( "Loss: %f\n", loss.item<double>() );
-
-    // Backpropagation
-    optimizer.zero_grad();
-    loss.backward();
-    if ( !handleInvalidGradients() )
+    auto QExpected = _qNetworkLocal.forward(statesTensor).gather(1, actionsTensor.unsqueeze(-1)).squeeze(-1).to(torch::kDouble);
+    auto QTargets = rewardsTensor;
+    if (GlobalConfiguration::DQN_TRAINING)
     {
+        // Double DQN : Use local network to select the best action for next states
+        const auto forwardLocalNet = _qNetworkLocal.forward( nextStatesTensor );
+        const auto localQValuesNextState = forwardLocalNet.detach().argmax( 1 );
+
+        // Use target network to calculate the Q-value of these actions
+        const auto forwardTargetNet = _qNetworkTarget.forward( nextStatesTensor );
+        const auto targetQValuesNextState =
+            forwardTargetNet.detach().gather( 1, localQValuesNextState.unsqueeze( -1 ) ).squeeze( -1 );
+        // Calculate Q targets for current states
+        QTargets =
+            rewardsTensor + GAMMA * targetQValuesNextState * ( 1 - doneTensor.to( torch::kFloat64 ) );
+
+        QExpected = _qNetworkLocal.forward( statesTensor )
+                                   .gather( 1, actionsTensor.unsqueeze( -1 ) )
+                                   .squeeze( -1 )
+                                   .to( torch::kDouble );
+
+
+        const auto loss = torch::mse_loss( QExpected, QTargets );
+        printf( "Loss: %f\n", loss.item<double>() );
+
+        // Backpropagation
+        optimizer.zero_grad();
+        loss.backward();
+        if ( !handleInvalidGradients() )
+        {
+            optimizer.step();
+            // updateLR();
+        }
+        else
+        {
+            printf( "Skipped updating weights due to invalid gradients.\n" );
+            fflush( stdout );
+        }
         optimizer.step();
-    }
-    else
+        softUpdate( _qNetworkLocal, _qNetworkTarget );
+    }else
     {
-        printf( "Skipped updating weights due to invalid gradients.\n" );
-        fflush( stdout );
+        const auto loss = torch::mse_loss(QExpected, QTargets);
+        printf("Validation Loss: %f\n", loss.item<double>());
     }
-    optimizer.step();
-    softUpdate( _qNetworkLocal, _qNetworkTarget );
+
+
 }
 
 

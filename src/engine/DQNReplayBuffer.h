@@ -158,7 +158,7 @@ public:
                           const State& stateAfterAction,
                           unsigned depth,
                           unsigned numSplits );
-    void handleDone( const State &currentState, bool success, unsigned stackDepth, unsigned numSplits );
+    void handleDone( const State &currentState, bool success, unsigned stackDepth, unsigned numSplits, double rewardForDone );
     void pushToRevisit( const State& stateAfterAction,
                         unsigned depth,
                         unsigned numSplits,

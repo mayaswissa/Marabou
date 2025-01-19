@@ -147,9 +147,19 @@ int marabouMain( int argc, char **argv )
                                         epsilon * GlobalConfiguration::DQN_EPSILON_DECAY );
                 }
 
+                // validation run:
+                GlobalConfiguration::DQN_TRAINING = false;
+                for ( unsigned int validations = 0; validations < 1; ++validations )
+                {
+                    currEpisodeScore = 0;
+                    agent = Marabou().runAgentTraining( epsilon, true, std::move( agent ) );
+                    epsilon = std::max( GlobalConfiguration::DQN_EPSILON_END,
+                                        epsilon * GlobalConfiguration::DQN_EPSILON_DECAY );
+                }
                 printf( "start solving with trained agent\n" );
                 fflush( stdout );
-                agent->saveNetworks();
+                if (agent != nullptr)
+                    agent->saveNetworks();
                 Marabou().runAgentTraining( 1, false );
                 return 0;
             }

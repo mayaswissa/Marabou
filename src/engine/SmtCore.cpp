@@ -131,6 +131,22 @@ bool SmtCore::needToSplit() const
     return _needToSplit;
 }
 
+
+double SmtCore::discoveredSubtrees( const unsigned numPlConstraints)
+{
+    double numDiscovered = 0;
+    int currentDepth = 0;
+    for (const auto &stackEntry : _stack)
+    {
+        if (stackEntry->_alternativeSplits.empty())
+        {
+            numDiscovered += pow(2, (numPlConstraints - currentDepth + 1)) - 1;
+        }
+        currentDepth ++;
+    }
+    return numDiscovered / (2 ^ numPlConstraints);
+}
+
 bool SmtCore::performSplit( const PhaseStatus *directionByAgent )
 {
     printf("entering SmtCore::performSplit\n");

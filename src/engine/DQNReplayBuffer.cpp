@@ -27,9 +27,9 @@ void ReplayBuffer::pushActionEntry( const Action &action,
 }
 
 void ReplayBuffer::handleDone( const State &currentState,
-                               const bool success,
+                               const bool /*success*/,
                                const unsigned stackDepth,
-                               const unsigned numSplits )
+                               const unsigned numSplits, double rewardForDone )
 {
     // go over all actions in actionsStack and move them to revisitExperiences
     // no need to go over alternative actions since they did not occur.
@@ -48,7 +48,8 @@ void ReplayBuffer::handleDone( const State &currentState,
     if (!_revisitExperiences.empty())
     {
         _revisitExperiences.back().get()->_done = true;
-        _revisitExperiences.back().get()->_reward = success ? 1 : -1;
+        // _revisitExperiences.back().get()->_reward = success ? 1 : -1;
+        _revisitExperiences.back().get()->_reward = rewardForDone;
     }
 
 }
@@ -82,7 +83,7 @@ void ReplayBuffer::applyNextAction( const State &stateAfterAction,
 {
     if ( _actionsStack.empty() )
     {
-        handleDone( stateAfterAction, true, depth, numSplits );
+        handleDone( stateAfterAction, true, depth, numSplits, 1 ); // todo check 1
         return;
     }
 
@@ -110,7 +111,7 @@ void ReplayBuffer::applyNextAction( const State &stateAfterAction,
 
             if ( _actionsStack.empty() )
             {
-                handleDone( stateAfterAction, true, depth, numSplits );
+                handleDone( stateAfterAction, true, depth, numSplits, 1 ); // todo check 1
                 return;
             }
         }

@@ -30,8 +30,9 @@ public:
                bool changeReward );
 
     void
-    handleDone( const State &currentState, unsigned stackDepth, unsigned numSplits, bool success = false );
+    handleDone( const State &currentState, unsigned stackDepth, unsigned numSplits, double rewardForDone,  bool success = false );
     Action act( const State &state, double eps = 0.1 );
+    double updateLR();
     Action tensorToAction( const torch::Tensor &tensor ) const;
     void saveNetworks() const;
     void loadNetworks();
@@ -49,10 +50,11 @@ private:
     ReplayBuffer _replayedBuffer;
     unsigned _tStep;
     static constexpr double GAMMA = 0.9;
-    static constexpr double TAU = 1e-3;
+    static constexpr double TAU = 1e-3; // Soft Update Parameter for target network
     static constexpr double LR = 5e-4;
+    unsigned int learningSteps = 0;
     static constexpr unsigned UPDATE_EVERY = 4;
-    static constexpr unsigned BATCH_SIZE = 50;
+    static constexpr unsigned BATCH_SIZE = 100;
     torch::Device device;
     const std::string _saveAgentFilePath;
     const std::string _trainedAgentFilePath;
