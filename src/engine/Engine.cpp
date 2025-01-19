@@ -241,6 +241,8 @@ bool Engine::solve( double timeoutInSeconds )
     bool splitJustPerformed = true;
     struct timespec mainLoopStart = TimeUtils::sampleMicro();
     unsigned numSplits = 0;
+    unsigned maxRandomSplits = GlobalConfiguration::RANDOM_ITERATIONS;
+    GlobalConfiguration::USE_DEEPSOI_LOCAL_SEARCH = false;
     while ( true )
     {
         struct timespec mainLoopEnd = TimeUtils::sampleMicro();
@@ -277,6 +279,15 @@ bool Engine::solve( double timeoutInSeconds )
 
         try
         {
+
+            if (numSplits == maxRandomSplits)
+            {
+                 numSplits ++;
+                 GlobalConfiguration::USE_RANDOM_SEARCH = false;
+                 GlobalConfiguration::USE_DEEPSOI_LOCAL_SEARCH = true;
+                 decideBranchingHeuristics();
+             }
+
             DEBUG( _tableau->verifyInvariants() );
 
             mainLoopStatistics();
@@ -467,6 +478,289 @@ bool Engine::solve( double timeoutInSeconds )
             _statistics.incLongAttribute( Statistics::TIME_MAIN_LOOP_MICRO,
                                           TimeUtils::timePassed( mainLoopStart, mainLoopEnd ) );
             return false;
+        }
+    }
+}
+
+unsigned Engine::solveWithRandomness( double timeoutInSeconds )
+{
+    SignalHandler::getInstance()->initialize();
+    SignalHandler::getInstance()->registerClient( this );
+
+    // Register the boundManager with all the PL constraints
+    for ( auto &plConstraint : _plConstraints )
+        plConstraint->registerBoundManager( &_boundManager );
+    for ( auto &nlConstraint : _nlConstraints )
+        nlConstraint->registerBoundManager( &_boundManager );
+
+    // Before encoding, make sure all valid constraints are applied.
+    applyAllValidConstraintCaseSplits();
+
+    if ( _solveWithMILP )
+        return solveWithMILPEncoding( timeoutInSeconds );
+
+    updateDirections();
+    if ( _lpSolverType == LPSolverType::NATIVE )
+        storeInitialEngineState();
+    else if ( _lpSolverType == LPSolverType::GUROBI )
+    {
+        ENGINE_LOG( "Encoding convex relaxation into Gurobi..." );
+        _gurobi = std::unique_ptr<GurobiWrapper>( new GurobiWrapper() );
+        _tableau->setGurobi( &( *_gurobi ) );
+        _milpEncoder = std::unique_ptr<MILPEncoder>( new MILPEncoder( *_tableau ) );
+        _milpEncoder->setStatistics( &_statistics );
+        _milpEncoder->encodeQuery( *_gurobi, *_preprocessedQuery, true );
+        ENGINE_LOG( "Encoding convex relaxation into Gurobi - done" );
+    }
+
+    mainLoopStatistics();
+    if ( _verbosity > 0 )
+    {
+        printf( "\nEngine::solve: Initial statistics\n" );
+        _statistics.print();
+        printf( "\n---\n" );
+    }
+
+    bool splitJustPerformed = true;
+    struct timespec mainLoopStart = TimeUtils::sampleMicro();
+    unsigned numSplits = 0;
+    unsigned maxRandomSplits = 5;
+    GlobalConfiguration::USE_DEEPSOI_LOCAL_SEARCH = false;
+    while ( true )
+    {
+        struct timespec mainLoopEnd = TimeUtils::sampleMicro();
+        _statistics.incLongAttribute( Statistics::TIME_MAIN_LOOP_MICRO,
+                                      TimeUtils::timePassed( mainLoopStart, mainLoopEnd ) );
+        mainLoopStart = mainLoopEnd;
+
+        if ( shouldExitDueToTimeout( timeoutInSeconds ) )
+        {
+            if ( _verbosity > 0 )
+            {
+                printf( "\n\nEngine: quitting due to timeout...\n\n" );
+                printf( "Final statistics:\n" );
+                _statistics.print();
+            }
+
+            _exitCode = Engine::TIMEOUT;
+            _statistics.timeout();
+            return numSplits;
+        }
+
+        if ( _quitRequested )
+        {
+            if ( _verbosity > 0 )
+            {
+                printf( "\n\nEngine: quitting due to external request...\n\n" );
+                printf( "Final statistics:\n" );
+                _statistics.print();
+            }
+
+            _exitCode = Engine::QUIT_REQUESTED;
+            return numSplits;
+        }
+
+        try
+        {
+
+            if (numSplits == maxRandomSplits)
+            {
+                numSplits ++;
+                GlobalConfiguration::USE_RANDOM_SEARCH = false;
+                GlobalConfiguration::USE_DEEPSOI_LOCAL_SEARCH = true;
+                decideBranchingHeuristics();
+            }
+
+            DEBUG( _tableau->verifyInvariants() );
+
+            mainLoopStatistics();
+            if ( _verbosity > 1 &&
+                 _statistics.getLongAttribute( Statistics::NUM_MAIN_LOOP_ITERATIONS ) %
+                         _statisticsPrintingFrequency ==
+                     0 )
+                _statistics.print();
+
+            if ( _lpSolverType == LPSolverType::NATIVE )
+            {
+                checkOverallProgress();
+                // Check whether progress has been made recently
+
+                if ( performPrecisionRestorationIfNeeded() )
+                    continue;
+
+                if ( _tableau->basisMatrixAvailable() )
+                {
+                    explicitBasisBoundTightening();
+                    _boundManager.propagateTightenings();
+                    applyAllValidConstraintCaseSplits();
+                }
+            }
+
+            // If true, we just entered a new subproblem
+            if ( splitJustPerformed )
+            {
+                performBoundTighteningAfterCaseSplit();
+                informLPSolverOfBounds();
+                splitJustPerformed = false;
+            }
+
+            // Perform any SmtCore-initiated case splits
+            if ( _smtCore.needToSplit() )
+            {
+                    printf("number of splits: %u\n", numSplits);
+                    fflush(stdout);
+                    numSplits++;
+                    _smtCore.performSplit();
+                    splitJustPerformed = true;
+                    continue;
+            }
+
+            if ( !_tableau->allBoundsValid() )
+            {
+                // Some variable bounds are invalid, so the query is unsat
+                throw InfeasibleQueryException();
+            }
+
+            if ( allVarsWithinBounds() )
+            {
+                // It's possible that a disjunction constraint is fixed and additional constraints
+                // are introduced, making the linear portion unsatisfied. So we need to make sure
+                // there are no valid case splits that we do not know of.
+                applyAllBoundTightenings();
+                if ( applyAllValidConstraintCaseSplits() )
+                    continue;
+
+                // The linear portion of the problem has been solved.
+                // Check the status of the PL constraints
+                bool solutionFound = adjustAssignmentToSatisfyNonLinearConstraints();
+                if ( solutionFound )
+                {
+                    if ( allNonlinearConstraintsHold() )
+                    {
+                        mainLoopEnd = TimeUtils::sampleMicro();
+                        _statistics.incLongAttribute(
+                            Statistics::TIME_MAIN_LOOP_MICRO,
+                            TimeUtils::timePassed( mainLoopStart, mainLoopEnd ) );
+                        if ( _verbosity > 0 )
+                        {
+                            printf( "\nEngine::solve: sat assignment found\n" );
+                            _statistics.print();
+                        }
+
+                        // Allows checking proofs produced for UNSAT leaves of satisfiable query
+                        // search tree
+                        if ( _produceUNSATProofs )
+                        {
+                            ASSERT( _UNSATCertificateCurrentPointer );
+                            ( **_UNSATCertificateCurrentPointer ).setSATSolutionFlag();
+                        }
+                        _exitCode = Engine::SAT;
+                        return numSplits;
+                    }
+                    else if ( !hasBranchingCandidate() )
+                    {
+                        mainLoopEnd = TimeUtils::sampleMicro();
+                        _statistics.incLongAttribute(
+                            Statistics::TIME_MAIN_LOOP_MICRO,
+                            TimeUtils::timePassed( mainLoopStart, mainLoopEnd ) );
+                        if ( _verbosity > 0 )
+                        {
+                            printf( "\nEngine::solve: at leaf node but solving inconclusive\n" );
+                            _statistics.print();
+                        }
+                        _exitCode = Engine::UNKNOWN;
+                        return numSplits;
+                    }
+                    else
+                    {
+                        while ( !_smtCore.needToSplit() )
+                            _smtCore.reportRejectedPhasePatternProposal();
+                        continue;
+                    }
+                }
+                else
+                {
+                    continue;
+                }
+            }
+
+            // We have out-of-bounds variables.
+            if ( _lpSolverType == LPSolverType::NATIVE )
+                performSimplexStep();
+            else
+            {
+                ENGINE_LOG( "Checking LP feasibility with Gurobi..." );
+                DEBUG( { checkGurobiBoundConsistency(); } );
+                ASSERT( _lpSolverType == LPSolverType::GUROBI );
+                LinearExpression dontCare;
+                minimizeCostWithGurobi( dontCare );
+            }
+            continue;
+        }
+        catch ( const MalformedBasisException & )
+        {
+            _tableau->toggleOptimization( false );
+            if ( !handleMalformedBasisException() )
+            {
+                ASSERT( _lpSolverType == LPSolverType::NATIVE );
+                _exitCode = Engine::ERROR;
+                exportQueryWithError( "Cannot restore tableau" );
+                mainLoopEnd = TimeUtils::sampleMicro();
+                _statistics.incLongAttribute( Statistics::TIME_MAIN_LOOP_MICRO,
+                                              TimeUtils::timePassed( mainLoopStart, mainLoopEnd ) );
+                return numSplits;
+            }
+        }
+        catch ( const InfeasibleQueryException & )
+        {
+            _tableau->toggleOptimization( false );
+            // The current query is unsat, and we need to pop.
+            // If we're at level 0, the whole query is unsat.
+            if ( _produceUNSATProofs )
+                explainSimplexFailure();
+
+            if ( !_smtCore.popSplit() )
+            {
+                mainLoopEnd = TimeUtils::sampleMicro();
+                _statistics.incLongAttribute( Statistics::TIME_MAIN_LOOP_MICRO,
+                                              TimeUtils::timePassed( mainLoopStart, mainLoopEnd ) );
+                if ( _verbosity > 0 )
+                {
+                    printf( "\nEngine::solve: unsat query\n" );
+                    _statistics.print();
+                }
+                _exitCode = Engine::UNSAT;
+                return numSplits;
+            }
+            else
+            {
+                splitJustPerformed = true;
+            }
+        }
+        catch ( const VariableOutOfBoundDuringOptimizationException & )
+        {
+            _tableau->toggleOptimization( false );
+            continue;
+        }
+        catch ( MarabouError &e )
+        {
+            String message = Stringf(
+                "Caught a MarabouError. Code: %u. Message: %s ", e.getCode(), e.getUserMessage() );
+            _exitCode = Engine::ERROR;
+            exportQueryWithError( message );
+            mainLoopEnd = TimeUtils::sampleMicro();
+            _statistics.incLongAttribute( Statistics::TIME_MAIN_LOOP_MICRO,
+                                          TimeUtils::timePassed( mainLoopStart, mainLoopEnd ) );
+            return numSplits;
+        }
+        catch ( ... )
+        {
+            _exitCode = Engine::ERROR;
+            exportQueryWithError( "Unknown error" );
+            mainLoopEnd = TimeUtils::sampleMicro();
+            _statistics.incLongAttribute( Statistics::TIME_MAIN_LOOP_MICRO,
+                                          TimeUtils::timePassed( mainLoopStart, mainLoopEnd ) );
+            return numSplits;
         }
     }
 }
@@ -2687,7 +2981,14 @@ void Engine::decideBranchingHeuristics()
     DivideStrategy divideStrategy = Options::get()->getDivideStrategy();
     if ( divideStrategy == DivideStrategy::Auto )
     {
-        if ( !_produceUNSATProofs && !_preprocessedQuery->getInputVariables().empty() &&
+        if (GlobalConfiguration::USE_RANDOM_SEARCH)
+        {
+            divideStrategy = DivideStrategy::Random;
+            if ( _verbosity >= 2 )
+                printf( "Branching heuristics set to Random\n" );
+        }
+
+        else if ( !_produceUNSATProofs && !_preprocessedQuery->getInputVariables().empty() &&
              _preprocessedQuery->getInputVariables().size() <
                  GlobalConfiguration::INTERVAL_SPLITTING_THRESHOLD )
         {
@@ -2754,19 +3055,36 @@ PiecewiseLinearConstraint *Engine::pickSplitPLConstraintBasedOnPolarity()
 
 PiecewiseLinearConstraint *Engine::pickSplitPLConstraintRandomly()
 {
+    List<PiecewiseLinearConstraint *> constraints =
+    _networkLevelReasoner->getConstraintsInTopologicalOrder();
+    unsigned constraintIndex = rand() % constraints.size() ;
+    if ( constraintIndex >= constraints.size() )
+    {
+        throw std::out_of_range( "Index is out of bounds" );
+    }
 
-    int constraintIndex = rand() % _plConstraints.size() ;
-    PiecewiseLinearConstraint *plConstraint = indexToConstraint( constraintIndex );
+    auto it = constraints.begin();
+    std::advance( it, constraintIndex );
+
+    PiecewiseLinearConstraint *plConstraint = *it;
+
     while ( !plConstraint->isActive() || plConstraint->phaseFixed() )
     {
-        constraintIndex = rand() % _plConstraints.size() ;
-        plConstraint = indexToConstraint( constraintIndex );
+        constraintIndex = rand() % constraints.size() ;
+        if ( constraintIndex >= constraints.size() )
+        {
+            throw std::out_of_range( "Index is out of bounds" );
+        }
+
+         it = constraints.begin();
+        std::advance( it, constraintIndex );
+        plConstraint = *it;
     }
     printf(" random plConstraint: %d\n", constraintIndex);
     fflush(stdout);
     return plConstraint;
-
 }
+
 PiecewiseLinearConstraint *Engine::pickSplitPLConstraintBasedOnTopology()
 {
     // We push the first unfixed ReLU in the topology order to the _candidatePlConstraints
@@ -2831,7 +3149,9 @@ PiecewiseLinearConstraint *Engine::pickSplitPLConstraint( DivideStrategy strateg
     ENGINE_LOG( Stringf( "Picking a split PLConstraint..." ).ascii() );
 
     PiecewiseLinearConstraint *candidatePLConstraint = NULL;
-    if ( strategy == DivideStrategy::PseudoImpact )
+    if (strategy == DivideStrategy::Random)
+        candidatePLConstraint = pickSplitPLConstraintRandomly();
+    else if ( strategy == DivideStrategy::PseudoImpact )
     {
         if ( _smtCore.getStackDepth() > 3 )
             candidatePLConstraint = _smtCore.getConstraintsWithHighestScore();
@@ -2858,8 +3178,7 @@ PiecewiseLinearConstraint *Engine::pickSplitPLConstraint( DivideStrategy strateg
         // Conduct interval splitting periodically.
         candidatePLConstraint = pickSplitPLConstraintBasedOnIntervalWidth();
     }
-    else if (strategy == DivideStrategy::Random)
-        candidatePLConstraint = pickSplitPLConstraintRandomly();
+
     ENGINE_LOG(
         Stringf( ( candidatePLConstraint ? "Picked..."
                                          : "Unable to pick using the current strategy..." ) )

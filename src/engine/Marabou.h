@@ -31,7 +31,7 @@ public:
     /*
       Entry point of this class
     */
-    void run();
+    unsigned run();
 
 private:
     InputQuery _inputQuery;
@@ -46,7 +46,7 @@ private:
     /*
       Invoke the engine to solve the input query
     */
-    void solveQuery();
+    unsigned solveQuery();
 
     /*
       Display the results

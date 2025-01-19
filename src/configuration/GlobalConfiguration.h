@@ -31,6 +31,7 @@ public:
     // to non-linear constraint.
     static bool USE_DEEPSOI_LOCAL_SEARCH;
     static bool USE_RANDOM_SEARCH;
+    static unsigned int RANDOM_ITERATIONS;
 
     // The quantity by which the score is bumped up for PLContraints not
     // participating in the SoI. This promotes those constraints in the branching

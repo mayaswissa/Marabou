@@ -55,12 +55,12 @@ Marabou::~Marabou()
     }
 }
 
-void Marabou::run()
+unsigned Marabou::run()
 {
     struct timespec start = TimeUtils::sampleMicro();
-
+    unsigned numSplits = 0;
     prepareQuery();
-    solveQuery();
+    numSplits = solveQuery();
 
     struct timespec end = TimeUtils::sampleMicro();
 
@@ -69,6 +69,7 @@ void Marabou::run()
 
     if ( Options::get()->getBool( Options::EXPORT_ASSIGNMENT ) )
         exportAssignment();
+    return numSplits;
 }
 
 void Marabou::prepareQuery()
@@ -211,8 +212,9 @@ void Marabou::exportAssignment() const
     exportFile->close();
 }
 
-void Marabou::solveQuery()
+unsigned Marabou::solveQuery()
 {
+    unsigned numSplits = 0;
     enum {
         MICROSECONDS_IN_SECOND = 1000000
     };
@@ -221,7 +223,8 @@ void Marabou::solveQuery()
     unsigned timeoutInSeconds = Options::get()->getInt( Options::TIMEOUT );
     if ( _engine->processInputQuery( _inputQuery ) )
     {
-        _engine->solve( timeoutInSeconds );
+         numSplits = _engine->solveWithRandomness( timeoutInSeconds );
+        _engine->solve();
         if ( _engine->shouldProduceProofs() && _engine->getExitCode() == Engine::UNSAT )
             _engine->certifyUNSATCertificate();
     }
@@ -247,6 +250,7 @@ void Marabou::solveQuery()
     // constraints are indeed satisfied.
     if ( _engine->getExitCode() == Engine::SAT )
         _engine->extractSolution( _inputQuery );
+    return numSplits;
 }
 
 void Marabou::displayResults( unsigned long long microSecondsElapsed ) const

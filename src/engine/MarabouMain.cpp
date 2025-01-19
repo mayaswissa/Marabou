@@ -20,6 +20,8 @@
 #include "Marabou.h"
 #include "Options.h"
 
+#include <fstream>
+
 #ifdef ENABLE_OPENBLAS
 #include "cblas.h"
 #endif
@@ -131,6 +133,30 @@ int marabouMain( int argc, char **argv )
 #ifdef ENABLE_OPENBLAS
             openblas_set_num_threads( options->getInt( Options::NUM_BLAS_THREADS ) );
 #endif
+            if ( GlobalConfiguration::USE_RANDOM_SEARCH )
+            {
+                std::ofstream outFile(
+                    "/home/maya-swisa/Documents/Lab/origin/Marabou/numSplits.txt" );
+                if ( outFile.is_open() )
+                {
+                    for ( int randomIterations = 1; randomIterations < 50; ++randomIterations )
+                    {
+                        GlobalConfiguration::RANDOM_ITERATIONS = randomIterations;
+                        for ( int run = 0; run < 40; ++run )
+                        {
+                            options->setInt( Options::SEED, run );
+                            const unsigned numSplitsInRun = Marabou().run();
+                            outFile << numSplitsInRun << " ";
+                            outFile << std::flush;
+                            GlobalConfiguration::USE_RANDOM_SEARCH = true;
+                        }
+                        outFile << std::endl;
+                    }
+
+                }
+
+                outFile.close();
+            }
             Marabou().run();
         }
     }

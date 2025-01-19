@@ -29,6 +29,7 @@ const double GlobalConfiguration::EXPONENTIAL_MOVING_AVERAGE_ALPHA = 0.5;
 // to non-linear constraint.
 bool GlobalConfiguration::USE_DEEPSOI_LOCAL_SEARCH = false;
 bool GlobalConfiguration::USE_RANDOM_SEARCH = true;
+unsigned int GlobalConfiguration::RANDOM_ITERATIONS = 0;
 
 const double GlobalConfiguration::SCORE_BUMP_FOR_PL_CONSTRAINTS_NOT_IN_SOI = 5;
 

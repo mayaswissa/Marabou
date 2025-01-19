@@ -84,6 +84,7 @@ public:
       (a timeout of 0 means no time limit). Returns true if found, false if infeasible.
     */
     bool solve( double timeoutInSeconds = 0 );
+    unsigned solveWithRandomness( double timeoutInSeconds );
 
     /*
       Minimize the cost function with respect to the current set of linear constraints.
