@@ -52,27 +52,27 @@ void PrecisionRestorer::restorePrecision( IEngine &engine,
     Vector<double> groundUpperBoundsBackup;
     Vector<double> groundLowerBoundsBackup;
 
-    Vector<double> upperBoundsBackup;
-    Vector<double> lowerBoundsBackup;
+    Vector<double> upperBoundsBackup = Vector<double>( targetN, 0 );
+    Vector<double> lowerBoundsBackup = Vector<double>( targetN, 0 );
 
     if ( engine.shouldProduceProofs() )
     {
         groundUpperBoundsBackup = Vector<double>( targetN, 0 );
         groundLowerBoundsBackup = Vector<double>( targetN, 0 );
 
-        upperBoundsBackup = Vector<double>( targetN, 0 );
-        lowerBoundsBackup = Vector<double>( targetN, 0 );
-
         boundExplainerBackup = *engine.getBoundExplainer();
 
         for ( unsigned i = 0; i < targetN; ++i )
         {
-            lowerBoundsBackup[i] = tableau.getLowerBound( i );
-            upperBoundsBackup[i] = tableau.getUpperBound( i );
-
             groundUpperBoundsBackup[i] = engine.getGroundBound( i, Tightening::UB );
             groundLowerBoundsBackup[i] = engine.getGroundBound( i, Tightening::LB );
         }
+    }
+
+    for ( unsigned i = 0; i < targetN; ++i )
+    {
+        upperBoundsBackup[i] = tableau.getUpperBound( i );
+        lowerBoundsBackup[i] = tableau.getLowerBound( i );
     }
 
     // Store the case splits performed so far
@@ -143,15 +143,16 @@ void PrecisionRestorer::restorePrecision( IEngine &engine,
             engine.updateGroundUpperBound( i, groundUpperBoundsBackup[i] );
             engine.updateGroundLowerBound( i, groundLowerBoundsBackup[i] );
         }
-
-        for ( unsigned i = 0; i < targetN; ++i )
-        {
-            tableau.tightenUpperBoundNaively( i, upperBoundsBackup[i] );
-            tableau.tightenLowerBoundNaively( i, lowerBoundsBackup[i] );
-        }
-
-        engine.propagateBoundManagerTightenings();
     }
+
+    for ( unsigned i = 0; i < targetN; ++i )
+    {
+        tableau.tightenUpperBoundNaively( i, upperBoundsBackup[i] );
+        tableau.tightenLowerBoundNaively( i, lowerBoundsBackup[i] );
+    }
+
+    engine.propagateBoundManagerTightenings();
+
 
     // Restore constraint status
     for ( const auto &pair : targetEngineState._plConstraintToState )
@@ -160,19 +161,27 @@ void PrecisionRestorer::restorePrecision( IEngine &engine,
     engine.setNumPlConstraintsDisabledByValidSplits(
         targetEngineState._numPlConstraintsDisabledByValidSplits );
 
-    DEBUG( {
+    // DEBUG( {
         // Same dimensions
         ASSERT( GlobalConfiguration::USE_COLUMN_MERGING_EQUATIONS || tableau.getN() == targetN );
         ASSERT( GlobalConfiguration::USE_COLUMN_MERGING_EQUATIONS || tableau.getM() == targetM );
-
+        int index = 0;
         // Constraints should be in the same state before and after restoration
         for ( const auto &pair : targetEngineState._plConstraintToState )
         {
             ASSERT( pair.second->isActive() == pair.first->isActive() );
             // Only active constraints need to be synchronized
+            if (pair.second->isActive() &&
+                    pair.second->phaseFixed() != pair.first->phaseFixed())
+            {
+                printf("assertion validation index: %d\n", index);
+                printf("pair.second->phaseFixed() %d\n", pair.second->phaseFixed());
+                printf("pair.first->phaseFixed() %d\n", pair.first->phaseFixed() );
+            }
             ASSERT( !pair.second->isActive() ||
                     pair.second->phaseFixed() == pair.first->phaseFixed() );
             ASSERT( pair.second->constraintObsolete() == pair.first->constraintObsolete() );
+            index++;
         }
 
         EngineState currentEngineState;
@@ -182,5 +191,6 @@ void PrecisionRestorer::restorePrecision( IEngine &engine,
                 targetEngineState._numPlConstraintsDisabledByValidSplits );
 
         tableau.verifyInvariants();
-    } );
+    // }
+// );
 }
