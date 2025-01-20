@@ -140,7 +140,9 @@ double SmtCore::discoveredSubtrees( const unsigned numPlConstraints)
     {
         if (stackEntry->_alternativeSplits.empty())
         {
-            numDiscovered += pow(2, (numPlConstraints - currentDepth + 1)) - 1;
+            // printf("depth where no alternative: %d\n", currentDepth);
+            // fflush(stdout);
+            numDiscovered += pow(2, (numPlConstraints - currentDepth )) - 1;
         }
         currentDepth ++;
     }

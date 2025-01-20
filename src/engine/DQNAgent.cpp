@@ -92,14 +92,11 @@ Action Agent::tensorToAction( const torch::Tensor &tensor ) const
 
 
 void Agent::handleDone( const State &currentState,
-                        unsigned stackDepth,
-                        unsigned numSplits,
-                        const double rewardForDone,
-                        bool success )
+                        const unsigned stackDepth,
+                        const unsigned numSplits )
 {
-    // needs to insert all actions in actions buffer to the replay buffer and learn.
-    // The rewards of all steps in this branch, except of the last action remain the same.
-    _replayedBuffer.handleDone( currentState, success, stackDepth, numSplits, rewardForDone );
+    // Insert all actions from actions buffer to the replay buffer and learn.
+    _replayedBuffer.handleDone( currentState, stackDepth, numSplits );
     learn();
 }
 
@@ -126,8 +123,7 @@ void Agent::step( const State &previousState,
                   const bool changeReward )
 {
     // invalid step due to fixed pl constraint or not fixed phase in action.
-    if ( !changeReward )
-    {
+    if ( !changeReward || done )
         _replayedBuffer.addToRevisitExperiences( previousState,
                                                  action,
                                                  static_cast<float>( reward ),
@@ -136,20 +132,16 @@ void Agent::step( const State &previousState,
                                                  depth,
                                                  numSplits,
                                                  changeReward );
+    else
+    {
+        _replayedBuffer.pushActionEntry( action, previousState, currentState, depth, numSplits );
         _tStep = ( _tStep + 1 ) % UPDATE_EVERY;
         if ( _tStep == 0 && _replayedBuffer.getNumRevisitExperiences() > BATCH_SIZE )
             learn();
-        return;
     }
 
-    if ( done )
-        return;
-    // add new _actionEntry and push it to ActionsStack.
-    _replayedBuffer.pushActionEntry( action, previousState, currentState, depth, numSplits );
 
-    _tStep = ( _tStep + 1 ) % UPDATE_EVERY;
-    if ( _tStep == 0 && _replayedBuffer.getNumRevisitExperiences() > BATCH_SIZE )
-        learn();
+
 }
 
 Action Agent::act( const State &state, const double eps )
@@ -322,4 +314,9 @@ torch::Device Agent::getDevice() const
 int Agent::getActionStackSize() const
 {
     return _replayedBuffer.getActionStackSize();
+}
+
+int Agent::getReplayBufferSize() const
+{
+    return _replayedBuffer.getNumRevisitExperiences();
 }

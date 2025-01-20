@@ -27,15 +27,14 @@ void ReplayBuffer::pushActionEntry( const Action &action,
 }
 
 void ReplayBuffer::handleDone( const State &currentState,
-                               const bool /*success*/,
                                const unsigned stackDepth,
-                               const unsigned numSplits, double rewardForDone )
+                               const unsigned numSplits )
 {
-    // go over all actions in actionsStack and move them to revisitExperiences
-    // no need to go over alternative actions since they did not occur.
+    // Go over all actions in actionsStack and move them to revisitExperiences
     while ( !_actionsStack.empty() )
     {
         ActionsStack *actionEntry = _actionsStack.back();
+        // no need to insert alternative actions.
         while ( !actionEntry->_activeActions.empty() )
         {
             pushToRevisit( currentState, stackDepth, numSplits, actionEntry );
@@ -45,12 +44,6 @@ void ReplayBuffer::handleDone( const State &currentState,
         printf( "replay buffer: pop action entry, depth %u\n", _actionsStack.size() );
         fflush( stdout );
     }
-    if (!_revisitExperiences.empty())
-    {
-        _revisitExperiences.back().get()->_done = true;
-        // _revisitExperiences.back().get()->_reward = success ? 1 : -1;
-        _revisitExperiences.back().get()->_reward = rewardForDone;
-    }
 
 }
 
@@ -59,8 +52,8 @@ void ReplayBuffer::pushToRevisit( const State &stateAfterAction,
                                   const unsigned numSplits,
                                   ActionsStack *actionEntry )
 {
-    auto activeAction = actionEntry->_activeActions.back();
-    double reward = ( static_cast<double>( activeAction._splitsBeforeActiveAction ) -
+    const auto activeAction = actionEntry->_activeActions.back();
+    const double reward = ( static_cast<double>( activeAction._splitsBeforeActiveAction ) -
                       static_cast<double>( numSplits ) ) /
                     activeAction._action.getNumPlConstraints();
     addToRevisitExperiences( activeAction._stateBeforeAction,
@@ -83,7 +76,7 @@ void ReplayBuffer::applyNextAction( const State &stateAfterAction,
 {
     if ( _actionsStack.empty() )
     {
-        handleDone( stateAfterAction, true, depth, numSplits, 1 ); // todo check 1
+        handleDone( stateAfterAction, depth, numSplits ); // todo check 1
         return;
     }
 
@@ -111,7 +104,7 @@ void ReplayBuffer::applyNextAction( const State &stateAfterAction,
 
             if ( _actionsStack.empty() )
             {
-                handleDone( stateAfterAction, true, depth, numSplits, 1 ); // todo check 1
+                handleDone( stateAfterAction, depth, numSplits ); // todo check 1
                 return;
             }
         }

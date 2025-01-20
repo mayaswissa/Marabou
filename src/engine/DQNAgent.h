@@ -30,13 +30,14 @@ public:
                bool changeReward );
 
     void
-    handleDone( const State &currentState, unsigned stackDepth, unsigned numSplits, double rewardForDone,  bool success = false );
+    handleDone( const State &currentState, unsigned stackDepth, unsigned numSplits );
     Action act( const State &state, double eps = 0.1 );
     double updateLR();
     Action tensorToAction( const torch::Tensor &tensor ) const;
     void saveNetworks() const;
     void loadNetworks();
     int getActionStackSize() const;
+    int getReplayBufferSize() const;
 
 private:
     static void softUpdate( const QNetwork &localModel, const QNetwork &targetModel );
