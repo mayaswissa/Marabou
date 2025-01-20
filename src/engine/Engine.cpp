@@ -682,7 +682,7 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( double epsilon,
                 {
                     numSplitsByAgent++;
                     smtSteps.push_back( 2 );
-                    printf("pushed 2 to smtSteps");
+                    printf( "pushed 2 to smtSteps" );
                     fflush( stdout );
                 }
                 splitJustPerformed = true;
