@@ -146,7 +146,9 @@ double SmtCore::discoveredSubtrees( const unsigned numPlConstraints)
         }
         currentDepth ++;
     }
-    return numDiscovered / (2 ^ numPlConstraints);
+    // printf("num discovered nodes : %f\n", numDiscovered);
+    // fflush(stdout);
+    return numDiscovered / (pow(2, numPlConstraints ) - 1);
 }
 
 bool SmtCore::performSplit( const PhaseStatus *directionByAgent )
