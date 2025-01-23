@@ -53,9 +53,12 @@ void ReplayBuffer::pushToRevisit( const State &stateAfterAction,
                                   ActionsStack *actionEntry )
 {
     const auto activeAction = actionEntry->_activeActions.back();
-    const double reward = ( static_cast<double>( activeAction._splitsBeforeActiveAction ) -
+    double reward = ( static_cast<double>( activeAction._splitsBeforeActiveAction ) -
                       static_cast<double>( numSplits ) ) /
                     activeAction._action.getNumPlConstraints();
+    reward = std::copysign(std::log(1.0 + std::abs(reward) / 10.0 + 1e-8), reward);
+    printf("reward = %lf\n", reward );
+    fflush( stdout );
     addToRevisitExperiences( activeAction._stateBeforeAction,
                              activeAction._action,
                              reward,

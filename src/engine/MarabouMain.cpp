@@ -151,6 +151,8 @@ int marabouMain( int argc, char **argv )
                 GlobalConfiguration::DQN_TRAINING = false;
                 for ( unsigned int validations = 0; validations < 1; ++validations )
                 {
+                    printf( "Validation run\n" );
+                    fflush( stdout );
                     currEpisodeScore = 0;
                     agent = Marabou().runAgentTraining( epsilon, true, std::move( agent ) );
                     epsilon = std::max( GlobalConfiguration::DQN_EPSILON_END,

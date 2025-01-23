@@ -17,7 +17,7 @@ Agent::Agent( const unsigned numPlConstraints,
           QNetwork( _numPlConstraints, _numPhaseStatuses, _embeddingDim, _numActions ) )
     , optimizer( _qNetworkLocal.parameters(), torch::optim::AdamOptions( LR ).weight_decay( 1e-4 ) )
     , _replayedBuffer(
-          ReplayBuffer( _numPlConstraints * _numPhaseStatuses, _numPlConstraints, BATCH_SIZE ) )
+          ReplayBuffer( _numPlConstraints * _numPhaseStatuses, 10000 , BATCH_SIZE ) )
     , _tStep( 0 )
     , device( torch::cuda::is_available() ? torch::kCUDA : torch::kCPU )
     , _saveAgentFilePath( saveAgentPath )
