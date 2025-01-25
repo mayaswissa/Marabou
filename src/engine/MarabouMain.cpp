@@ -148,6 +148,7 @@ int marabouMain( int argc, char **argv )
                 }
 
                 // validation run:
+                GlobalConfiguration::USE_DQN = true;
                 GlobalConfiguration::DQN_TRAINING = false;
                 for ( unsigned int validations = 0; validations < 1; ++validations )
                 {
@@ -160,6 +161,8 @@ int marabouMain( int argc, char **argv )
                 }
                 printf( "start solving with trained agent\n" );
                 fflush( stdout );
+                GlobalConfiguration::USE_DQN = true;
+                GlobalConfiguration::USE_DEEPSOI_LOCAL_SEARCH = true;
                 if (agent != nullptr)
                     agent->saveNetworks();
                 Marabou().runAgentTraining( 1, false );

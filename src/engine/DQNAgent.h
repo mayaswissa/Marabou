@@ -52,10 +52,10 @@ private:
     unsigned _tStep;
     static constexpr double GAMMA = 0.9;
     static constexpr double TAU = 1e-3; // Soft Update Parameter for target network
-    static constexpr double LR = 5e-4;
+    static constexpr double LR = 4e-4;
     unsigned int learningSteps = 0;
     static constexpr unsigned UPDATE_EVERY = 4;
-    static constexpr unsigned BATCH_SIZE = 100;
+    static constexpr unsigned BATCH_SIZE = 500;
     torch::Device device;
     const std::string _saveAgentFilePath;
     const std::string _trainedAgentFilePath;

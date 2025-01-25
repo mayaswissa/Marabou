@@ -22,8 +22,8 @@ void ReplayBuffer::pushActionEntry( const Action &action,
     auto *actionEntry =
         new ActionsStack( action, stateBeforeAction, stateAfterAction, depth, numSplits );
     _actionsStack.append( actionEntry );
-    printf( "replay buffer: add action entry, depth %u\n", _actionsStack.size() );
-    fflush( stdout );
+    // printf( "replay buffer: add action entry, depth %u\n", _actionsStack.size() );
+    // fflush( stdout );
 }
 
 void ReplayBuffer::handleDone( const State &currentState,
@@ -31,6 +31,8 @@ void ReplayBuffer::handleDone( const State &currentState,
                                const unsigned numSplits )
 {
     // Go over all actions in actionsStack and move them to revisitExperiences
+    printf("ReplayBuffer::handleDone()\n");
+    fflush( stdout );
     while ( !_actionsStack.empty() )
     {
         ActionsStack *actionEntry = _actionsStack.back();
@@ -41,8 +43,8 @@ void ReplayBuffer::handleDone( const State &currentState,
         }
         delete _actionsStack.back();
         _actionsStack.popBack();
-        printf( "replay buffer: pop action entry, depth %u\n", _actionsStack.size() );
-        fflush( stdout );
+        //printf( "replay buffer: pop action entry, depth %u\n", _actionsStack.size() );
+        //fflush( stdout );
     }
 
 }
@@ -86,8 +88,8 @@ void ReplayBuffer::applyNextAction( const State &stateAfterAction,
     ActionsStack *actionEntry;
     //  no alternative splits for previous actions - pop this entry and move activeActions to
     //  revisit Buffer.
-    printf( "ReplayBuffer::applyNextAction\n" );
-    fflush( stdout );
+    // printf( "ReplayBuffer::applyNextAction\n" );
+    // fflush( stdout );
     while ( numInconsistent > 0 )
     {
         while ( _actionsStack.back()->_alternativeActions.empty() )
@@ -97,13 +99,13 @@ void ReplayBuffer::applyNextAction( const State &stateAfterAction,
             while ( !actionEntry->_activeActions.empty() )
             {
                 pushToRevisit( stateAfterAction, depth, numSplits, actionEntry );
-                printf( "replay buffer: applyNextAction, pop activeAction\n" );
-                fflush( stdout );
+                // printf( "replay buffer: applyNextAction, pop activeAction\n" );
+                // fflush( stdout );
             }
             delete _actionsStack.back();
             _actionsStack.popBack();
-            printf( "replay buffer: pop entry, depth after pop: %u\n", _actionsStack.size() );
-            fflush( stdout );
+            // printf( "replay buffer: pop entry, depth after pop: %u\n", _actionsStack.size() );
+            // fflush( stdout );
 
             if ( _actionsStack.empty() )
             {
@@ -122,9 +124,9 @@ void ReplayBuffer::applyNextAction( const State &stateAfterAction,
                                                           numSplits ) );
         actionEntry->_alternativeActions.erase( action );
         numInconsistent--;
-        printf( "replay buffer: erased alternative, move it to active, depth: %u\n",
-                _actionsStack.size() );
-        fflush( stdout );
+        // printf( "replay buffer: erased alternative, move it to active, depth: %u\n",
+        //         _actionsStack.size() );
+        // fflush( stdout );
     }
 }
 

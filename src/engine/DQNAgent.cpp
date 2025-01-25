@@ -182,8 +182,8 @@ Action Agent::act( const State &state, const double eps )
     }
     else
     {
-        printf( "chose randomly\n" );
-        fflush( stdout );
+        // printf( "chose randomly\n" );
+        // fflush( stdout );
         std::vector<unsigned> validConstraints;
         for ( unsigned i = 0; i < _numPlConstraints; ++i )
         {

@@ -27,7 +27,7 @@ const double GlobalConfiguration::EXPONENTIAL_MOVING_AVERAGE_ALPHA = 0.5;
 
 // Whether to use SoI instead of Reluplex for local search for satisfying assignments
 // to non-linear constraint.
-bool GlobalConfiguration::USE_DEEPSOI_LOCAL_SEARCH = false;
+bool GlobalConfiguration::USE_DEEPSOI_LOCAL_SEARCH = true;
 
 //Use Deep Q-Network to decide which branch to take first in a case split
 bool GlobalConfiguration::USE_DQN = true;
