@@ -1,63 +1,76 @@
 #include "DQNState.h"
 
-State::State( unsigned numConstraints, unsigned numPhases )
-    : _stateData( numConstraints, std::vector<int>( numPhases, 0 ) )
+State::State( const unsigned numConstraints, const unsigned numPhases )
+    : _stateData( numConstraints, std::vector<double>( numPhases + 2, 0.0f ) )
     , _numPhases( numPhases )
 {
     // set all phases not fixed
     for ( unsigned i = 0; i < numConstraints; ++i )
     {
-        _stateData[i][0] = 1;
+        _stateData[i][0] = 1.0;              // Default not fixed phase
+        _stateData[i][numPhases] = 0.0f;     // Default upper bound
+        _stateData[i][numPhases + 1] = 0.0f; // Default lower bound
     }
 }
 
-State::State(const State& other)
-    : _stateData(other._stateData),
-      _numPhases(other._numPhases)
+State::State( const State &other )
+    : _stateData( other._stateData )
+    , _numPhases( other._numPhases )
 {
 }
-State& State::operator=(const State& other) {
-    if (this == &other) {
+State &State::operator=( const State &other )
+{
+    if ( this == &other )
         return *this;
-    }
 
     _stateData = other._stateData;
     _numPhases = other._numPhases;
-
     return *this;
 }
 
-torch::Tensor State::toTensor() const
-{
-    std::vector<float> flatData;
-    for ( const auto &constraint : _stateData )
-    {
-        for ( int phase : constraint )
-        {
-            flatData.push_back( static_cast<float>( phase ) );
+torch::Tensor State::toTensor() const {
+    std::vector<int64_t> phaseData;
+    std::vector< double> boundsData;
+    unsigned numConstraints = _stateData.size();
+    for (const auto& constraint : _stateData) {
+        for (size_t i = 0; i < constraint.size() - 2; ++i) {
+            phaseData.push_back(static_cast<int64_t>(constraint[i]));  // Collect phase indices
         }
+        boundsData.push_back(static_cast<double>(constraint[constraint.size() - 2]));  // Collect upper bound
+        boundsData.push_back(static_cast<double>(constraint[constraint.size() - 1]));  // Collect lower bound
     }
-    auto tensor = torch::tensor(flatData, torch::kInt64);
 
-    return tensor.view({1, static_cast<long>(flatData.size())});
+    auto phaseTensor = torch::tensor(phaseData, torch::kInt64).view({numConstraints, _numPhases});
+    auto boundsTensor = torch::tensor(boundsData, torch::kFloat32).view({numConstraints, 2});
+
+    return torch::cat({phaseTensor, boundsTensor}, 1);
 }
+
 
 void State::updateConstraintPhase( const unsigned constraintIndex, const unsigned newPhase )
 {
-    if ( constraintIndex < static_cast<unsigned>(_stateData.size()) && newPhase < _numPhases )
+    if ( constraintIndex < static_cast<unsigned>( _stateData.size() ) && newPhase < _numPhases )
     {
-        // reset this constraint's vector to zeros and assign 1 to the new phase's enrty
-        std::fill( _stateData[constraintIndex].begin(), _stateData[constraintIndex].end(), 0 );
-        _stateData[constraintIndex][newPhase] = 1;
+        // reset this constraint's vector to zeros and assign 1 to the new phase's entry
+        std::fill_n( _stateData[constraintIndex].begin(),
+                   _numPhases,
+                   0.0f );
+        _stateData[constraintIndex][newPhase] = 1.0f;
     }
 }
 
-const std::vector<std::vector<int>> &State::getData() const
+void State::updateBounds( const unsigned constraintIndex,
+                       const double upperBound,
+                       const double lowerBound )
 {
-    return _stateData;
+    if ( constraintIndex < _stateData.size() )
+    {
+        _stateData[constraintIndex][_numPhases] = upperBound;
+        _stateData[constraintIndex][_numPhases + 1] = lowerBound;
+    }
 }
 
-int State::encodeStateIndex( const std::pair<int, int> &element ) const
+const std::vector<std::vector<double>> &State::getData() const
 {
-    return element.first * _numPhases + element.second;
+    return _stateData;
 }
