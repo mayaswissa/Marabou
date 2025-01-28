@@ -1,4 +1,4 @@
-cmake_minimum_required (VERSION 3.12)
+cmake_minimum_required (VERSION 3.16)
 project(Marabou)
 
 set(MARABOU_VERSION 2.0.0)
@@ -22,7 +22,7 @@ option(RUN_PYTHON_TEST "Run Python API tests if building with Python" OFF)
 option(ENABLE_GUROBI "Enable use the Gurobi optimizer" OFF)
 option(ENABLE_OPENBLAS "Do symbolic bound tighting using blas" OFF) # Not available on Windows
 option(CODE_COVERAGE "Add code coverage" OFF)  # Available only in debug mode
-
+option(BUILD_TORCH "Build libtorch" ON)
 ###################
 ## Git variables ##
 ###################
@@ -94,16 +94,14 @@ else()
 endif()
 
 set(Boost_USE_DEBUG_RUNTIME FALSE)
-find_package(Boost ${BOOST_VERSION} QUIET COMPONENTS program_options timer chrono thread)
+find_package(Boost ${BOOST_VERSION} COMPONENTS program_options timer chrono thread)
 # Find boost
 if (NOT ${Boost_FOUND})
     execute_process(COMMAND ${TOOLS_DIR}/download_boost.${SCRIPT_EXTENSION} ${BOOST_VERSION})
-    set(Boost_NO_SYSTEM_PATHS ON)
     find_package(Boost ${BOOST_VERSION} REQUIRED COMPONENTS program_options timer chrono thread)
 endif()
 set(LIBS_INCLUDES ${Boost_INCLUDE_DIRS})
 list(APPEND LIBS ${Boost_LIBRARIES})
-
 
 ##############
 ## Protobuf ##
@@ -152,21 +150,29 @@ include_directories(SYSTEM ${ONNX_DIR})
 ## Pytorch ##
 #############
 
-
-set(PYTORCH_VERSION 2.2.1)
-find_package(Torch ${PYTORCH_VERSION} QUIET)
-if (NOT Torch_FOUND)
-    set(PYTORCH_DIR "${TOOLS_DIR}/libtorch-${PYTORCH_VERSION}")
-    list(APPEND CMAKE_PREFIX_PATH ${PYTORCH_DIR})
-    if(NOT EXISTS "${PYTORCH_DIR}")
-        execute_process(COMMAND ${TOOLS_DIR}/download_libtorch.sh ${PYTORCH_VERSION})
+if (${BUILD_TORCH})
+    message(STATUS "Using pytorch")
+    if (NOT DEFINED BUILD_TORCH)
+        set(BUILD_TORCH $ENV{TORCH_HOME})
+        add_definitions(-DBUILD_TORCH)
     endif()
-    set(Torch_DIR ${PYTORCH_DIR}/share/cmake/Torch)
-    find_package(Torch ${PYTORCH_VERSION} REQUIRED)
-endif()
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS}")
-list(APPEND LIBS ${TORCH_LIBRARIES})
-
+    add_compile_definitions(BUILD_TORCH)
+    set(PYTORCH_VERSION 2.2.1)
+    find_package(Torch ${PYTORCH_VERSION} QUIET)
+    if (NOT Torch_FOUND)
+        set(PYTORCH_DIR "${TOOLS_DIR}/libtorch-${PYTORCH_VERSION}")
+        list(APPEND CMAKE_PREFIX_PATH ${PYTORCH_DIR})
+        if(NOT EXISTS "${PYTORCH_DIR}")
+            execute_process(COMMAND ${TOOLS_DIR}/download_libtorch.sh ${PYTORCH_VERSION})
+            set(Torch_NO_SYSTEM_PATHS ON)
+        endif()
+        set(Torch_DIR ${PYTORCH_DIR}/share/cmake/Torch)
+        find_package(Torch ${PYTORCH_VERSION} REQUIRED)
+    endif()
+    set(TORCH_CXX_FLAGS "-Wno-error=array-bounds")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS}")
+    list(APPEND LIBS ${TORCH_LIBRARIES})
+endif ()
 ############
 ## Gurobi ##
 ############
@@ -179,7 +185,7 @@ if (${ENABLE_GUROBI})
     add_compile_definitions(ENABLE_GUROBI)
 
     set(GUROBI_LIB1 "gurobi_c++")
-    set(GUROBI_LIB2 "gurobi95")
+    set(GUROBI_LIB2 "gurobi110")
 
     add_library(${GUROBI_LIB1} SHARED IMPORTED)
     set_target_properties(${GUROBI_LIB1} PROPERTIES IMPORTED_LOCATION ${GUROBI_DIR}/lib/libgurobi_c++.a)
@@ -190,9 +196,9 @@ if (${ENABLE_GUROBI})
 
     # MACOSx uses .dylib instead of .so for its Gurobi downloads.
     if (APPLE)
-        set_target_properties(${GUROBI_LIB2} PROPERTIES IMPORTED_LOCATION ${GUROBI_DIR}/lib/libgurobi95.dylib)
+        set_target_properties(${GUROBI_LIB2} PROPERTIES IMPORTED_LOCATION ${GUROBI_DIR}/lib/libgurobi110.dylib)
     else()
-        set_target_properties(${GUROBI_LIB2} PROPERTIES IMPORTED_LOCATION ${GUROBI_DIR}/lib/libgurobi95.so)
+        set_target_properties(${GUROBI_LIB2} PROPERTIES IMPORTED_LOCATION ${GUROBI_DIR}/lib/libgurobi110.so)
     endif ()
 
     list(APPEND LIBS ${GUROBI_LIB2})
@@ -291,8 +297,7 @@ target_include_directories(${MARABOU_LIB} PRIVATE SYSTEM)
 
 set(MARABOU_EXE Marabou${CMAKE_EXECUTABLE_SUFFIX})
 
-add_executable(${MARABOU_EXE} "${ENGINE_DIR}/main.cpp"
-        )
+add_executable(${MARABOU_EXE} "${ENGINE_DIR}/main.cpp")
 set(MARABOU_EXE_PATH "${BIN_DIR}/${MARABOU_EXE}")
 add_custom_command(TARGET ${MARABOU_EXE} POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:${MARABOU_EXE}> ${MARABOU_EXE_PATH} )
@@ -301,15 +306,14 @@ set(MPS_PARSER_PATH "${BIN_DIR}/${MPS_PARSER}")
 
 if (NOT MSVC)
     if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-        set(COMPILE_FLAGS -Wall -Wextra -Werror -MMD -Qunused-arguments -Wno-deprecated-declarations -Wno-unused-but-set-variable -Wno-error=array-bounds)
+        set(COMPILE_FLAGS  -Wall -Wextra -Werror -MMD -Qunused-arguments -Wno-deprecated-declarations -Wno-unused-but-set-variable )
     elseif (CMAKE_BUILD_TYPE MATCHES "Release")
-        set(COMPILE_FLAGS -Wall -Wno-error=array-bounds)
+        set(COMPILE_FLAGS  -Wall )
     else()
-        set(COMPILE_FLAGS -Wall -Wextra -Werror -MMD -Wno-error=array-bounds) #-Wno-deprecated
+        set(COMPILE_FLAGS  -Wall -Wextra -Werror -MMD ) #-Wno-deprecated
     endif()
     set(RELEASE_FLAGS ${COMPILE_FLAGS} -O3) #-Wno-deprecated
 endif()
-
 
 if (RUN_MEMORY_TEST)
     if(NOT MSVC)
@@ -349,8 +353,6 @@ target_compile_options(${MARABOU_LIB} PRIVATE ${RELEASE_FLAGS})
 # Build marabou executable
 target_link_libraries(${MARABOU_EXE} ${MARABOU_LIB})
 target_include_directories(${MARABOU_EXE} PRIVATE ${LIBS_INCLUDES})
-
-
 
 ######################
 ## Build Python API ##
