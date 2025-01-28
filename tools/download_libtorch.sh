@@ -2,6 +2,7 @@
 curdir=$pwd
 mydir="${0%/*}"
 version=$1
+
 cd $mydir
 
 # Need to download the cxx11-abi version of libtorch in order to ensure compatability
