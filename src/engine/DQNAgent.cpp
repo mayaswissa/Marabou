@@ -16,8 +16,7 @@ Agent::Agent( const unsigned numPlConstraints,
     , _qNetworkTarget(
           QNetwork( _numPlConstraints, _numPhaseStatuses, _embeddingDim, _numActions ) )
     , optimizer( _qNetworkLocal.parameters(), torch::optim::AdamOptions( LR ).weight_decay( 1e-4 ) )
-    , _replayedBuffer(
-          ReplayBuffer( _numPlConstraints * _numPhaseStatuses, 10000 , BATCH_SIZE ) )
+    , _replayedBuffer( ReplayBuffer( _numPlConstraints * _numPhaseStatuses, 10000, BATCH_SIZE ) )
     , _tStep( 0 )
     , device( torch::cuda::is_available() ? torch::kCUDA : torch::kCPU )
     , _saveAgentFilePath( saveAgentPath )
@@ -25,8 +24,8 @@ Agent::Agent( const unsigned numPlConstraints,
 {
     _qNetworkLocal.to( device );
     _qNetworkTarget.to( device );
-    _qNetworkTarget.to( torch::kDouble );
-    _qNetworkTarget.to( torch::kDouble );
+    _qNetworkLocal.to( torch::kFloat32 );
+    _qNetworkTarget.to( torch::kFloat32 );
     // If a load path is provided, load the networks
     if ( !trainedAgentPath.empty() )
     {
@@ -139,9 +138,6 @@ void Agent::step( const State &previousState,
         if ( _tStep == 0 && _replayedBuffer.getNumRevisitExperiences() > BATCH_SIZE )
             learn();
     }
-
-
-
 }
 
 Action Agent::act( const State &state, const double eps )
@@ -203,13 +199,15 @@ Action Agent::act( const State &state, const double eps )
         _numPhaseStatuses, _numPlConstraints, actionIndices.first, actionIndices.second );
 }
 
-double Agent::updateLR() {
+double Agent::updateLR()
+{
     learningSteps++;
 
-    auto newLR =  LR * pow(GAMMA, learningSteps);
-    for (auto& param_group : optimizer.param_groups()) {
-        auto& options = static_cast<torch::optim::AdamOptions&>(param_group.options());
-        options.lr(newLR);
+    auto newLR = LR * pow( GAMMA, learningSteps );
+    for ( auto &param_group : optimizer.param_groups() )
+    {
+        auto &options = static_cast<torch::optim::AdamOptions &>( param_group.options() );
+        options.lr( newLR );
     }
     return newLR;
 }
@@ -229,25 +227,30 @@ void Agent::learn()
         if ( index < _replayedBuffer.getNumRevisitExperiences() )
         {
             Experience &experience = _replayedBuffer.getRevisitExperienceAt( index );
-            previousStates.push_back( experience._stateBeforeAction.toTensor().to( device ) );
+            previousStates.push_back(
+                experience._stateBeforeAction.toTensor().unsqueeze( 0 ).to( device ) );
             actions.push_back( experience._action.actionToTensor().to( device ) );
             rewards.push_back( experience._reward );
-            nextStates.push_back( experience._stateAfterAction.toTensor().to( device ) );
+            nextStates.push_back(
+                experience._stateAfterAction.toTensor().unsqueeze( 0 ).to( device ) );
             dones.push_back( static_cast<uint8_t>( experience._done ) );
         }
     }
 
-    // Create tensors from vectors
-    const auto statesTensor = torch::cat( previousStates, 0 ).to( device );
-    const auto actionsTensor = torch::cat( actions, 0 ).to( device );
+    // Concatenate tensors along the batch dimension
+    const auto statesTensor = torch::cat( previousStates, 0 );
+    const auto actionsTensor = torch::cat( actions, 0 ).view( { -1, 1 } );
     const auto rewardsTensor =
-        torch::tensor( rewards, torch::dtype( torch::kFloat64 ) ).to( device );
+        torch::tensor( rewards, torch::dtype( torch::kFloat32 ) ).to( device );
     const auto nextStatesTensor = torch::cat( nextStates, 0 );
     const auto doneTensor = torch::tensor( dones, torch::dtype( torch::kUInt8 ) ).to( device );
 
-    auto QExpected = _qNetworkLocal.forward(statesTensor).gather(1, actionsTensor.unsqueeze(-1)).squeeze(-1).to(torch::kDouble);
+    auto QExpected = _qNetworkLocal.forward(statesTensor).gather( 1, actionsTensor )
+                         .squeeze( -1 )
+                         .to( torch::kFloat32 );
     auto QTargets = rewardsTensor;
-    if (GlobalConfiguration::DQN_TRAINING)
+
+    if ( GlobalConfiguration::DQN_TRAINING )
     {
         // Double DQN : Use local network to select the best action for next states
         const auto forwardLocalNet = _qNetworkLocal.forward( nextStatesTensor );
@@ -255,17 +258,29 @@ void Agent::learn()
 
         // Use target network to calculate the Q-value of these actions
         const auto forwardTargetNet = _qNetworkTarget.forward( nextStatesTensor );
-        const auto targetQValuesNextState =
-            forwardTargetNet.detach().gather( 1, localQValuesNextState.unsqueeze( -1 ) ).squeeze( -1 );
+        const auto targetQValuesNextState = forwardTargetNet.detach()
+                                                .gather( 1, localQValuesNextState.unsqueeze( -1 ) )
+                                                .squeeze( -1 );
         // Calculate Q targets for current states
         QTargets =
-            rewardsTensor + GAMMA * targetQValuesNextState * ( 1 - doneTensor.to( torch::kFloat64 ) );
-
+        rewardsTensor + GAMMA * targetQValuesNextState * ( 1 - doneTensor.to( torch::kFloat32 ) );
+        std::cout << "QTargets min: " << QTargets.min().item<double>()
+          << ", max: " << QTargets.max().item<double>() << std::endl;
         QExpected = _qNetworkLocal.forward( statesTensor )
-                                   .gather( 1, actionsTensor.unsqueeze( -1 ) )
-                                   .squeeze( -1 )
-                                   .to( torch::kDouble );
+                        .gather( 1, actionsTensor )
+                        .squeeze( -1 )
+                        .to( torch::kFloat32 );
 
+        if (torch::isnan(QTargets).any().item<bool>()) {
+            std::cerr << "Error: QTargets contains NaN values!" << std::endl;
+            throw std::runtime_error("NaN detected in QTargets.");
+        }
+        for (const auto& param : _qNetworkLocal.parameters()) {
+            if (param.grad().defined() && torch::isnan(param.grad()).any().item<bool>()) {
+                std::cerr << "Error: NaN detected in gradients!" << std::endl;
+                throw std::runtime_error("NaN gradients detected.");
+            }
+        }
 
         const auto loss = torch::mse_loss( QExpected, QTargets );
         printf( "Loss: %f\n", loss.item<double>() );
@@ -285,13 +300,12 @@ void Agent::learn()
         }
         optimizer.step();
         softUpdate( _qNetworkLocal, _qNetworkTarget );
-    }else
-    {
-        const auto loss = torch::mse_loss(QExpected, QTargets);
-        printf("Validation Loss: %f\n", loss.item<double>());
     }
-
-
+    else
+    {
+        const auto loss = torch::mse_loss( QExpected, QTargets );
+        printf( "Validation Loss: %f\n", loss.item<double>() );
+    }
 }
 
 

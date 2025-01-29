@@ -8,8 +8,6 @@ State::State( const unsigned numConstraints, const unsigned numPhases )
     for ( unsigned i = 0; i < numConstraints; ++i )
     {
         _stateData[i][0] = 1.0;              // Default not fixed phase
-        _stateData[i][numPhases] = 0.0f;     // Default upper bound
-        _stateData[i][numPhases + 1] = 0.0f; // Default lower bound
     }
 }
 

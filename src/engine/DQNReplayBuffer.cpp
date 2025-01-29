@@ -171,7 +171,7 @@ Vector<unsigned> ReplayBuffer::sample() const
     unsigned startIndex = 0;
     unsigned endIndex = getNumRevisitExperiences() - 1;
 
-    unsigned rangeSize = endIndex - startIndex;
+    unsigned rangeSize = endIndex - startIndex + 1;
     unsigned sampleSize = std::min( _batchSize, rangeSize );
 
     Vector<unsigned> indices( rangeSize );

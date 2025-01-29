@@ -3,6 +3,8 @@
 #undef Warning
 #include <torch/torch.h>
 
+
+#endif
 class QNetwork final : public torch::nn::Module
 {
 public:
@@ -28,6 +30,5 @@ private:
     unsigned _numPhases;
     unsigned _embeddingDim;
     unsigned _numBounds;
+    unsigned _numConstraints;
 };
-
-#endif

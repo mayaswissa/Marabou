@@ -11,14 +11,9 @@ QNetwork::QNetwork( const unsigned numPlConstraints,
     , _embeddingDim( embeddingDim )
     , _numBounds( 2 )
 {
-    _inputDim = numPhases * embeddingDim + _numBounds;
-    _inputDim = numPlConstraints * (_numPhases * embeddingDim + _numBounds);
+    _inputDim = numPlConstraints * ( _numPhases * embeddingDim + _numBounds );
     _outputDim = numActions;
-    std::cout << "number of constraints: " << numPlConstraints << std::endl;
-    std::cout << "number phases: " << _numPhases << std::endl;
-    std::cout << "Phase data size: " << _numPhases * embeddingDim << std::endl;
-    std::cout << "Bounds size: " << _numBounds << std::endl;
-    std::cout << "Input dimension: " << _inputDim << std::endl;
+    _numConstraints = numPlConstraints;
     fc1 = register_module( "fc1", torch::nn::Linear( _inputDim, 64 ) );
     fc2 = register_module( "fc2", torch::nn::Linear( 64, 128 ) );
     fc3 = register_module( "fc3", torch::nn::Linear( 128, 256 ) );
@@ -45,43 +40,57 @@ void QNetwork::initWeights()
         torch::nn::init::constant_( fc4->bias, 0.0 );
 }
 
-torch::Tensor QNetwork::forward(const torch::Tensor &state)
+torch::Tensor QNetwork::forward( const torch::Tensor &state )
 {
-    auto phases = state.narrow(1, 0, _numPhases ).to(torch::kInt64);
-    auto bounds = state.narrow(1, _numPhases, _numBounds).to(torch::kDouble);
+    auto stateWithBatch = state.to(torch::kFloat32);
+    if ( state.sizes().size() == 2 )
+        stateWithBatch = state.unsqueeze( 0 ); // Add batch dimension
 
-    // Debugging prints to verify dimensions at each step
-    std::cout << "Phase tensor size: " << phases.sizes() << std::endl;
-    std::cout << "Bounds tensor size: " << bounds.sizes() << std::endl;
+    const auto phases = stateWithBatch.narrow( 2, 0, _numPhases ).to( torch::kInt64 );
+    const auto bounds = stateWithBatch.narrow( 2, _numPhases, _numBounds ).to( torch::kFloat64 );
 
-    if (phases.any().item<bool>() &&
-        (phases.min().item<int>() < 0 || phases.max().item<int>() >= static_cast<int>(_numPhases))) {
+    if ( phases.any().item<bool>() &&
+         ( phases.min().item<int>() < 0 ||
+           phases.max().item<int>() >=
+               static_cast<int>( _statusEmbedding->options.num_embeddings() ) ) )
+    {
         std::cerr << "Phase index out of bounds: Min " << phases.min().item<int>() << ", Max "
-                  << phases.max().item<int>() << " vs _numPhases " << _numPhases << std::endl;
-        throw std::runtime_error("Phase index out of embedding bounds.");
-        }
-
-    // Applying the embedding layer
-    auto embedded = _statusEmbedding->forward(phases);
-    auto embeddedFlattened = embedded.view({embedded.size(0), -1});
-
-    // Concatenate the bounds with the flattened embedded tensor
-    auto fullInput = torch::cat({embeddedFlattened, bounds}, 1);
-    fullInput = fullInput.view({1, -1});
-    std::cout << "Embedded size: " << embeddedFlattened.sizes() << std::endl;
-    std::cout << "bounds size: " << bounds.sizes() << std::endl;
-    std::cout << "Full input size: " << fullInput.sizes() << std::endl;
-
-    if (fullInput.sizes().size() != 2 || fullInput.size( 1 ) != fc1->options.in_features()) {
-        std::cerr << "Invalid state size: Expected [batch_size, " << fc1->options.in_features()
-                  << "], got " << fullInput.sizes() << std::endl;
-        throw std::runtime_error("Invalid state size received by QNetwork");
+                  << phases.max().item<int>() << " vs num_embeddings "
+                  << _statusEmbedding->options.num_embeddings() << std::endl;
+        throw std::runtime_error( "Phase index out of embedding bounds." );
     }
 
-    auto x = torch::relu(fc1(fullInput));
-    x = torch::relu(fc2(x));
-    x = torch::relu(fc3(x));
-    auto output = fc4(x);
+    // Applying the embedding layer
+    auto embedded = _statusEmbedding->forward( phases );
+    auto embeddedFlattened = embedded.view( { embedded.size( 0 ), -1 } );
+
+    auto boundsFlattened = bounds.view( { bounds.size( 0 ), -1 } );
+    auto fullInput = torch::cat( { embeddedFlattened, boundsFlattened }, 1 );
+    fullInput = fullInput.to( torch::kFloat32 );
+
+    if ( fullInput.sizes().size() != 2 || fullInput.size( 1 ) != fc1->options.in_features() )
+    {
+        std::cerr << "Invalid input tensor size: Expected [batch_size, "
+                  << fc1->options.in_features() << "], got " << fullInput.sizes() << std::endl;
+        throw std::runtime_error( "Invalid input tensor size." );
+    }
+
+    if ( torch::isnan( fullInput ).any().item<bool>() ||
+         torch::isinf( fullInput ).any().item<bool>() )
+    {
+        std::cerr << "Error: fullInput contains NaN or Inf values!" << std::endl;
+        throw std::runtime_error( "NaN/Inf detected in fullInput." );
+    }
+
+    auto x = torch::relu( fc1( fullInput ) );
+    x = torch::relu( fc2( x ) );
+    x = torch::relu( fc3( x ) );
+    auto output = fc4( x );
+    // If the input was a single state, remove batch dimension from output
+    if ( state.sizes().size() == 2 )
+    {
+        output = output.squeeze( 0 );
+    }
     return output;
 }
 
