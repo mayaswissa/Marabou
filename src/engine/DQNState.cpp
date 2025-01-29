@@ -30,18 +30,20 @@ torch::Tensor State::toTensor() const {
     std::vector<int64_t> phaseData;
     std::vector< double> boundsData;
     unsigned numConstraints = _stateData.size();
+    unsigned counter = 0;
     for (const auto& constraint : _stateData) {
-        for (size_t i = 0; i < constraint.size() - 2; ++i) {
+        counter += constraint.size();
+        for (size_t i = 0; i < constraint.size() - 2; ++i)
             phaseData.push_back(static_cast<int64_t>(constraint[i]));  // Collect phase indices
-        }
-        boundsData.push_back(static_cast<double>(constraint[constraint.size() - 2]));  // Collect upper bound
-        boundsData.push_back(static_cast<double>(constraint[constraint.size() - 1]));  // Collect lower bound
+        double upperBound = std::tanh(constraint[constraint.size() - 2]);
+        double lowerBound = std::tanh(constraint[constraint.size() - 1]);
+        boundsData.push_back(upperBound);
+        boundsData.push_back(lowerBound);
     }
-
     auto phaseTensor = torch::tensor(phaseData, torch::kInt64).view({numConstraints, _numPhases});
     auto boundsTensor = torch::tensor(boundsData, torch::kFloat32).view({numConstraints, 2});
-
-    return torch::cat({phaseTensor, boundsTensor}, 1);
+    auto tensorState = torch::cat({phaseTensor, boundsTensor}, 1);
+    return tensorState;
 }
 
 
