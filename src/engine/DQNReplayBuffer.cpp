@@ -28,38 +28,40 @@ void ReplayBuffer::pushActionEntry( const Action &action,
 
 void ReplayBuffer::handleDone( const State &currentState,
                                const unsigned stackDepth,
-                               const unsigned numSplits )
+                               const unsigned numSplits,
+                               const double prunedSubtrees )
 {
     // Go over all actions in actionsStack and move them to revisitExperiences
-    printf("ReplayBuffer::handleDone()\n");
-    fflush( stdout );
     while ( !_actionsStack.empty() )
     {
         ActionsStack *actionEntry = _actionsStack.back();
         // no need to insert alternative actions.
         while ( !actionEntry->_activeActions.empty() )
-        {
-            pushToRevisit( currentState, stackDepth, numSplits, actionEntry );
-        }
+            pushToRevisit( currentState, stackDepth, numSplits, actionEntry, prunedSubtrees );
+
         delete _actionsStack.back();
         _actionsStack.popBack();
-        //printf( "replay buffer: pop action entry, depth %u\n", _actionsStack.size() );
-        //fflush( stdout );
+        // printf( "replay buffer: pop action entry, depth %u\n", _actionsStack.size() );
+        // fflush( stdout );
     }
-
 }
 
 void ReplayBuffer::pushToRevisit( const State &stateAfterAction,
                                   const unsigned depth,
                                   const unsigned numSplits,
-                                  ActionsStack *actionEntry )
+                                  ActionsStack *actionEntry,
+                                  const double prunedSubtrees )
 {
     const auto activeAction = actionEntry->_activeActions.back();
-    double reward = ( static_cast<double>( activeAction._splitsBeforeActiveAction ) -
-                      static_cast<double>( numSplits ) ) /
-                    activeAction._action.getNumPlConstraints();
-    reward = std::copysign(std::log(1.0 + std::abs(reward) / 10.0 + 1e-8), reward);
-    printf("reward = %lf\n", reward );
+    double splitsReward = ( static_cast<double>( activeAction._splitsBeforeActiveAction ) -
+                            static_cast<double>( numSplits ) ) /
+                          activeAction._action.getNumPlConstraints();
+    splitsReward =
+        std::copysign( std::log( 1.0 + std::abs( splitsReward ) / 10.0 + 1e-8 ), splitsReward );
+    printf( "reward = %lf\n", splitsReward );
+    auto reward = GlobalConfiguration::DQN_ALPHA_REWARDS * splitsReward +
+                  ( 1.0 - GlobalConfiguration::DQN_ALPHA_REWARDS ) * prunedSubtrees;
+    printf( "combinedReward = %lf\n", splitsReward );
     fflush( stdout );
     addToRevisitExperiences( activeAction._stateBeforeAction,
                              activeAction._action,
@@ -77,11 +79,12 @@ void ReplayBuffer::pushToRevisit( const State &stateAfterAction,
 void ReplayBuffer::applyNextAction( const State &stateAfterAction,
                                     const unsigned depth,
                                     const unsigned numSplits,
-                                    unsigned &numInconsistent )
+                                    unsigned &numInconsistent,
+                                    const double prunedSubtrees )
 {
     if ( _actionsStack.empty() )
     {
-        handleDone( stateAfterAction, depth, numSplits ); // todo check 1
+        handleDone( stateAfterAction, depth, numSplits, prunedSubtrees ); // todo check 1
         return;
     }
 
@@ -98,7 +101,7 @@ void ReplayBuffer::applyNextAction( const State &stateAfterAction,
             // move activeSplit to revisit buffer.
             while ( !actionEntry->_activeActions.empty() )
             {
-                pushToRevisit( stateAfterAction, depth, numSplits, actionEntry );
+                pushToRevisit( stateAfterAction, depth, numSplits, actionEntry, prunedSubtrees );
                 // printf( "replay buffer: applyNextAction, pop activeAction\n" );
                 // fflush( stdout );
             }
@@ -109,7 +112,7 @@ void ReplayBuffer::applyNextAction( const State &stateAfterAction,
 
             if ( _actionsStack.empty() )
             {
-                handleDone( stateAfterAction, depth, numSplits ); // todo check 1
+                handleDone( stateAfterAction, depth, numSplits, prunedSubtrees ); // todo check 1
                 return;
             }
         }
@@ -201,8 +204,7 @@ unsigned ReplayBuffer::getBatchSize() const
 
 int ReplayBuffer::getActionStackSize() const
 {
-    if (_actionSize)
+    if ( _actionSize )
         return _actionsStack.size();
     return 0;
 }
-

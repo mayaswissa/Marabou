@@ -100,7 +100,7 @@ public:
       Returns true iff the SMT core wants to perform a case split.
     */
     bool needToSplit() const;
-    double discoveredSubtrees( unsigned numPlConstraints );
+    double prunedSubtrees( unsigned numPlConstraints );
 
     /*
       Perform the split according to the constraint marked for

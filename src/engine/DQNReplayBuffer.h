@@ -158,15 +158,20 @@ public:
                           const State& stateAfterAction,
                           unsigned depth,
                           unsigned numSplits );
-    void handleDone( const State &currentState, unsigned stackDepth, unsigned numSplits );
-    void pushToRevisit( const State& stateAfterAction,
+    void handleDone( const State &currentState,
+                     unsigned stackDepth,
+                     unsigned numSplits,
+                     double prunedSubtrees );
+    void pushToRevisit( const State &stateAfterAction,
                         unsigned depth,
                         unsigned numSplits,
-                        ActionsStack *actionEntry );
-    void applyNextAction( const State& state,
+                        ActionsStack *actionEntry,
+                        double prunedSubtrees );
+    void applyNextAction( const State &state,
                           unsigned depth,
                           unsigned numSplits,
-                          unsigned &numInconsistent  );
+                          unsigned &numInconsistent,
+                          double prunedSubtrees );
     int getActionStackSize() const;
 
 

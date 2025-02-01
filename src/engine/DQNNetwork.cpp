@@ -6,7 +6,7 @@ QNetwork::QNetwork( const unsigned numPlConstraints,
                     const unsigned numActions )
     : _statusEmbedding(
           register_module( "statusEmbedding", torch::nn::Embedding( numPhases, embeddingDim ) ) )
-    , dropout( register_module( "dropout", torch::nn::Dropout( 0.3 ) ) )
+    // , dropout( register_module( "dropout", torch::nn::Dropout( 0.3 ) ) )
     , _numPhases( numPhases )
     , _embeddingDim( embeddingDim )
     , _numBounds( 2 )
@@ -42,7 +42,7 @@ void QNetwork::initWeights()
 
 torch::Tensor QNetwork::forward( const torch::Tensor &state )
 {
-    auto stateWithBatch = state.to(torch::kFloat32);
+    auto stateWithBatch = state.to( torch::kFloat32 );
     if ( state.sizes().size() == 2 )
         stateWithBatch = state.unsqueeze( 0 ); // Add batch dimension
 

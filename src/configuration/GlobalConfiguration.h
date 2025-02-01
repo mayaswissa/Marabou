@@ -266,6 +266,8 @@ public:
     static const double DQN_EPSILON_START;
     static const double DQN_EPSILON_END;
     static const double DQN_EPSILON_DECAY;
+    static const double DQN_ALPHA_REWARDS;
+    static const double DQN_LR;
 
 
 #ifdef ENABLE_GUROBI

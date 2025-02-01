@@ -132,19 +132,19 @@ bool SmtCore::needToSplit() const
 }
 
 
-double SmtCore::discoveredSubtrees( const unsigned numPlConstraints)
+double SmtCore::prunedSubtrees( const unsigned numPlConstraints)
 {
-    double numDiscovered = 0;
+    double numPruned = 0;
     int currentDepth = 0;
     for (const auto &stackEntry : _stack)
     {
         if (stackEntry->_alternativeSplits.empty())
-            numDiscovered += pow(2, (numPlConstraints - currentDepth )) - 1;
+            numPruned += pow(2, (numPlConstraints - currentDepth )) - 1;
 
         currentDepth ++;
     }
     // Normalize the reward to [0,1]
-    return numDiscovered / (pow(2, numPlConstraints ) - 1);
+    return   (numPruned - (pow(2, numPlConstraints ) - 1)) / (pow(2, numPlConstraints ) - 1);
 }
 
 bool SmtCore::performSplit( const PhaseStatus *directionByAgent )

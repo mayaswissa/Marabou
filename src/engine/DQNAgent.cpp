@@ -12,15 +12,16 @@ Agent::Agent( const unsigned numPlConstraints,
     , _numPhaseStatuses( numPhases )
     , _embeddingDim( 4 ) // todo change
     , _numActions( _actionSpace.getSpaceSize() )
-    , _qNetworkLocal( QNetwork( _numPlConstraints, _numPhaseStatuses, _embeddingDim, _numActions ) )
-    , _qNetworkTarget(
-          QNetwork( _numPlConstraints, _numPhaseStatuses, _embeddingDim, _numActions ) )
-    , optimizer( _qNetworkLocal.parameters(), torch::optim::AdamOptions( LR ).weight_decay( 1e-4 ) )
-    , _replayedBuffer( ReplayBuffer( _numPlConstraints * _numPhaseStatuses, 10000, BATCH_SIZE ) )
     , _tStep( 0 )
     , device( torch::cuda::is_available() ? torch::kCUDA : torch::kCPU )
     , _saveAgentFilePath( saveAgentPath )
     , _trainedAgentFilePath( trainedAgentPath )
+    , _qNetworkLocal( QNetwork( _numPlConstraints, _numPhaseStatuses, _embeddingDim, _numActions ) )
+    , _qNetworkTarget(
+          QNetwork( _numPlConstraints, _numPhaseStatuses, _embeddingDim, _numActions ) )
+    , optimizer( _qNetworkLocal.parameters(),
+                 torch::optim::AdamOptions( GlobalConfiguration::DQN_LR ).weight_decay( 1e-4 ) )
+    , _replayedBuffer( ReplayBuffer( _numPlConstraints * _numPhaseStatuses, 10000, _batchSize ) )
 {
     _qNetworkLocal.to( device );
     _qNetworkTarget.to( device );
@@ -92,22 +93,24 @@ Action Agent::tensorToAction( const torch::Tensor &tensor ) const
 
 void Agent::handleDone( const State &currentState,
                         const unsigned stackDepth,
-                        const unsigned numSplits )
+                        const unsigned numSplits,
+                        const double prunedSubtrees )
 {
     // Insert all actions from actions buffer to the replay buffer and learn.
-    _replayedBuffer.handleDone( currentState, stackDepth, numSplits );
+    _replayedBuffer.handleDone( currentState, stackDepth, numSplits, prunedSubtrees );
     learn();
 }
 
 void Agent::addAlternativeAction( const State &stateBeforeSplit,
                                   const unsigned depthBeforeSplit,
                                   const unsigned numSplits,
-                                  unsigned &numInconsistent )
+                                  unsigned &numInconsistent,
+                                  const double prunedSubtrees )
 {
     _replayedBuffer.applyNextAction(
-        stateBeforeSplit, depthBeforeSplit, numSplits, numInconsistent );
-    _tStep = ( _tStep + 1 ) % UPDATE_EVERY;
-    if ( _tStep == 0 && _replayedBuffer.getNumRevisitExperiences() > BATCH_SIZE )
+        stateBeforeSplit, depthBeforeSplit, numSplits, numInconsistent, prunedSubtrees );
+    _tStep = ( _tStep + 1 ) % _updateEvery;
+    if ( _tStep == 0 && _replayedBuffer.getNumRevisitExperiences() > _batchSize )
         learn();
 }
 
@@ -134,8 +137,8 @@ void Agent::step( const State &previousState,
     else
     {
         _replayedBuffer.pushActionEntry( action, previousState, currentState, depth, numSplits );
-        _tStep = ( _tStep + 1 ) % UPDATE_EVERY;
-        if ( _tStep == 0 && _replayedBuffer.getNumRevisitExperiences() > BATCH_SIZE )
+        _tStep = ( _tStep + 1 ) % _updateEvery;
+        if ( _tStep == 0 && _replayedBuffer.getNumRevisitExperiences() > _batchSize )
             learn();
     }
 }
@@ -199,24 +202,11 @@ Action Agent::act( const State &state, const double eps )
         _numPhaseStatuses, _numPlConstraints, actionIndices.first, actionIndices.second );
 }
 
-double Agent::updateLR()
-{
-    learningSteps++;
-
-    auto newLR = LR * pow( GAMMA, learningSteps );
-    for ( auto &param_group : optimizer.param_groups() )
-    {
-        auto &options = static_cast<torch::optim::AdamOptions &>( param_group.options() );
-        options.lr( newLR );
-    }
-    return newLR;
-}
-
 
 void Agent::learn()
 {
     Vector<unsigned> indices = _replayedBuffer.sample();
-    if ( indices.size() < _replayedBuffer.getBatchSize() )
+    if ( indices.size() < _replayedBuffer.getBatchSize() || indices.empty() )
         return;
     std::vector<torch::Tensor> previousStates, actions, nextStates;
     std::vector<double> rewards;
@@ -245,7 +235,8 @@ void Agent::learn()
     const auto nextStatesTensor = torch::cat( nextStates, 0 );
     const auto doneTensor = torch::tensor( dones, torch::dtype( torch::kUInt8 ) ).to( device );
 
-    auto QExpected = _qNetworkLocal.forward(statesTensor).gather( 1, actionsTensor )
+    auto QExpected = _qNetworkLocal.forward( statesTensor )
+                         .gather( 1, actionsTensor )
                          .squeeze( -1 )
                          .to( torch::kFloat32 );
     auto QTargets = rewardsTensor;
@@ -262,23 +253,26 @@ void Agent::learn()
                                                 .gather( 1, localQValuesNextState.unsqueeze( -1 ) )
                                                 .squeeze( -1 );
         // Calculate Q targets for current states
-        QTargets =
-        rewardsTensor + GAMMA * targetQValuesNextState * ( 1 - doneTensor.to( torch::kFloat32 ) );
+        QTargets = rewardsTensor +
+                   GAMMA * targetQValuesNextState * ( 1 - doneTensor.to( torch::kFloat32 ) );
         std::cout << "QTargets min: " << QTargets.min().item<double>()
-          << ", max: " << QTargets.max().item<double>() << std::endl;
+                  << ", max: " << QTargets.max().item<double>() << std::endl;
         QExpected = _qNetworkLocal.forward( statesTensor )
                         .gather( 1, actionsTensor )
                         .squeeze( -1 )
                         .to( torch::kFloat32 );
 
-        if (torch::isnan(QTargets).any().item<bool>()) {
+        if ( torch::isnan( QTargets ).any().item<bool>() )
+        {
             std::cerr << "Error: QTargets contains NaN values!" << std::endl;
-            throw std::runtime_error("NaN detected in QTargets.");
+            throw std::runtime_error( "NaN detected in QTargets." );
         }
-        for (const auto& param : _qNetworkLocal.parameters()) {
-            if (param.grad().defined() && torch::isnan(param.grad()).any().item<bool>()) {
+        for ( const auto &param : _qNetworkLocal.parameters() )
+        {
+            if ( param.grad().defined() && torch::isnan( param.grad() ).any().item<bool>() )
+            {
                 std::cerr << "Error: NaN detected in gradients!" << std::endl;
-                throw std::runtime_error("NaN gradients detected.");
+                throw std::runtime_error( "NaN gradients detected." );
             }
         }
 
@@ -291,7 +285,6 @@ void Agent::learn()
         if ( !handleInvalidGradients() )
         {
             optimizer.step();
-            // updateLR();
         }
         else
         {
