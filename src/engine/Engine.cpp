@@ -343,7 +343,7 @@ bool Engine::solve( double timeoutInSeconds, const std::string &trainedAgentPath
             {
                 printf( "changed to SOI\n" );
                 fflush( stdout );
-                numSplits++;
+                (*numSplits)++;
                 GlobalConfiguration::USE_DQN = false;
                 GlobalConfiguration::USE_DEEPSOI_LOCAL_SEARCH = true;
                 decideBranchingHeuristics();
@@ -390,7 +390,7 @@ bool Engine::solve( double timeoutInSeconds, const std::string &trainedAgentPath
                 }
                 else
                     _smtCore.performSplit();
-                numSplits++;
+                (*numSplits)++;
                 printf( "numSplits:%u\n", *numSplits );
                 fflush( stdout );
                 splitJustPerformed = true;
