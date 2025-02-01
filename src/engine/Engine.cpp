@@ -296,7 +296,6 @@ bool Engine::solve( double timeoutInSeconds, const std::string &trainedAgentPath
         _action = std::make_unique<Action>( numPhases, _plConstraints.size() );
         _previousState = std::make_unique<State>( _plConstraints.size(), numPhases );
     }
-    unsigned numSplits = 0;
     unsigned DQNIterations = 5;
     _eps = GlobalConfiguration::DQN_EPSILON_END;
     bool splitJustPerformed = true;
@@ -318,7 +317,6 @@ bool Engine::solve( double timeoutInSeconds, const std::string &trainedAgentPath
                 printf( "Final statistics:\n" );
                 _statistics.print();
             }
-
             _exitCode = Engine::TIMEOUT;
             _statistics.timeout();
             return false;
@@ -341,7 +339,7 @@ bool Engine::solve( double timeoutInSeconds, const std::string &trainedAgentPath
         {
             DEBUG( _tableau->verifyInvariants() );
 
-            if ( GlobalConfiguration::USE_DQN && numSplits >= DQNIterations )
+            if ( GlobalConfiguration::USE_DQN && *numSplits >= static_cast<int>(DQNIterations) )
             {
                 printf( "changed to SOI\n" );
                 fflush( stdout );
@@ -393,7 +391,7 @@ bool Engine::solve( double timeoutInSeconds, const std::string &trainedAgentPath
                 else
                     _smtCore.performSplit();
                 numSplits++;
-                printf( "numSplits:%u\n", numSplits );
+                printf( "numSplits:%u\n", *numSplits );
                 fflush( stdout );
                 splitJustPerformed = true;
                 continue;

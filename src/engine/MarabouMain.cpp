@@ -214,36 +214,36 @@ int marabouMain( int argc, char **argv )
                     }
                 }
 
-                for ( unsigned int episode = 0; episode < _nEpisodes; ++episode )
-                {
-                    currEpisodeScore = 0;
-                    agent = Marabou().runAgentTraining( epsilon, true, std::move( agent ) );
-                    printf( "done one train, score: %f\n", currEpisodeScore );
-                    fflush( stdout );
-                    epsilon = std::max( GlobalConfiguration::DQN_EPSILON_END,
-                                        epsilon * GlobalConfiguration::DQN_EPSILON_DECAY );
-                }
-
-                // validation run:
-                GlobalConfiguration::USE_DQN = true;
-                GlobalConfiguration::DQN_TRAINING = false;
-                int numSplits = 0;
-                for ( unsigned int validations = 0; validations < 1; ++validations )
-                {
-                    printf( "Validation run\n" );
-                    fflush( stdout );
-                    currEpisodeScore = 0;
-                    agent = Marabou().runAgentTraining( epsilon, true, std::move( agent ) );
-                    epsilon = std::max( GlobalConfiguration::DQN_EPSILON_END,
-                                        epsilon * GlobalConfiguration::DQN_EPSILON_DECAY );
-                }
-                printf( "start solving with trained agent\n" );
-                fflush( stdout );
-                GlobalConfiguration::USE_DQN = true;
-                GlobalConfiguration::USE_DEEPSOI_LOCAL_SEARCH = true;
-                if (agent != nullptr)
-                    agent->saveNetworks();
-                Marabou().runAgentTraining( 1, false, std::move(agent), &numSplits );
+                // for ( unsigned int episode = 0; episode < _nEpisodes; ++episode )
+                // {
+                //     currEpisodeScore = 0;
+                //     agent = Marabou().runAgentTraining( epsilon, true, std::move( agent ) );
+                //     printf( "done one train, score: %f\n", currEpisodeScore );
+                //     fflush( stdout );
+                //     epsilon = std::max( GlobalConfiguration::DQN_EPSILON_END,
+                //                         epsilon * GlobalConfiguration::DQN_EPSILON_DECAY );
+                // }
+                //
+                // // validation run:
+                // GlobalConfiguration::USE_DQN = true;
+                // GlobalConfiguration::DQN_TRAINING = false;
+                // int numSplits = 0;
+                // for ( unsigned int validations = 0; validations < 1; ++validations )
+                // {
+                //     printf( "Validation run\n" );
+                //     fflush( stdout );
+                //     currEpisodeScore = 0;
+                //     agent = Marabou().runAgentTraining( epsilon, true, std::move( agent ) );
+                //     epsilon = std::max( GlobalConfiguration::DQN_EPSILON_END,
+                //                         epsilon * GlobalConfiguration::DQN_EPSILON_DECAY );
+                // }
+                // printf( "start solving with trained agent\n" );
+                // fflush( stdout );
+                // GlobalConfiguration::USE_DQN = true;
+                // GlobalConfiguration::USE_DEEPSOI_LOCAL_SEARCH = true;
+                // if (agent != nullptr)
+                //     agent->saveNetworks();
+                // Marabou().runAgentTraining( 1, false, std::move(agent), &numSplits );
                 return 0;
             }
 
