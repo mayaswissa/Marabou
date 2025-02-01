@@ -79,14 +79,15 @@ void Marabou::run()
 }
 
 std::unique_ptr<Agent> Marabou::runAgentTraining( double epsilon,
-                                const bool training,
-                                std::unique_ptr<Agent> agent)
+                                                  const bool training,
+                                                  std::unique_ptr<Agent> agent,
+                                                  int *numSplits )
 {
     struct timespec start = TimeUtils::sampleMicro();
 
     prepareInputQuery();
 
-    agent = solveQueryWithAgent( epsilon, training, std::move( agent ));
+    agent = solveQueryWithAgent( epsilon, training, std::move( agent ), numSplits);
 
     struct timespec end = TimeUtils::sampleMicro();
 
@@ -252,7 +253,8 @@ void Marabou::exportAssignment() const
 
 std::unique_ptr<Agent> Marabou::solveQueryWithAgent( double epsilon,
                                                      bool training,
-                                                     std::unique_ptr<Agent> agent)
+                                                     std::unique_ptr<Agent> agent,
+                                                     int *numSplits )
 {
     enum {
         MICROSECONDS_IN_SECOND = 1000000
@@ -271,7 +273,7 @@ std::unique_ptr<Agent> Marabou::solveQueryWithAgent( double epsilon,
                 agent->saveNetworks();
         }
         else
-            _engine->solve( timeoutInSeconds, filePath );
+            _engine->solve( timeoutInSeconds, filePath, numSplits );
     }
     return agent;
 }

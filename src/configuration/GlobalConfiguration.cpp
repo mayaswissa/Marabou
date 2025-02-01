@@ -126,8 +126,8 @@ const unsigned GlobalConfiguration::MAX_ROUNDS_OF_BACKWARD_ANALYSIS = 10;
 const double GlobalConfiguration::DQN_EPSILON_START = 1.0;
 const double GlobalConfiguration::DQN_EPSILON_END = 0.01;
 const double GlobalConfiguration::DQN_EPSILON_DECAY = 0.9;
-const double GlobalConfiguration::DQN_ALPHA_REWARDS = 0.5;
-const double GlobalConfiguration::DQN_LR = 1e-4;
+double GlobalConfiguration::DQN_ALPHA_REWARDS = 0.5;
+double GlobalConfiguration::DQN_LR = 1e-4;
 
 #ifdef ENABLE_GUROBI
 const unsigned GlobalConfiguration::GUROBI_NUMBER_OF_THREADS = 1;

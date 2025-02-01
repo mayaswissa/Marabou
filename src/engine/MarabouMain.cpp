@@ -19,6 +19,7 @@
 #include "LPSolverType.h"
 #include "Marabou.h"
 #include "Options.h"
+#include <fstream>
 
 #ifdef ENABLE_OPENBLAS
 #include "cblas.h"
@@ -137,6 +138,82 @@ int marabouMain( int argc, char **argv )
                 double currEpisodeScore = 0;
                 std::unique_ptr<Agent> agent = nullptr;
                 double epsilon = GlobalConfiguration::DQN_EPSILON_START;
+                std::vector<double> learningRates = {
+                    1e-5, 5e-5,  // Very small learning rates
+                    1e-4, 5e-4,  // Small learning rates
+                    1e-3, 5e-3,  // Moderate learning rates
+                    1e-2,  5e-2,  // Large learning rates
+                    1e-1,  5e-1 // Very large learning rates
+                };
+
+                std::vector<double> alphas = {
+                    0,
+                    0.05, 0.1,
+                    0.15, 0.2,
+                    0.25, 0.3,
+                    0.35,  0.4,
+                    0.45,  0.5,
+                    0.55,  0.6,
+                    0.65,  0.7,
+                    0.75,  0.8,
+                    0.85,  0.9,
+                    0.95,  1.0,
+                };
+                for (auto lr: learningRates)
+                {
+                    int avgNumSplits = 0;
+                    int numSplits = 0;
+                    int numRuns = 5;
+                    for (auto alpha: alphas)
+                    {
+
+                        GlobalConfiguration::DQN_ALPHA_REWARDS = alpha;
+                        GlobalConfiguration::DQN_LR = lr;
+
+                        std::ostringstream filename;
+                        filename << "/home/maya-swisa/Documents/Lab/origin/Marabou/"
+                                 << "results_lr-" << std::scientific << std::setprecision(1) << lr
+                                 << "_alpha-" << std::fixed << std::setprecision(2) << alpha << ".txt";
+
+                        // Open file with generated name
+                        std::ofstream outFile(filename.str());
+
+                        if (outFile.is_open())
+                        {
+                            outFile << "Logging results for learning rate: " << lr
+                                    << " and alpha: " << alpha << "\n";
+                            for (int i=0; i < numRuns; i++)
+                            {
+                                for ( unsigned int episode = 0; episode < _nEpisodes; ++episode )
+                                {
+                                    currEpisodeScore = 0;
+                                    agent = Marabou().runAgentTraining( epsilon, true, std::move( agent ) );
+                                    printf( "done one train, score: %f\n", currEpisodeScore );
+                                    fflush( stdout );
+                                    epsilon = std::max( GlobalConfiguration::DQN_EPSILON_END,
+                                                        epsilon * GlobalConfiguration::DQN_EPSILON_DECAY );
+                                }
+                                printf( "start solving with trained agent\n" );
+                                fflush( stdout );
+                                GlobalConfiguration::USE_DQN = true;
+                                GlobalConfiguration::USE_DEEPSOI_LOCAL_SEARCH = true;
+                                if (agent != nullptr)
+                                    agent->saveNetworks();
+                                Marabou().runAgentTraining( 1, false, std::move(agent), &numSplits );
+                                avgNumSplits += numSplits;
+                            }
+                            avgNumSplits /= numRuns;
+                            outFile << "number of splits for learning rate " << lr
+                                                << " and alpha " << alpha << " :"<< avgNumSplits << "\n";
+                            outFile.close();
+                        }
+                        else
+                        {
+                            std::cerr << "Failed to open file: " << filename.str() << std::endl;
+                        }
+                    }
+                }
+
                 for ( unsigned int episode = 0; episode < _nEpisodes; ++episode )
                 {
                     currEpisodeScore = 0;
@@ -150,6 +227,7 @@ int marabouMain( int argc, char **argv )
                 // validation run:
                 GlobalConfiguration::USE_DQN = true;
                 GlobalConfiguration::DQN_TRAINING = false;
+                int numSplits = 0;
                 for ( unsigned int validations = 0; validations < 1; ++validations )
                 {
                     printf( "Validation run\n" );
@@ -165,7 +243,7 @@ int marabouMain( int argc, char **argv )
                 GlobalConfiguration::USE_DEEPSOI_LOCAL_SEARCH = true;
                 if (agent != nullptr)
                     agent->saveNetworks();
-                Marabou().runAgentTraining( 1, false );
+                Marabou().runAgentTraining( 1, false, std::move(agent), &numSplits );
                 return 0;
             }
 

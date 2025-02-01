@@ -35,8 +35,10 @@ public:
     void prepareInputQuery();
 
     unsigned numPLConstraints() const;
-    std::unique_ptr<Agent> runAgentTraining( double epsilon, bool training = true,
-                           std::unique_ptr<Agent> agent = nullptr);
+    std::unique_ptr<Agent> runAgentTraining( double epsilon,
+                                             bool training = true,
+                                             std::unique_ptr<Agent> agent = nullptr,
+                                             int *numSplits = nullptr );
 
 private:
     InputQuery _inputQuery;
@@ -52,8 +54,10 @@ private:
     */
     void solveQuery();
 
-    std::unique_ptr<Agent> solveQueryWithAgent( double epsilon, bool training = true,
-                              std::unique_ptr<Agent> agent = nullptr);
+    std::unique_ptr<Agent> solveQueryWithAgent( double epsilon,
+                                                bool training = true,
+                                                std::unique_ptr<Agent> agent = nullptr,
+                                                int *numSplits = nullptr );
 
     /*
       Display the results

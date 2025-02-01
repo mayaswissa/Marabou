@@ -91,7 +91,8 @@ public:
       Solve the encoded query.
     */
     virtual bool solve( double timeoutInSeconds,
-                        const std::string &trainedAgentPath = "" ) = 0;
+                        const std::string &trainedAgentPath = "",
+                        int *numSplits = nullptr ) = 0;
 
     /*
       Retrieve the exit code.

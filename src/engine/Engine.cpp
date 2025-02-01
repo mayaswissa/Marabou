@@ -244,7 +244,7 @@ PhaseStatus Engine::valueToPhase( unsigned phaseValue )
     return static_cast<PhaseStatus>( phaseValue );
 }
 
-bool Engine::solve( double timeoutInSeconds, const std::string &trainedAgentPath )
+bool Engine::solve( double timeoutInSeconds, const std::string &trainedAgentPath, int *numSplits )
 {
     SignalHandler::getInstance()->initialize();
     SignalHandler::getInstance()->registerClient( this );
