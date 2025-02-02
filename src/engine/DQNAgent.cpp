@@ -21,7 +21,9 @@ Agent::Agent( const unsigned numPlConstraints,
           QNetwork( _numPlConstraints, _numPhaseStatuses, _embeddingDim, _numActions ) )
     , optimizer( _qNetworkLocal.parameters(),
                  torch::optim::AdamOptions( GlobalConfiguration::DQN_LR ).weight_decay( 1e-4 ) )
-    , _replayedBuffer( ReplayBuffer( _numPlConstraints * _numPhaseStatuses, 10000, _batchSize ) )
+    , _replayedBuffer( ReplayBuffer( _numPlConstraints * _numPhaseStatuses,
+                                     GlobalConfiguration::DQN_BUFFER_SIZE,
+                                     GlobalConfiguration::DQN_BATCH_SIZE ) )
 {
     _qNetworkLocal.to( device );
     _qNetworkTarget.to( device );
@@ -109,8 +111,8 @@ void Agent::addAlternativeAction( const State &stateBeforeSplit,
 {
     _replayedBuffer.applyNextAction(
         stateBeforeSplit, depthBeforeSplit, numSplits, numInconsistent, prunedSubtrees );
-    _tStep = ( _tStep + 1 ) % _updateEvery;
-    if ( _tStep == 0 && _replayedBuffer.getNumRevisitExperiences() > _batchSize )
+    _tStep = ( _tStep + 1 ) % GlobalConfiguration::DQN_EXPLORATION_RATE;
+    if ( _tStep == 0 && _replayedBuffer.getNumRevisitExperiences() > GlobalConfiguration::DQN_BATCH_SIZE )
         learn();
 }
 
@@ -137,8 +139,8 @@ void Agent::step( const State &previousState,
     else
     {
         _replayedBuffer.pushActionEntry( action, previousState, currentState, depth, numSplits );
-        _tStep = ( _tStep + 1 ) % _updateEvery;
-        if ( _tStep == 0 && _replayedBuffer.getNumRevisitExperiences() > _batchSize )
+        _tStep = ( _tStep + 1 ) % GlobalConfiguration::DQN_EXPLORATION_RATE;
+        if ( _tStep == 0 && _replayedBuffer.getNumRevisitExperiences() > GlobalConfiguration::DQN_BATCH_SIZE )
             learn();
     }
 }
@@ -257,10 +259,6 @@ void Agent::learn()
                    GAMMA * targetQValuesNextState * ( 1 - doneTensor.to( torch::kFloat32 ) );
         std::cout << "QTargets min: " << QTargets.min().item<double>()
                   << ", max: " << QTargets.max().item<double>() << std::endl;
-        QExpected = _qNetworkLocal.forward( statesTensor )
-                        .gather( 1, actionsTensor )
-                        .squeeze( -1 )
-                        .to( torch::kFloat32 );
 
         if ( torch::isnan( QTargets ).any().item<bool>() )
         {
@@ -283,15 +281,13 @@ void Agent::learn()
         optimizer.zero_grad();
         loss.backward();
         if ( !handleInvalidGradients() )
-        {
             optimizer.step();
-        }
+
         else
         {
             printf( "Skipped updating weights due to invalid gradients.\n" );
             fflush( stdout );
         }
-        optimizer.step();
         softUpdate( _qNetworkLocal, _qNetworkTarget );
     }
     else
@@ -308,8 +304,9 @@ void Agent::softUpdate( const QNetwork &localModel, const QNetwork &targetModel 
     const auto targetParams = targetModel.getParameters();
     for ( size_t i = 0; i < localParams.size(); ++i )
     {
-        targetParams[i].data().copy_( TAU * localParams[i].data() +
-                                      ( 1.0 - TAU ) * targetParams[i].data() );
+        targetParams[i].data().copy_( GlobalConfiguration::DQN_TAU * localParams[i].data() +
+                                      ( 1.0 - GlobalConfiguration::DQN_TAU ) *
+                                          targetParams[i].data() );
     }
 }
 

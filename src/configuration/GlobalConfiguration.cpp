@@ -122,12 +122,16 @@ const bool GlobalConfiguration::WRITE_JSON_PROOF = false;
 
 const unsigned GlobalConfiguration::BACKWARD_BOUND_PROPAGATION_DEPTH = 3;
 const unsigned GlobalConfiguration::MAX_ROUNDS_OF_BACKWARD_ANALYSIS = 10;
+unsigned GlobalConfiguration::DQN_EXPLORATION_RATE = 2;
+unsigned GlobalConfiguration::DQN_BUFFER_SIZE = 64000;
+unsigned GlobalConfiguration::DQN_BATCH_SIZE = 128;
 
 const double GlobalConfiguration::DQN_EPSILON_START = 1.0;
 const double GlobalConfiguration::DQN_EPSILON_END = 0.01;
 const double GlobalConfiguration::DQN_EPSILON_DECAY = 0.9;
 double GlobalConfiguration::DQN_ALPHA_REWARDS = 0.5;
 double GlobalConfiguration::DQN_LR = 1e-4;
+double GlobalConfiguration::DQN_TAU = 1e-3;
 
 #ifdef ENABLE_GUROBI
 const unsigned GlobalConfiguration::GUROBI_NUMBER_OF_THREADS = 1;

@@ -263,11 +263,16 @@ public:
      */
     static const unsigned MAX_ROUNDS_OF_BACKWARD_ANALYSIS;
 
+    static unsigned DQN_EXPLORATION_RATE;
+    static unsigned DQN_BUFFER_SIZE;
+    static unsigned DQN_BATCH_SIZE;
+
     static const double DQN_EPSILON_START;
     static const double DQN_EPSILON_END;
     static const double DQN_EPSILON_DECAY;
     static double DQN_ALPHA_REWARDS;
-    static  double DQN_LR;
+    static double DQN_LR;
+    static double DQN_TAU; // Soft Update Parameter for target network
 
 
 #ifdef ENABLE_GUROBI

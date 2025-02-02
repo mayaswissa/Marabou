@@ -50,12 +50,7 @@ private:
     ActionSpace _actionSpace;
     unsigned _numPlConstraints, _numPhaseStatuses, _embeddingDim, _numActions;
     unsigned _tStep;
-    static constexpr double GAMMA = 0.9;
-    static constexpr double TAU = 1e-3; // Soft Update Parameter for target network
-    static constexpr double LR = 1e-4;
-    unsigned int learningSteps = 0;
-    unsigned _updateEvery = 4;
-    unsigned _batchSize = 100;
+    static constexpr double GAMMA = 0.9; // future rewards contribution to the current Q-value
     torch::Device device;
     const std::string _saveAgentFilePath;
     const std::string _trainedAgentFilePath;

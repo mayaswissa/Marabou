@@ -635,8 +635,6 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
             auto prunedSubtrees = _smtCore.prunedSubtrees( numPlConstraints() );
             prunedSubtrees = std::copysign(
                 std::log( 1.0 + std::abs( prunedSubtrees ) / 10.0 + 1e-8 ), prunedSubtrees );
-            printf("prunedSubtrees = %g\n", prunedSubtrees );
-            fflush( stdout );
 
             _agent->step( previousState,
                           *_action,
