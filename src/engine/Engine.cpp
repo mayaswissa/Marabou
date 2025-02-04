@@ -720,8 +720,6 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                         auto prunedSubtrees = _smtCore.prunedSubtrees( numPlConstraints() );
                         prunedSubtrees = std::copysign(
                             std::log( 1.0 + std::abs( prunedSubtrees ) / 10.0 + 1e-8 ), prunedSubtrees );
-                        printf("prunedSubtrees = %g\n", prunedSubtrees );
-                        fflush( stdout );
                         _agent->addAlternativeAction( *_currentDQNState,
                                                       stackDepth,
                                                       numSplitsByAgent,
@@ -803,8 +801,6 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                         auto prunedSubtrees = _smtCore.prunedSubtrees( numPlConstraints() );
                         prunedSubtrees = std::copysign(
                             std::log( 1.0 + std::abs( prunedSubtrees ) / 10.0 + 1e-8 ), prunedSubtrees );
-                        printf("prunedSubtrees = %g\n", prunedSubtrees );
-                        fflush( stdout );
                         _agent->handleDone(
                             *_currentDQNState, _smtCore.getStackDepth(), numSplitsByAgent, prunedSubtrees );
                         printf( "success!" );
@@ -839,8 +835,6 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                         auto prunedSubtrees = _smtCore.prunedSubtrees( numPlConstraints() );
                         prunedSubtrees = std::copysign(
                             std::log( 1.0 + std::abs( prunedSubtrees ) / 10.0 + 1e-8 ), prunedSubtrees );
-                        printf("prunedSubtrees = %g\n", prunedSubtrees );
-                        fflush( stdout );
                         _agent->handleDone(
                             *_currentDQNState, _smtCore.getStackDepth(), numSplitsByAgent, prunedSubtrees );
                         printf( "fail!" );
@@ -890,8 +884,6 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                 auto prunedSubtrees = _smtCore.prunedSubtrees( numPlConstraints() );
                 prunedSubtrees = std::copysign(
                     std::log( 1.0 + std::abs( prunedSubtrees ) / 10.0 + 1e-8 ), prunedSubtrees );
-                printf("prunedSubtrees = %g\n", prunedSubtrees );
-                fflush( stdout );
                 _agent->handleDone(
                     *_currentDQNState, _smtCore.getStackDepth(), numSplitsByAgent, prunedSubtrees );
                 return std::move( _agent );
@@ -935,8 +927,6 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                 auto prunedSubtrees = _smtCore.prunedSubtrees( numPlConstraints() );
                 prunedSubtrees = std::copysign(
                     std::log( 1.0 + std::abs( prunedSubtrees ) / 10.0 + 1e-8 ), prunedSubtrees );
-                printf("prunedSubtrees = %g\n", prunedSubtrees );
-                fflush( stdout );
                 _agent->handleDone(
                     *_currentDQNState, _smtCore.getStackDepth(), numSplitsByAgent, prunedSubtrees );
 

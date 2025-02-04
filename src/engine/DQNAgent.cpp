@@ -177,20 +177,17 @@ Action Agent::act( const State &state, const double eps )
         {
             // best action - maximum Q-value from the masked values
             actionIndex = QValues.argmax().item<int>();
-            printf( "chose by agent\n" );
-            fflush( stdout );
         }
     }
     else
     {
-        // printf( "chose randomly\n" );
-        // fflush( stdout );
         std::vector<unsigned> validConstraints;
         for ( unsigned i = 0; i < _numPlConstraints; ++i )
         {
             if ( state.getData()[i][PHASE_NOT_FIXED] != 0 )
                 validConstraints.push_back( i );
         }
+
         unsigned actionConstraint = validConstraints[rand() % validConstraints.size()];
         std::random_device rd;
         std::mt19937 gen( rd() );
@@ -257,9 +254,6 @@ void Agent::learn()
         // Calculate Q targets for current states
         QTargets = rewardsTensor +
                    GAMMA * targetQValuesNextState * ( 1 - doneTensor.to( torch::kFloat32 ) );
-        std::cout << "QTargets min: " << QTargets.min().item<double>()
-                  << ", max: " << QTargets.max().item<double>() << std::endl;
-
         if ( torch::isnan( QTargets ).any().item<bool>() )
         {
             std::cerr << "Error: QTargets contains NaN values!" << std::endl;
