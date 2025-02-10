@@ -41,6 +41,7 @@ public:
     void loadNetworks();
     int getActionStackSize() const;
     int getReplayBufferSize() const;
+    void schedulersStep();
 
 private:
     static void softUpdate( const QNetwork &localModel, const QNetwork &targetModel );
@@ -55,7 +56,8 @@ private:
     const std::string _saveAgentFilePath;
     const std::string _trainedAgentFilePath;
     QNetwork _qNetworkLocal, _qNetworkTarget;
-    torch::optim::Adam optimizer;
+    torch::optim::Adam _optimizer;
+    torch::optim::StepLR _scheduler;
     ReplayBuffer _replayedBuffer;
     bool handleInvalidGradients();
 };

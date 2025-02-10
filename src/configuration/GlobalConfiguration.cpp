@@ -131,7 +131,7 @@ const double GlobalConfiguration::DQN_EPSILON_END = 0.01;
 const double GlobalConfiguration::DQN_EPSILON_DECAY = 0.9;
 double GlobalConfiguration::DQN_ALPHA_REWARDS = 0.5;
 double GlobalConfiguration::DQN_LR = 1e-4;
-double GlobalConfiguration::DQN_TAU = 1e-3;
+double GlobalConfiguration::DQN_TAU = 5e-3;
 
 #ifdef ENABLE_GUROBI
 const unsigned GlobalConfiguration::GUROBI_NUMBER_OF_THREADS = 1;

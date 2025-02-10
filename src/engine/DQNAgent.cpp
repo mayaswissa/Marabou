@@ -19,8 +19,9 @@ Agent::Agent( const unsigned numPlConstraints,
     , _qNetworkLocal( QNetwork( _numPlConstraints, _numPhaseStatuses, _embeddingDim, _numActions ) )
     , _qNetworkTarget(
           QNetwork( _numPlConstraints, _numPhaseStatuses, _embeddingDim, _numActions ) )
-    , optimizer( _qNetworkLocal.parameters(),
+    , _optimizer( _qNetworkLocal.parameters(),
                  torch::optim::AdamOptions( GlobalConfiguration::DQN_LR ).weight_decay( 1e-4 ) )
+    , _scheduler( _optimizer, 1, 0.9 )
     , _replayedBuffer( ReplayBuffer( _numPlConstraints * _numPhaseStatuses,
                                      GlobalConfiguration::DQN_BUFFER_SIZE,
                                      GlobalConfiguration::DQN_BATCH_SIZE ) )
@@ -65,7 +66,7 @@ void Agent::loadNetworks()
 bool Agent::handleInvalidGradients()
 {
     bool invalid = false;
-    for ( auto &group : optimizer.param_groups() )
+    for ( auto &group : _optimizer.param_groups() )
     {
         for ( auto &p : group.params() )
         {
@@ -112,7 +113,8 @@ void Agent::addAlternativeAction( const State &stateBeforeSplit,
     _replayedBuffer.applyNextAction(
         stateBeforeSplit, depthBeforeSplit, numSplits, numInconsistent, prunedSubtrees );
     _tStep = ( _tStep + 1 ) % GlobalConfiguration::DQN_EXPLORATION_RATE;
-    if ( _tStep == 0 && _replayedBuffer.getNumRevisitExperiences() > GlobalConfiguration::DQN_BATCH_SIZE )
+    if ( _tStep == 0 &&
+         _replayedBuffer.getNumRevisitExperiences() > GlobalConfiguration::DQN_BATCH_SIZE )
         learn();
 }
 
@@ -140,7 +142,8 @@ void Agent::step( const State &previousState,
     {
         _replayedBuffer.pushActionEntry( action, previousState, currentState, depth, numSplits );
         _tStep = ( _tStep + 1 ) % GlobalConfiguration::DQN_EXPLORATION_RATE;
-        if ( _tStep == 0 && _replayedBuffer.getNumRevisitExperiences() > GlobalConfiguration::DQN_BATCH_SIZE )
+        if ( _tStep == 0 &&
+             _replayedBuffer.getNumRevisitExperiences() > GlobalConfiguration::DQN_BATCH_SIZE )
             learn();
     }
 }
@@ -272,10 +275,11 @@ void Agent::learn()
         printf( "Loss: %f\n", loss.item<double>() );
 
         // Backpropagation
-        optimizer.zero_grad();
+        _optimizer.zero_grad();
         loss.backward();
+        torch::nn::utils::clip_grad_norm_(_qNetworkLocal.parameters(), 0.5);
         if ( !handleInvalidGradients() )
-            optimizer.step();
+            _optimizer.step();
 
         else
         {
@@ -317,4 +321,11 @@ int Agent::getActionStackSize() const
 int Agent::getReplayBufferSize() const
 {
     return _replayedBuffer.getNumRevisitExperiences();
+}
+
+void Agent::schedulersStep()
+{
+    _scheduler.step();
+    const auto lr = _optimizer.param_groups()[0].options().get_lr();
+    std::cout << "Current LR: " << lr << std::endl;
 }

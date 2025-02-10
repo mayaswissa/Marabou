@@ -58,11 +58,9 @@ void ReplayBuffer::pushToRevisit( const State &stateAfterAction,
                           activeAction._action.getNumPlConstraints();
     splitsReward =
         std::copysign( std::log( 1.0 + std::abs( splitsReward ) / 10.0 + 1e-8 ), splitsReward );
-    printf( "reward = %lf\n", splitsReward );
     auto reward = GlobalConfiguration::DQN_ALPHA_REWARDS * splitsReward +
                   ( 1.0 - GlobalConfiguration::DQN_ALPHA_REWARDS ) * prunedSubtrees;
-    printf( "combinedReward = %lf\n", splitsReward );
-    fflush( stdout );
+
     addToRevisitExperiences( activeAction._stateBeforeAction,
                              activeAction._action,
                              reward,

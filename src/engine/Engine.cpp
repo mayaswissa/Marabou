@@ -576,13 +576,7 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
     if ( _lpSolverType == LPSolverType::NATIVE )
         storeInitialEngineState();
 
-    mainLoopStatistics();
-    if ( _verbosity > 0 )
-    {
-        printf( "\nEngine::solve: Initial statistics\n" );
-        _statistics.print();
-        printf( "\n---\n" );
-    }
+
     // DQN CODE:
     _eps = epsilon; // exploration
     printf("epsilon = %g\n", _eps);
@@ -650,7 +644,6 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
             {
                 printf( "\n\nEngine: quitting due to timeout...\n\n" );
                 printf( "Final statistics:\n" );
-                _statistics.print();
             }
 
             _exitCode = Engine::TIMEOUT;
@@ -663,8 +656,6 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
             if ( _verbosity > 0 )
             {
                 printf( "\n\nEngine: quitting due to external request...\n\n" );
-                printf( "Final statistics:\n" );
-                _statistics.print();
             }
 
             _exitCode = Engine::QUIT_REQUESTED;
@@ -674,13 +665,6 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
         try
         {
             DEBUG( _tableau->verifyInvariants() );
-
-            mainLoopStatistics();
-            if ( _verbosity > 1 &&
-                 _statistics.getLongAttribute( Statistics::NUM_MAIN_LOOP_ITERATIONS ) %
-                         _statisticsPrintingFrequency ==
-                     0 )
-                _statistics.print();
 
             if ( _lpSolverType == LPSolverType::NATIVE )
             {
@@ -778,7 +762,6 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                         if ( _verbosity > 0 )
                         {
                             printf( "\nEngine::solve: sat assignment found\n" );
-                            _statistics.print();
                         }
 
                         _exitCode = Engine::SAT;
@@ -816,7 +799,6 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                         if ( _verbosity > 0 )
                         {
                             printf( "\nEngine::solve: at leaf node but solving inconclusive\n" );
-                            _statistics.print();
                         }
 
                         mainLoopEnd = TimeUtils::sampleMicro();
@@ -906,7 +888,6 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                 if ( _verbosity > 0 )
                 {
                     printf( "\nEngine::solve: unsat query\n" );
-                    _statistics.print();
                 }
 
                 printf( "done unsat!\n" );

@@ -134,112 +134,121 @@ int marabouMain( int argc, char **argv )
 #endif
             if ( GlobalConfiguration::USE_DQN )
             {
-                unsigned _nEpisodes = 10;
+                unsigned epochs = 10;
                 double currEpisodeScore = 0;
-                std::vector<double> learningRates = {
-                    5e-5, // Very small learning rates
-                    1e-4, 5e-4,
-                    1e-3,       // Moderate learning rates
-                    1e-2, 5e-2, // Large learning rates
-                    1e-1, 5e-1  // Very large learning rates
-                };
+                std::vector<double> learningRates = { 1e-2 };
 
-                std::vector<double> alphas = {
-                    0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0
-                };
-                std::vector<unsigned> batchSize = { 64, 128, 256, 512, 1024 };
+                std::vector<double> alphas = { 0.2, 0.4, 0.8 };
+                std::vector<unsigned> batchSizes = {256, 512, 1024 };
+                std::vector<unsigned> bufferSizes = {  32000, 64000 };
                 int numRuns = 20;
+                unsigned bestBufferSize = 64;
                 unsigned bestBatchSize = 64;
                 double bestLR = 0;
                 double bestAlpha = 0;
                 double minNumSplits = 30000;
 
-                for ( auto batchSize : batchSize )
+                for ( auto bufferSize : bufferSizes )
                 {
-                    for ( auto lr : learningRates )
+                    for ( auto batchSize : batchSizes )
                     {
-                        for ( auto alpha : alphas )
+                        for ( auto lr : learningRates )
                         {
-                            int avgNumSplits = 0;
-                            int numSplits = 0;
-                            GlobalConfiguration::DQN_BATCH_SIZE = batchSize;
-                            GlobalConfiguration::DQN_ALPHA_REWARDS = alpha;
-                            GlobalConfiguration::DQN_LR = lr;
-
-                            std::ostringstream currentRunFile;
-                            currentRunFile << "/home/maya-swisa/Documents/Lab/DRL/Marabou/searchLR/"
-                                           << "batchSize-" << batchSize << "results_lr-"
-                                           << std::scientific << std::setprecision( 1 ) << lr
-                                           << "_alpha-" << std::fixed << std::setprecision( 2 )
-                                           << alpha << ".txt";
-
-                            // Open file with generated name
-                            std::ofstream outFile( currentRunFile.str() );
-
-                            if ( outFile.is_open() )
+                            for ( auto alpha : alphas )
                             {
-                                outFile << "Results for batch size: " << batchSize
-                                        << ", learning rate: " << lr << " and alpha: " << alpha
-                                        << "\n";
-                                for ( int i = 0; i < numRuns; i++ )
+                                int avgNumSplits = 0;
+                                int numSplits = 0;
+                                GlobalConfiguration::DQN_BUFFER_SIZE = bufferSize;
+                                GlobalConfiguration::DQN_BATCH_SIZE = batchSize;
+                                GlobalConfiguration::DQN_ALPHA_REWARDS = alpha;
+                                GlobalConfiguration::DQN_LR = lr;
+                                printf("learning rate = %g\n", GlobalConfiguration::DQN_LR);
+                                printf("alpha = %g\n", GlobalConfiguration::DQN_ALPHA_REWARDS);
+                                printf("bufferSize = %u\n", GlobalConfiguration::DQN_BUFFER_SIZE);
+                                printf("batchSize = %u\n", GlobalConfiguration::DQN_BATCH_SIZE);
+                                std::ostringstream currentRunFile;
+                                currentRunFile
+                                    << "/home/maya-swisa/Documents/Lab/DRL/Marabou/schedulerResults/"
+                                    << "buffer-" << bufferSize << "batchSize-" << batchSize
+                                    << "results_lr-" << std::scientific << std::setprecision( 1 )
+                                    << lr << "_alpha-" << std::fixed << std::setprecision( 2 )
+                                    << alpha << ".txt";
+
+                                // Open file with generated name
+                                std::ofstream outFile( currentRunFile.str() );
+
+                                if ( outFile.is_open() )
                                 {
-                                    std::unique_ptr<Agent> agent = nullptr;
-                                    double epsilon = GlobalConfiguration::DQN_EPSILON_START;
-                                    for ( unsigned int episode = 0; episode < _nEpisodes;
-                                          ++episode )
+                                    outFile << "Results for buffer size: " << bufferSize
+                                            << "batchSize" << batchSize << ", learning rate: " << lr
+                                            << " and alpha: " << alpha << "\n";
+                                    for ( int i = 0; i < numRuns; i++ )
                                     {
-                                        currEpisodeScore = 0;
-                                        agent = Marabou().runAgentTraining(
-                                            epsilon, true, std::move( agent ) );
-                                        printf( "done one train, score: %f\n", currEpisodeScore );
+                                        std::unique_ptr<Agent> agent = nullptr;
+                                        double epsilon = GlobalConfiguration::DQN_EPSILON_START;
+                                        for ( unsigned int episode = 0; episode < epochs;
+                                              ++episode )
+                                        {
+                                            currEpisodeScore = 0;
+                                            agent = Marabou().runAgentTraining(
+                                                epsilon, true, std::move( agent ) );
+                                            printf( "done one train, score: %f\n",
+                                                    currEpisodeScore );
+                                            fflush( stdout );
+                                            epsilon = std::max(
+                                                GlobalConfiguration::DQN_EPSILON_END,
+                                                epsilon * GlobalConfiguration::DQN_EPSILON_DECAY );
+                                            if (agent)
+                                                agent->schedulersStep();
+                                        }
+                                        printf( "start solving with trained agent\n" );
                                         fflush( stdout );
-                                        epsilon = std::max(
-                                            GlobalConfiguration::DQN_EPSILON_END,
-                                            epsilon * GlobalConfiguration::DQN_EPSILON_DECAY );
+                                        GlobalConfiguration::USE_DQN = true;
+                                        GlobalConfiguration::USE_DEEPSOI_LOCAL_SEARCH = true;
+                                        if ( agent != nullptr )
+                                            agent->saveNetworks();
+                                        Marabou().runAgentTraining(
+                                            1, false, std::move( agent ), &numSplits );
+                                        avgNumSplits += numSplits;
+                                        printf( "numsplits marabouMain: %d\n", numSplits );
+                                        fflush( stdout );
+                                        outFile << numSplits << " ";
+                                        outFile << std::flush;
+                                        numSplits = 0;
                                     }
-                                    printf( "start solving with trained agent\n" );
-                                    fflush( stdout );
-                                    GlobalConfiguration::USE_DQN = true;
-                                    GlobalConfiguration::USE_DEEPSOI_LOCAL_SEARCH = true;
-                                    if ( agent != nullptr )
-                                        agent->saveNetworks();
-                                    Marabou().runAgentTraining(
-                                        1, false, std::move( agent ), &numSplits );
-                                    avgNumSplits += numSplits;
-                                    printf( "numsplits marabouMain: %d\n", numSplits );
-                                    fflush( stdout );
-                                    outFile << numSplits << " ";
-                                    outFile << std::flush;
-                                    numSplits = 0;
+                                    avgNumSplits /= numRuns;
+                                    if ( minNumSplits > avgNumSplits )
+                                    {
+                                        minNumSplits = avgNumSplits;
+                                        bestBufferSize = bufferSize;
+                                        bestBatchSize = batchSize;
+                                        bestLR = lr;
+                                        bestAlpha = alpha;
+                                    }
+                                    outFile << "\n number of splits for BufferSize " << bufferSize
+                                            << "BatchSize : " << batchSize << " learning rate "
+                                            << lr << " and alpha " << alpha << " :" << avgNumSplits
+                                            << "\n";
+                                    outFile.close();
                                 }
-                                avgNumSplits /= numRuns;
-                                if ( minNumSplits > avgNumSplits )
+                                else
                                 {
-                                    minNumSplits = avgNumSplits;
-                                    bestBatchSize = batchSize;
-                                    bestLR = lr;
-                                    bestAlpha = alpha;
+                                    std::cerr << "Failed to open file: " << currentRunFile.str()
+                                              << std::endl;
                                 }
-                                outFile << "\n number of splits for learning rate " << lr
-                                        << " and alpha " << alpha << " :" << avgNumSplits << "\n";
-                                outFile.close();
-                            }
-                            else
-                            {
-                                std::cerr << "Failed to open file: " << currentRunFile.str()
-                                          << std::endl;
                             }
                         }
                     }
                 }
+
                 std::ostringstream bestRunFile;
-                bestRunFile << "/home/maya-swisa/Documents/Lab/DRL/Marabou/"
+                bestRunFile << "/home/maya-swisa/Documents/Lab/DRL/Marabou/schedulerResults/"
                             << "bestCombination.txt";
                 std::ofstream outFile( bestRunFile.str() );
                 if ( outFile.is_open() )
                 {
-                    outFile << "\n best combination Batch Size: ," << bestBatchSize
-                            << " RL:" << bestLR << " and alpha: " << bestAlpha
+                    outFile << "\n best combination BufferSize: "<< bestBufferSize << ", Batch Size: " << bestBatchSize
+                            << ", RL:" << bestLR << " and alpha: " << bestAlpha
                             << ". Avg number of splits:" << minNumSplits << "\n";
                     outFile.close();
                 }
