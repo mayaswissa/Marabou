@@ -125,6 +125,7 @@ const unsigned GlobalConfiguration::MAX_ROUNDS_OF_BACKWARD_ANALYSIS = 10;
 unsigned GlobalConfiguration::DQN_EXPLORATION_RATE = 2;
 unsigned GlobalConfiguration::DQN_BUFFER_SIZE = 64000;
 unsigned GlobalConfiguration::DQN_BATCH_SIZE = 128;
+unsigned GlobalConfiguration::DQN_MIN_SAMPLE_SIZE = 1;
 
 const double GlobalConfiguration::DQN_EPSILON_START = 1.0;
 const double GlobalConfiguration::DQN_EPSILON_END = 0.01;

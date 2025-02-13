@@ -162,13 +162,10 @@ Vector<unsigned> ReplayBuffer::sample() const
 {
     Vector<unsigned> sampledIndices;
 
-    if ( _batchSize == 0 || _revisitExperiences.empty() )
+    if ( _batchSize == 0 || _revisitExperiences.empty() || _revisitExperiences.size() < _batchSize * GlobalConfiguration::DQN_MIN_SAMPLE_SIZE)
     {
-        printf( "revisit experiences empty\n" );
-        fflush( stdout );
         return sampledIndices;
     }
-
     unsigned startIndex = 0;
     unsigned endIndex = getNumRevisitExperiences() - 1;
 

@@ -266,6 +266,7 @@ public:
     static unsigned DQN_EXPLORATION_RATE;
     static unsigned DQN_BUFFER_SIZE;
     static unsigned DQN_BATCH_SIZE;
+    static unsigned DQN_MIN_SAMPLE_SIZE;
 
     static const double DQN_EPSILON_START;
     static const double DQN_EPSILON_END;

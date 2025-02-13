@@ -134,7 +134,7 @@ int marabouMain( int argc, char **argv )
 #endif
             if ( GlobalConfiguration::USE_DQN )
             {
-                unsigned epochs = 10;
+                unsigned epochs = 12;
                 double currEpisodeScore = 0;
                 std::vector<double> learningRates = { 1e-2 };
 
@@ -184,6 +184,9 @@ int marabouMain( int argc, char **argv )
                                             << " and alpha: " << alpha << "\n";
                                     for ( int i = 0; i < numRuns; i++ )
                                     {
+                                        numSplits = 0;
+                                        GlobalConfiguration::USE_DEEPSOI_LOCAL_SEARCH = false;
+                                        GlobalConfiguration::USE_DQN = true;
                                         std::unique_ptr<Agent> agent = nullptr;
                                         double epsilon = GlobalConfiguration::DQN_EPSILON_START;
                                         for ( unsigned int episode = 0; episode < epochs;
@@ -214,7 +217,7 @@ int marabouMain( int argc, char **argv )
                                         fflush( stdout );
                                         outFile << numSplits << " ";
                                         outFile << std::flush;
-                                        numSplits = 0;
+
                                     }
                                     avgNumSplits /= numRuns;
                                     if ( minNumSplits > avgNumSplits )
