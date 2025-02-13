@@ -123,14 +123,9 @@ void Engine::updateToCurrentDQNState( State &stateToUpdate )
     int index = 0;
     for ( const auto &plConstraint : _plConstraints )
     {
-        auto phase = plConstraint->getPhaseStatus();
-        if ( !plConstraint->isActive() )
-            phase = RELU_PHASE_ACTIVE; // todo check
+        const auto phase = plConstraint->getPhaseStatus();
         stateToUpdate.updateConstraintPhase( index, static_cast<int>( phase ) );
-        // if phase fixed : relu constraint's current variable = _f. _b otherwise . // todo check
-        const auto variable = plConstraint->phaseFixed()
-                                ? plConstraint->getParticipatingVariables().back()
-                                : plConstraint->getParticipatingVariables().front();
+        const auto variable = plConstraint->getParticipatingVariables().front();
         stateToUpdate.updateBounds( index,
                                  _boundManager.getUpperBound( variable ),
                                  _boundManager.getLowerBound( variable ) );
