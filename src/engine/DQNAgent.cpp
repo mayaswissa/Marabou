@@ -20,7 +20,7 @@ Agent::Agent( const unsigned numPlConstraints,
     , _qNetworkTarget(
           QNetwork( _numPlConstraints, _numPhaseStatuses, _embeddingDim, _numActions ) )
     , _optimizer( _qNetworkLocal.parameters(),
-                 torch::optim::AdamOptions( GlobalConfiguration::DQN_LR ).weight_decay( 1e-4 ) )
+                  torch::optim::AdamOptions( GlobalConfiguration::DQN_LR ).weight_decay( 1e-4 ) )
     , _scheduler( _optimizer, 1, 0.9 )
     , _replayedBuffer( ReplayBuffer( _numPlConstraints * _numPhaseStatuses,
                                      GlobalConfiguration::DQN_BUFFER_SIZE,
@@ -159,11 +159,14 @@ Action Agent::act( const State &state, const double eps )
     torch::Tensor mask = torch::zeros( { _numActions } );
     for ( unsigned i = 0; i < _numPlConstraints; i++ )
     {
-        const unsigned index = i * _numPhaseStatuses;
-        mask[index] = -std::numeric_limits<float>::infinity();
-
-        if ( state.getData()[i][PHASE_NOT_FIXED] == 0 ) // plConstraint in current state is fixed -
-                                                        // invalid action.
+        mask[i * _numPhaseStatuses] =
+            -std::numeric_limits<float>::infinity(); // can not choose to convert a constraint back
+                                                     // to an unfixed phase.
+        mask[i * _numPhaseStatuses + GlobalConfiguration::DQN_INITIAL_INACTIVE_PHASE] =
+            -std::numeric_limits<float>::infinity(); // can not choose to convert a constraint to an
+                                                     // initialization inactive phase
+        if ( state.getData()[i][PHASE_NOT_FIXED] == 0 ) // can not choose to change a fixed
+                                                        // constraint.
         {
             for ( unsigned j = 0; j < _numPhaseStatuses; j++ )
             {
@@ -187,7 +190,7 @@ Action Agent::act( const State &state, const double eps )
         std::vector<unsigned> validConstraints;
         for ( unsigned i = 0; i < _numPlConstraints; ++i )
         {
-            if ( state.getData()[i][PHASE_NOT_FIXED] != 0 )
+            if ( state.getData()[i][PHASE_NOT_FIXED] == 1 )
                 validConstraints.push_back( i );
         }
 
@@ -195,7 +198,7 @@ Action Agent::act( const State &state, const double eps )
         std::random_device rd;
         std::mt19937 gen( rd() );
         std::uniform_int_distribution<> dist( RELU_PHASE_ACTIVE, RELU_PHASE_INACTIVE );
-        unsigned actionPhase = dist( gen );
+        const unsigned actionPhase = dist( gen );
         actionIndex = _actionSpace.getActionIndex( actionConstraint, actionPhase );
     }
 
@@ -277,7 +280,7 @@ void Agent::learn()
         // Backpropagation
         _optimizer.zero_grad();
         loss.backward();
-        torch::nn::utils::clip_grad_norm_(_qNetworkLocal.parameters(), 0.5);
+        torch::nn::utils::clip_grad_norm_( _qNetworkLocal.parameters(), 0.5 );
         if ( !handleInvalidGradients() )
             _optimizer.step();
 

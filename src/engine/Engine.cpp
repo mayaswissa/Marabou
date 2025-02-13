@@ -123,11 +123,11 @@ void Engine::updateToCurrentDQNState( State &stateToUpdate )
     int index = 0;
     for ( const auto &plConstraint : _plConstraints )
     {
-        auto phase = plConstraint->getPhaseStatus();
-        if (!plConstraint->isActive() && !plConstraint->phaseFixed())
-            phase = PhaseStatus::RELU_PHASE_ACTIVE; // todo check
-
-        stateToUpdate.updateConstraintPhase( index, static_cast<int>( phase ) );
+        if (!stateToUpdate.getData()[index][GlobalConfiguration::DQN_INITIAL_INACTIVE_PHASE])
+        {
+            auto const phase = plConstraint->getPhaseStatus();
+            stateToUpdate.updateConstraintPhase( index, static_cast<int>( phase ) );
+        }
         const auto variable = plConstraint->getParticipatingVariables().front();
         stateToUpdate.updateBounds( index,
                                  _boundManager.getUpperBound( variable ),
@@ -135,6 +135,27 @@ void Engine::updateToCurrentDQNState( State &stateToUpdate )
         index++;
     }
 }
+
+void Engine::initializeDQNState( State &stateToUpdate )
+{
+    int index = 0;
+    for ( const auto &plConstraint : _plConstraints )
+    {
+        auto phase = static_cast<int>(plConstraint->getPhaseStatus());
+        if (!plConstraint->isActive())
+            phase = GlobalConfiguration::DQN_INITIAL_INACTIVE_PHASE;
+
+
+        stateToUpdate.updateConstraintPhase( index, phase );
+        const auto variable = plConstraint->getParticipatingVariables().front();
+        stateToUpdate.updateBounds( index,
+                                 _boundManager.getUpperBound( variable ),
+                                 _boundManager.getLowerBound( variable ) );
+        index++;
+    }
+}
+
+
 unsigned Engine::numPlConstraints() const
 {
     return _plConstraints.size(); // todo
@@ -286,13 +307,14 @@ bool Engine::solve( double timeoutInSeconds, const std::string &trainedAgentPath
     {
         if ( trainedAgentPath.empty() )
             throw std::runtime_error( "Agent is not set" );
-        unsigned numPhases = 3; // todo change
+        unsigned numPhases = GlobalConfiguration::DQN_NUM_PHASES; // todo change
         _currentDQNState = std::make_unique<State>( _plConstraints.size(), numPhases );
-        updateToCurrentDQNState( *_currentDQNState );
+        initializeDQNState( *_currentDQNState );
         _agent =
-            std::make_unique<Agent>( _plConstraints.size(), 3, trainedAgentPath, trainedAgentPath );
+            std::make_unique<Agent>( _plConstraints.size(), numPhases, trainedAgentPath, trainedAgentPath );
         _action = std::make_unique<Action>( numPhases, _plConstraints.size() );
         _previousState = std::make_unique<State>( _plConstraints.size(), numPhases );
+        initializeDQNState( *_previousState );
     }
     unsigned DQNIterations = 5;
     _eps = GlobalConfiguration::DQN_EPSILON_END;
@@ -580,14 +602,14 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
     printf("epsilon = %g\n", _eps);
     fflush( stdout );
     std::deque<int> smtSteps;
-    unsigned numPhases = 3; // todo change
+    unsigned numPhases = GlobalConfiguration::DQN_NUM_PHASES; // todo change
     _currentDQNState = std::make_unique<State>( _plConstraints.size(), numPhases );
-    updateToCurrentDQNState( *_currentDQNState );
+    initializeDQNState( *_currentDQNState );
     if ( agent == nullptr )
     {
         printf( "no agent provided! creating new\n" );
         fflush( stdout );
-        _agent = std::make_unique<Agent>( _plConstraints.size(), 3, trainedAgentPath );
+        _agent = std::make_unique<Agent>( _plConstraints.size(), numPhases, trainedAgentPath );
     }
     else
         _agent = std::move( agent );
@@ -604,8 +626,8 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
     }
 
     _action = std::make_unique<Action>( numPhases, _plConstraints.size() );
-    auto previousState = State( _plConstraints.size(), numPhases );
-    updateToCurrentDQNState( previousState );
+    _previousState = std::make_unique<State>( _plConstraints.size(), numPhases );
+    initializeDQNState( *_previousState );
     const unsigned maxSplitsByAgent = 1000;
     unsigned numSplitsByAgent = 0;
     bool splitJustPerformed = true;
@@ -628,7 +650,7 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
             prunedSubtrees = std::copysign(
                 std::log( 1.0 + std::abs( prunedSubtrees ) / 10.0 + 1e-8 ), prunedSubtrees );
 
-            _agent->step( previousState,
+            _agent->step( *_previousState,
                           *_action,
                           prunedSubtrees,
                           *_currentDQNState,
@@ -713,7 +735,7 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                     {
                         // printf( "enters step because smtStep = 2 \n" );
                         updateToCurrentDQNState( *_currentDQNState );
-                        _agent->step( previousState,
+                        _agent->step( *_previousState,
                                       *_action,
                                       0,
                                       *_currentDQNState,
@@ -731,7 +753,7 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
 
                 numSplitsByAgent++;
                 splitJustPerformed = true;
-                updateToCurrentDQNState( previousState );
+                updateToCurrentDQNState( *_previousState );
                 continue;
             }
 
@@ -771,7 +793,7 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                             rewardForDone );
 
                         // double rewardForDone = 0;
-                        _agent->step( previousState,
+                        _agent->step( *_previousState,
                                       *_action,
                                       rewardForDone,
                                       *_currentDQNState,
@@ -804,7 +826,7 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                         // const auto rewardForDone =
                         // _smtCore.prunedSubtrees( numPlConstraints() );
                         double rewardForDone = -1; // todo check?
-                        _agent->step( previousState,
+                        _agent->step( *_previousState,
                                       *_action,
                                       rewardForDone,
                                       *_currentDQNState,
@@ -853,7 +875,7 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                 mainLoopEnd = TimeUtils::sampleMicro();
                 _statistics.incLongAttribute( Statistics::TIME_MAIN_LOOP_MICRO,
                                               TimeUtils::timePassed( mainLoopStart, mainLoopEnd ) );
-                _agent->step( previousState,
+                _agent->step( *_previousState,
                               *_action,
                               -1, // todo check
                               *_currentDQNState,
@@ -895,7 +917,7 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                 rewardForDone = std::copysign(
                     std::log( 1.0 + std::abs( rewardForDone ) / 10.0 + 1e-8 ), rewardForDone );
                 // double rewardForDone = 0;
-                _agent->step( previousState,
+                _agent->step( *_previousState,
                               *_action,
                               rewardForDone,
                               *_currentDQNState,
@@ -935,7 +957,7 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
             mainLoopEnd = TimeUtils::sampleMicro();
             _statistics.incLongAttribute( Statistics::TIME_MAIN_LOOP_MICRO,
                                           TimeUtils::timePassed( mainLoopStart, mainLoopEnd ) );
-            _agent->step( previousState,
+            _agent->step( *_previousState,
                           *_action,
                           -1, // todo check
                           *_currentDQNState,
@@ -968,7 +990,7 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
         std::copysign( std::log( 1.0 + std::abs( rewardForDone ) / 10.0 + 1e-8 ), rewardForDone );
     // double rewardForDone = 0;
     printf( "rewardForDone : %f\n", rewardForDone );
-    _agent->step( previousState,
+    _agent->step( *_previousState,
                   *_action,
                   rewardForDone,
                   *_currentDQNState,

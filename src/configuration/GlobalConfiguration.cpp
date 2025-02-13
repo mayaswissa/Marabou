@@ -126,6 +126,8 @@ unsigned GlobalConfiguration::DQN_EXPLORATION_RATE = 2;
 unsigned GlobalConfiguration::DQN_BUFFER_SIZE = 64000;
 unsigned GlobalConfiguration::DQN_BATCH_SIZE = 128;
 unsigned GlobalConfiguration::DQN_MIN_SAMPLE_SIZE = 1;
+unsigned GlobalConfiguration::DQN_INITIAL_INACTIVE_PHASE = 3;
+unsigned GlobalConfiguration::DQN_NUM_PHASES = 4;
 
 const double GlobalConfiguration::DQN_EPSILON_START = 1.0;
 const double GlobalConfiguration::DQN_EPSILON_END = 0.01;

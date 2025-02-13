@@ -932,6 +932,7 @@ private:
       DQN functions
      */
     void updateToCurrentDQNState( State &state );
+    void initializeDQNState( State &stateToUpdate );
     unsigned getNumFixedConstraints() const;
     PiecewiseLinearConstraint *indexToConstraint( int index, List<PiecewiseLinearConstraint *>* constraints );
     PhaseStatus valueToPhase( unsigned index ); // todo this is not really the value but the index
