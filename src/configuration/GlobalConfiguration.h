@@ -267,7 +267,7 @@ public:
     static unsigned DQN_BUFFER_SIZE;
     static unsigned DQN_BATCH_SIZE;
     static unsigned DQN_MIN_SAMPLE_SIZE;
-    static unsigned DQN_INITIAL_INACTIVE_PHASE;
+    static unsigned DQN_CONSTRAINT_INACTIVE;
     static unsigned DQN_NUM_PHASES;
 
     static const double DQN_EPSILON_START;

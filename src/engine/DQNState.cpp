@@ -1,5 +1,7 @@
 #include "DQNState.h"
 
+#include <GlobalConfiguration.h>
+
 State::State( const unsigned numConstraints, const unsigned numPhases )
     : _stateData( numConstraints, std::vector<double>( numPhases + 2, 0.0f ) )
     , _numPhases( numPhases )
@@ -73,4 +75,9 @@ void State::updateBounds( const unsigned constraintIndex,
 const std::vector<std::vector<double>> &State::getData() const
 {
     return _stateData;
+}
+
+bool State::constraintActive(const unsigned constraintIndex) const
+{
+    return this->getData()[constraintIndex][GlobalConfiguration::DQN_CONSTRAINT_INACTIVE] == 0;
 }

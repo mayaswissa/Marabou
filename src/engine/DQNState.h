@@ -13,7 +13,8 @@ public:
     torch::Tensor toTensor() const;
     void updateConstraintPhase( unsigned constraintIndex, unsigned newPhase );
     void updateBounds( unsigned constraintIndex, double upperBound, double lowerBound );
-    const std::vector<std::vector<double>>& getData() const;
+    const std::vector<std::vector<double>> &getData() const;
+    bool constraintActive( unsigned constraintIndex ) const;
 
 private:
     // each inner vector represents a pl-constraint in one-hot encoding:

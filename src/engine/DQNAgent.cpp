@@ -148,7 +148,7 @@ void Agent::step( const State &previousState,
     }
 }
 
-Action Agent::act( const State &state, const double eps )
+std::unique_ptr<Action> Agent::act( const State &state, const double eps )
 {
     _qNetworkLocal.eval();
     torch::Tensor QValues = _qNetworkLocal.forward( state.toTensor() );
@@ -162,7 +162,7 @@ Action Agent::act( const State &state, const double eps )
         mask[i * _numPhaseStatuses] =
             -std::numeric_limits<float>::infinity(); // can not choose to convert a constraint back
                                                      // to an unfixed phase.
-        mask[i * _numPhaseStatuses + GlobalConfiguration::DQN_INITIAL_INACTIVE_PHASE] =
+        mask[i * _numPhaseStatuses + GlobalConfiguration::DQN_CONSTRAINT_INACTIVE] =
             -std::numeric_limits<float>::infinity(); // can not choose to convert a constraint to an
                                                      // initialization inactive phase
         if ( state.getData()[i][PHASE_NOT_FIXED] == 0 ) // can not choose to change a fixed
@@ -193,8 +193,9 @@ Action Agent::act( const State &state, const double eps )
             if ( state.getData()[i][PHASE_NOT_FIXED] == 1 )
                 validConstraints.push_back( i );
         }
-
-        unsigned actionConstraint = validConstraints[rand() % validConstraints.size()];
+        if(validConstraints.empty())
+            return nullptr;
+        const unsigned actionConstraint = validConstraints[rand() % validConstraints.size()];
         std::random_device rd;
         std::mt19937 gen( rd() );
         std::uniform_int_distribution<> dist( RELU_PHASE_ACTIVE, RELU_PHASE_INACTIVE );
@@ -203,7 +204,7 @@ Action Agent::act( const State &state, const double eps )
     }
 
     auto actionIndices = _actionSpace.decodeActionIndex( actionIndex );
-    return Action(
+    return std::make_unique<Action>(
         _numPhaseStatuses, _numPlConstraints, actionIndices.first, actionIndices.second );
 }
 
