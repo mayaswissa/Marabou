@@ -122,15 +122,13 @@ const bool GlobalConfiguration::WRITE_JSON_PROOF = false;
 
 const unsigned GlobalConfiguration::BACKWARD_BOUND_PROPAGATION_DEPTH = 3;
 const unsigned GlobalConfiguration::MAX_ROUNDS_OF_BACKWARD_ANALYSIS = 10;
-unsigned GlobalConfiguration::DQN_EXPLORATION_RATE = 2;
-unsigned GlobalConfiguration::DQN_BUFFER_SIZE = 64000;
-unsigned GlobalConfiguration::DQN_BATCH_SIZE = 128;
+unsigned GlobalConfiguration::DQN_EXPLORATION_RATE = 4;
+unsigned GlobalConfiguration::DQN_BUFFER_SIZE = 8000;
+unsigned GlobalConfiguration::DQN_BATCH_SIZE = 256;
 unsigned GlobalConfiguration::DQN_MIN_SAMPLE_SIZE = 1;
-unsigned GlobalConfiguration::DQN_CONSTRAINT_INACTIVE = 3;
-unsigned GlobalConfiguration::DQN_NUM_PHASES = 4;
 
 const double GlobalConfiguration::DQN_EPSILON_START = 1.0;
-const double GlobalConfiguration::DQN_EPSILON_END = 0.01;
+const double GlobalConfiguration::DQN_EPSILON_END = 0.0;
 const double GlobalConfiguration::DQN_EPSILON_DECAY = 0.9;
 double GlobalConfiguration::DQN_ALPHA_REWARDS = 0.5;
 double GlobalConfiguration::DQN_LR = 1e-4;

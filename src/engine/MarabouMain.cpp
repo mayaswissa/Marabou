@@ -134,14 +134,14 @@ int marabouMain( int argc, char **argv )
 #endif
             if ( GlobalConfiguration::USE_DQN )
             {
-                unsigned epochs = 12;
+                unsigned epochs = 9;
                 double currEpisodeScore = 0;
                 std::vector<double> learningRates = { 1e-2 };
 
-                std::vector<double> alphas = { 0.2, 0.4, 0.8 };
+                std::vector<double> alphas = { 0, 0.2, 0.4, 0.8, 1 };
                 std::vector<unsigned> batchSizes = {256, 512, 1024 };
-                std::vector<unsigned> bufferSizes = {  32000, 64000 };
-                int numRuns = 20;
+                std::vector<unsigned> bufferSizes = {  8000, 64000 };
+                int numRuns = 12;
                 unsigned bestBufferSize = 64;
                 unsigned bestBatchSize = 64;
                 double bestLR = 0;
@@ -201,8 +201,8 @@ int marabouMain( int argc, char **argv )
                                             epsilon = std::max(
                                                 GlobalConfiguration::DQN_EPSILON_END,
                                                 epsilon * GlobalConfiguration::DQN_EPSILON_DECAY );
-                                            if (agent)
-                                                agent->schedulersStep();
+                                            // if (agent)
+                                            //     agent->schedulersStep();
                                         }
                                         printf( "start solving with trained agent\n" );
                                         fflush( stdout );

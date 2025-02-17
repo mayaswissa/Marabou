@@ -16,12 +16,12 @@ public:
            unsigned numPhases,
            const std::string &saveAgentPath,
            const std::string &trainedAgentPath = "" );
-    void addAlternativeAction( const State &stateBeforeSplit,
+    void stepAlternativeAction( const State &stateBeforeSplit,
                                unsigned depthBeforeSplit,
                                unsigned numSplits,
                                unsigned &numInconsistent,
                                double prunedSubtrees );
-    void step( const State &state,
+    void stepNewAction( const State &state,
                const Action &action,
                double reward,
                const State &nextState,
@@ -49,7 +49,7 @@ private:
     torch::Device getDevice() const;
 
     ActionSpace _actionSpace;
-    unsigned _numPlConstraints, _numPhaseStatuses, _embeddingDim, _numActions;
+    unsigned _numPlConstraints, _numPhases, _embeddingDim, _numActions;
     unsigned _tStep;
     static constexpr double GAMMA = 0.9; // future rewards contribution to the current Q-value
     torch::Device device;

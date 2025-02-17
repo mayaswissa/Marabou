@@ -72,7 +72,7 @@ unsigned Action::getPlConstraintAction() const
     return _plConstraintActionIndex;
 }
 
-unsigned Action::getAssignmentStatus() const
+unsigned Action::getActionPhase() const
 {
     return _assignmentIndex;
 }

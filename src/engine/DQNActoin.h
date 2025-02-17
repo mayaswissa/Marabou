@@ -14,7 +14,7 @@ public:
     Action &operator=( const Action &other );
     unsigned getPlConstraintAction() const;
 
-    unsigned getAssignmentStatus() const;
+    unsigned getActionPhase() const;
 
     torch::Tensor actionToTensor() const;
 

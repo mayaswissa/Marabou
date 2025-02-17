@@ -132,19 +132,22 @@ bool SmtCore::needToSplit() const
 }
 
 
-double SmtCore::prunedSubtrees( const unsigned numPlConstraints)
+double SmtCore::prunedSubtrees( const unsigned numPlConstraints )
 {
     double numPruned = 0;
     int currentDepth = 0;
-    for (const auto &stackEntry : _stack)
+    for ( const auto &stackEntry : _stack )
     {
-        if (stackEntry->_alternativeSplits.empty())
-            numPruned += pow(2, (numPlConstraints - currentDepth )) - 1;
+        if ( stackEntry->_alternativeSplits.empty() )
+            numPruned += pow( 2, ( numPlConstraints - currentDepth ) ) - 1;
 
-        currentDepth ++;
+        currentDepth++;
     }
     // Normalize the reward to [0,1]
-    return   (numPruned - (pow(2, numPlConstraints ) - 1)) / (pow(2, numPlConstraints ) - 1);
+    auto pruned =
+        ( numPruned - ( pow( 2, numPlConstraints ) - 1 ) ) / ( pow( 2, numPlConstraints ) - 1 );
+    // reward
+    return std::copysign( std::log( 1.0 + std::abs( pruned ) / 10.0 + 1e-8 ), pruned );
 }
 
 bool SmtCore::performSplit( const PhaseStatus *directionByAgent )

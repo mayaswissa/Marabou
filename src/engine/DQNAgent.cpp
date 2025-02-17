@@ -9,20 +9,19 @@ Agent::Agent( const unsigned numPlConstraints,
               const std::string &trainedAgentPath )
     : _actionSpace( ActionSpace( numPlConstraints, numPhases ) )
     , _numPlConstraints( numPlConstraints )
-    , _numPhaseStatuses( numPhases )
-    , _embeddingDim( 4 ) // todo change
+    , _numPhases( numPhases )
+    , _embeddingDim( numPhases + 2 ) // todo change
     , _numActions( _actionSpace.getSpaceSize() )
     , _tStep( 0 )
     , device( torch::cuda::is_available() ? torch::kCUDA : torch::kCPU )
     , _saveAgentFilePath( saveAgentPath )
     , _trainedAgentFilePath( trainedAgentPath )
-    , _qNetworkLocal( QNetwork( _numPlConstraints, _numPhaseStatuses, _embeddingDim, _numActions ) )
-    , _qNetworkTarget(
-          QNetwork( _numPlConstraints, _numPhaseStatuses, _embeddingDim, _numActions ) )
+    , _qNetworkLocal( QNetwork( _numPlConstraints, _numPhases, _embeddingDim, _numActions ) )
+    , _qNetworkTarget( QNetwork( _numPlConstraints, _numPhases, _embeddingDim, _numActions ) )
     , _optimizer( _qNetworkLocal.parameters(),
                   torch::optim::AdamOptions( GlobalConfiguration::DQN_LR ).weight_decay( 1e-4 ) )
     , _scheduler( _optimizer, 1, 0.9 )
-    , _replayedBuffer( ReplayBuffer( _numPlConstraints * _numPhaseStatuses,
+    , _replayedBuffer( ReplayBuffer( _numPlConstraints * _numPhases,
                                      GlobalConfiguration::DQN_BUFFER_SIZE,
                                      GlobalConfiguration::DQN_BATCH_SIZE ) )
 {
@@ -85,12 +84,12 @@ bool Agent::handleInvalidGradients()
 
 Action Agent::tensorToAction( const torch::Tensor &tensor ) const
 {
-    int combinedIndex = tensor.item<int>();
+    const int combinedIndex = tensor.item<int>();
 
-    int plConstraintActionIndex = combinedIndex / _numPhaseStatuses;
-    int assignmentIndex = combinedIndex % _numPhaseStatuses;
+    const int plConstraintActionIndex = combinedIndex / _numPhases;
+    const int assignmentIndex = combinedIndex % _numPhases;
 
-    return Action( _numPhaseStatuses, _numPlConstraints, plConstraintActionIndex, assignmentIndex );
+    return Action( _numPhases, _numPlConstraints, plConstraintActionIndex, assignmentIndex );
 }
 
 
@@ -101,14 +100,15 @@ void Agent::handleDone( const State &currentState,
 {
     // Insert all actions from actions buffer to the replay buffer and learn.
     _replayedBuffer.handleDone( currentState, stackDepth, numSplits, prunedSubtrees );
+    _tStep = ( _tStep + 1 ) % GlobalConfiguration::DQN_EXPLORATION_RATE;
     learn();
 }
 
-void Agent::addAlternativeAction( const State &stateBeforeSplit,
-                                  const unsigned depthBeforeSplit,
-                                  const unsigned numSplits,
-                                  unsigned &numInconsistent,
-                                  const double prunedSubtrees )
+void Agent::stepAlternativeAction( const State &stateBeforeSplit,
+                                   const unsigned depthBeforeSplit,
+                                   const unsigned numSplits,
+                                   unsigned &numInconsistent,
+                                   const double prunedSubtrees )
 {
     _replayedBuffer.applyNextAction(
         stateBeforeSplit, depthBeforeSplit, numSplits, numInconsistent, prunedSubtrees );
@@ -119,33 +119,31 @@ void Agent::addAlternativeAction( const State &stateBeforeSplit,
 }
 
 
-void Agent::step( const State &previousState,
-                  const Action &action,
-                  const double reward,
-                  const State &currentState,
-                  const bool done,
-                  const unsigned depth,
-                  const unsigned numSplits,
-                  const bool changeReward )
+void Agent::stepNewAction( const State &previousState,
+                           const Action &action,
+                           const double reward,
+                           const State &currentState,
+                           const bool done,
+                           const unsigned depth,
+                           const unsigned numSplits,
+                           const bool changeReward )
 {
-    // invalid step due to fixed pl constraint or not fixed phase in action.
     if ( !changeReward || done )
-        _replayedBuffer.addToRevisitExperiences( previousState,
-                                                 action,
-                                                 static_cast<float>( reward ),
-                                                 currentState,
-                                                 done,
-                                                 depth,
-                                                 numSplits,
-                                                 changeReward );
+        _replayedBuffer.addExperienceToRevisitBuffer( previousState,
+                                                      action,
+                                                      static_cast<float>( reward ),
+                                                      currentState,
+                                                      done,
+                                                      depth,
+                                                      numSplits,
+                                                      changeReward );
     else
-    {
         _replayedBuffer.pushActionEntry( action, previousState, currentState, depth, numSplits );
-        _tStep = ( _tStep + 1 ) % GlobalConfiguration::DQN_EXPLORATION_RATE;
-        if ( _tStep == 0 &&
-             _replayedBuffer.getNumRevisitExperiences() > GlobalConfiguration::DQN_BATCH_SIZE )
-            learn();
-    }
+
+    _tStep = ( _tStep + 1 ) % GlobalConfiguration::DQN_EXPLORATION_RATE;
+    if ( _tStep == 0 &&
+         _replayedBuffer.getNumRevisitExperiences() > GlobalConfiguration::DQN_BATCH_SIZE )
+        learn();
 }
 
 std::unique_ptr<Action> Agent::act( const State &state, const double eps )
@@ -159,18 +157,19 @@ std::unique_ptr<Action> Agent::act( const State &state, const double eps )
     torch::Tensor mask = torch::zeros( { _numActions } );
     for ( unsigned i = 0; i < _numPlConstraints; i++ )
     {
-        mask[i * _numPhaseStatuses] =
-            -std::numeric_limits<float>::infinity(); // can not choose to convert a constraint back
-                                                     // to an unfixed phase.
-        mask[i * _numPhaseStatuses + GlobalConfiguration::DQN_CONSTRAINT_INACTIVE] =
+        mask[i * _numPhases] = -std::numeric_limits<float>::infinity(); // can not choose to convert
+                                                                        // a constraint back to an
+                                                                        // unfixed phase. todo check
+        mask[i * _numPhases + DQN_RELU_OFF] =
             -std::numeric_limits<float>::infinity(); // can not choose to convert a constraint to an
                                                      // initialization inactive phase
-        if ( state.getData()[i][PHASE_NOT_FIXED] == 0 ) // can not choose to change a fixed
-                                                        // constraint.
+
+        if ( state.getData()[i][DQN_RELU_NOT_FIXED] == 0 ) // can not choose to change a fixed
+                                                           // constraint.
         {
-            for ( unsigned j = 0; j < _numPhaseStatuses; j++ )
+            for ( unsigned j = 0; j < _numPhases; j++ )
             {
-                mask[i * _numPhaseStatuses + j] = -std::numeric_limits<float>::infinity();
+                mask[i * _numPhases + j] = -std::numeric_limits<float>::infinity();
             }
         }
     }
@@ -180,21 +179,19 @@ std::unique_ptr<Action> Agent::act( const State &state, const double eps )
 
     if ( static_cast<double>( rand() ) / RAND_MAX > eps )
     {
-        {
-            // best action - maximum Q-value from the masked values
-            actionIndex = QValues.argmax().item<int>();
-        }
+        // best action - maximum Q-value from the masked values
+        actionIndex = QValues.argmax().item<int>();
     }
     else
     {
         std::vector<unsigned> validConstraints;
         for ( unsigned i = 0; i < _numPlConstraints; ++i )
-        {
-            if ( state.getData()[i][PHASE_NOT_FIXED] == 1 )
+            if ( state.getData()[i][DQN_RELU_NOT_FIXED] == 1 )
                 validConstraints.push_back( i );
-        }
-        if(validConstraints.empty())
+
+        if ( validConstraints.empty() )
             return nullptr;
+
         const unsigned actionConstraint = validConstraints[rand() % validConstraints.size()];
         std::random_device rd;
         std::mt19937 gen( rd() );
@@ -203,16 +200,80 @@ std::unique_ptr<Action> Agent::act( const State &state, const double eps )
         actionIndex = _actionSpace.getActionIndex( actionConstraint, actionPhase );
     }
 
-    auto actionIndices = _actionSpace.decodeActionIndex( actionIndex );
-    return std::make_unique<Action>(
-        _numPhaseStatuses, _numPlConstraints, actionIndices.first, actionIndices.second );
+    auto [constraint, phase] = _actionSpace.decodeActionIndex( actionIndex );
+    return std::make_unique<Action>( _numPhases, _numPlConstraints, constraint, phase );
+}
+
+#include <cmath>
+#include <iostream>
+#include <torch/torch.h>
+
+void detectUnusualData( const std::string &name, torch::Tensor tensor )
+{
+    try
+    {
+        if ( tensor.numel() == 0 )
+        {
+            std::cerr << "🔍 [" << name << "] Tensor is EMPTY!" << std::endl;
+            return;
+        }
+
+        // Convert to CPU, contiguous, and ensure it is float type
+        tensor = tensor.to( torch::kCPU ).contiguous();
+        if ( !tensor.is_floating_point() )
+        {
+            tensor = tensor.to( torch::kFloat32 ); // Convert to float to avoid mean() error
+        }
+
+        // Flatten for easier analysis
+        auto cpuTensor = tensor.flatten();
+
+        // Compute statistics
+        double minVal = cpuTensor.min().item<double>();
+        double maxVal = cpuTensor.max().item<double>();
+        double meanVal = cpuTensor.mean().item<double>();
+        double stdVal = cpuTensor.std().item<double>();
+
+        std::cerr << "[" << name << "] Stats -> Min: " << minVal << " | Max: " << maxVal
+                  << " | Mean: " << meanVal << " | Std: " << stdVal << std::endl;
+
+        // Define outlier threshold (values beyond 3 standard deviations)
+        double lowerBound = meanVal - 3 * stdVal;
+        double upperBound = meanVal + 3 * stdVal;
+
+        std::cerr << "[" << name << "] Unusual values (outliers):" << std::endl;
+
+        // Use data pointer for efficient access
+        auto dataPtr = cpuTensor.data_ptr<float>(); // Now safe, since we ensured it's float
+        bool foundOutlier = false;
+
+        for ( int i = 0; i < cpuTensor.numel(); i++ )
+        {
+            double val = static_cast<double>( dataPtr[i] );
+
+            if ( std::isnan( val ) || std::isinf( val ) || val > upperBound || val < lowerBound )
+            {
+                std::cerr << "  Index " << i << ": " << val << std::endl;
+                foundOutlier = true;
+            }
+        }
+
+        if ( !foundOutlier )
+        {
+            std::cerr << "  No extreme outliers detected in [" << name << "]" << std::endl;
+        }
+    }
+    catch ( const std::exception &e )
+    {
+        std::cerr << "ERROR in detectUnusualData(" << name << "): " << e.what() << std::endl;
+    }
 }
 
 
 void Agent::learn()
 {
     Vector<unsigned> indices = _replayedBuffer.sample();
-    if ( indices.size() < _replayedBuffer.getBatchSize() || indices.empty() )
+    if ( indices.empty() )
         return;
     std::vector<torch::Tensor> previousStates, actions, nextStates;
     std::vector<double> rewards;
@@ -220,17 +281,14 @@ void Agent::learn()
 
     for ( const unsigned index : indices )
     {
-        if ( index < _replayedBuffer.getNumRevisitExperiences() )
-        {
-            Experience &experience = _replayedBuffer.getRevisitExperienceAt( index );
-            previousStates.push_back(
-                experience._stateBeforeAction.toTensor().unsqueeze( 0 ).to( device ) );
-            actions.push_back( experience._action.actionToTensor().to( device ) );
-            rewards.push_back( experience._reward );
-            nextStates.push_back(
-                experience._stateAfterAction.toTensor().unsqueeze( 0 ).to( device ) );
-            dones.push_back( static_cast<uint8_t>( experience._done ) );
-        }
+        ASSERT( index < _replayedBuffer.getNumRevisitExperiences() )
+        Experience &experience = _replayedBuffer.getRevisitExperienceAt( index );
+        previousStates.push_back(
+            experience._stateBeforeAction.toTensor().unsqueeze( 0 ).to( device ) );
+        actions.push_back( experience._action.actionToTensor().to( device ) );
+        rewards.push_back( experience._reward );
+        nextStates.push_back( experience._stateAfterAction.toTensor().unsqueeze( 0 ).to( device ) );
+        dones.push_back( static_cast<uint8_t>( experience._done ) );
     }
 
     // Concatenate tensors along the batch dimension

@@ -1,15 +1,14 @@
 #include "DQNState.h"
-
 #include <GlobalConfiguration.h>
 
-State::State( const unsigned numConstraints, const unsigned numPhases )
-    : _stateData( numConstraints, std::vector<double>( numPhases + 2, 0.0f ) )
-    , _numPhases( numPhases )
+State::State( const unsigned numConstraints )
+    : _stateData( numConstraints, std::vector<double>( DQN_NUM_PHASES + 2, 0.0f ) )
+    , _numPhases( DQN_NUM_PHASES )
 {
     // set all phases not fixed
     for ( unsigned i = 0; i < numConstraints; ++i )
     {
-        _stateData[i][0] = 1.0;              // Default not fixed phase
+        _stateData[i][DQN_RELU_NOT_FIXED] = 1.0; // Default not fixed phase
     }
 }
 
@@ -79,5 +78,5 @@ const std::vector<std::vector<double>> &State::getData() const
 
 bool State::constraintActive(const unsigned constraintIndex) const
 {
-    return this->getData()[constraintIndex][GlobalConfiguration::DQN_CONSTRAINT_INACTIVE] == 0;
+    return this->getData()[constraintIndex][DQN_RELU_OFF] == 0;
 }

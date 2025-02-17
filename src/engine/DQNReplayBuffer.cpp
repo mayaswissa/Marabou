@@ -37,7 +37,7 @@ void ReplayBuffer::handleDone( const State &currentState,
         ActionsStack *actionEntry = _actionsStack.back();
         // no need to insert alternative actions.
         while ( !actionEntry->_activeActions.empty() )
-            pushToRevisit( currentState, stackDepth, numSplits, actionEntry, prunedSubtrees );
+            moveActionToRevisitBuffer( currentState, stackDepth, numSplits, actionEntry, prunedSubtrees );
 
         delete _actionsStack.back();
         _actionsStack.popBack();
@@ -46,7 +46,7 @@ void ReplayBuffer::handleDone( const State &currentState,
     }
 }
 
-void ReplayBuffer::pushToRevisit( const State &stateAfterAction,
+void ReplayBuffer::moveActionToRevisitBuffer( const State &stateAfterAction,
                                   const unsigned depth,
                                   const unsigned numSplits,
                                   ActionsStack *actionEntry,
@@ -58,10 +58,10 @@ void ReplayBuffer::pushToRevisit( const State &stateAfterAction,
                           activeAction._action.getNumPlConstraints();
     splitsReward =
         std::copysign( std::log( 1.0 + std::abs( splitsReward ) / 10.0 + 1e-8 ), splitsReward );
-    auto reward = GlobalConfiguration::DQN_ALPHA_REWARDS * splitsReward +
+    const auto reward = GlobalConfiguration::DQN_ALPHA_REWARDS * splitsReward +
                   ( 1.0 - GlobalConfiguration::DQN_ALPHA_REWARDS ) * prunedSubtrees;
 
-    addToRevisitExperiences( activeAction._stateBeforeAction,
+    addExperienceToRevisitBuffer( activeAction._stateBeforeAction,
                              activeAction._action,
                              reward,
                              stateAfterAction,
@@ -81,25 +81,22 @@ void ReplayBuffer::applyNextAction( const State &stateAfterAction,
                                     const double prunedSubtrees )
 {
     if ( _actionsStack.empty() )
-    {
-        handleDone( stateAfterAction, depth, numSplits, prunedSubtrees ); // todo check 1
         return;
-    }
 
     ActionsStack *actionEntry;
-    //  no alternative splits for previous actions - pop this entry and move activeActions to
-    //  revisit Buffer.
+
     // printf( "ReplayBuffer::applyNextAction\n" );
     // fflush( stdout );
     while ( numInconsistent > 0 )
     {
+        //  no alternative splits for this action - pop the entry and move activeActions to
+        //  revisitExperiences buffer.
         while ( _actionsStack.back()->_alternativeActions.empty() )
         {
             actionEntry = _actionsStack.back();
-            // move activeSplit to revisit buffer.
             while ( !actionEntry->_activeActions.empty() )
             {
-                pushToRevisit( stateAfterAction, depth, numSplits, actionEntry, prunedSubtrees );
+                moveActionToRevisitBuffer( stateAfterAction, depth, numSplits, actionEntry, prunedSubtrees );
                 // printf( "replay buffer: applyNextAction, pop activeAction\n" );
                 // fflush( stdout );
             }
@@ -109,10 +106,8 @@ void ReplayBuffer::applyNextAction( const State &stateAfterAction,
             // fflush( stdout );
 
             if ( _actionsStack.empty() )
-            {
-                handleDone( stateAfterAction, depth, numSplits, prunedSubtrees ); // todo check 1
                 return;
-            }
+
         }
 
         // alternative action exists - push it to activeSplits with current numSplits:
@@ -132,7 +127,7 @@ void ReplayBuffer::applyNextAction( const State &stateAfterAction,
 }
 
 
-void ReplayBuffer::addToRevisitExperiences( const State &state,
+void ReplayBuffer::addExperienceToRevisitBuffer( const State &state,
                                             const Action &action,
                                             double reward,
                                             const State &nextState,
@@ -143,7 +138,6 @@ void ReplayBuffer::addToRevisitExperiences( const State &state,
 {
     if ( _revisitExperiences.size() >= _bufferSize )
         _revisitExperiences.pop_front();
-
 
     auto experience = std::make_unique<Experience>(
         state, action, reward, nextState, done, depth, numSplits, changeReward );
@@ -162,15 +156,16 @@ Vector<unsigned> ReplayBuffer::sample() const
 {
     Vector<unsigned> sampledIndices;
 
-    if ( _batchSize == 0 || _revisitExperiences.empty() || _revisitExperiences.size() < _batchSize * GlobalConfiguration::DQN_MIN_SAMPLE_SIZE)
+    if ( _batchSize == 0 || _revisitExperiences.empty() ||
+         _revisitExperiences.size() < _batchSize * GlobalConfiguration::DQN_MIN_SAMPLE_SIZE )
     {
         return sampledIndices;
     }
-    unsigned startIndex = 0;
-    unsigned endIndex = getNumRevisitExperiences() - 1;
+    const unsigned startIndex = 0;
+    const unsigned endIndex = getNumRevisitExperiences() - 1;
 
-    unsigned rangeSize = endIndex - startIndex + 1;
-    unsigned sampleSize = std::min( _batchSize, rangeSize );
+    const unsigned rangeSize = endIndex - startIndex + 1;
+    const unsigned currentBatchSize = std::min( _batchSize, rangeSize );
 
     Vector<unsigned> indices( rangeSize );
     std::iota( indices.begin(), indices.end(), startIndex );
@@ -179,7 +174,7 @@ Vector<unsigned> ReplayBuffer::sample() const
     std::mt19937 g( rd() );
     std::shuffle( indices.begin(), indices.end(), g );
 
-    for ( unsigned i = 0; i < sampleSize; ++i )
+    for ( unsigned i = 0; i < currentBatchSize; ++i )
     {
         auto it = sampledIndices.end();
         sampledIndices.insert( it, indices[i] );

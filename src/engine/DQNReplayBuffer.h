@@ -142,7 +142,7 @@ public:
     Vector<unsigned> sample() const;
     unsigned getNumRevisitExperiences() const;
     unsigned getBatchSize() const;
-    void addToRevisitExperiences( const State& state,
+    void addExperienceToRevisitBuffer( const State& state,
                                   const Action& action,
                                   double reward,
                                   const State& nextState,
@@ -162,7 +162,7 @@ public:
                      unsigned stackDepth,
                      unsigned numSplits,
                      double prunedSubtrees );
-    void pushToRevisit( const State &stateAfterAction,
+    void moveActionToRevisitBuffer( const State &stateAfterAction,
                         unsigned depth,
                         unsigned numSplits,
                         ActionsStack *actionEntry,
