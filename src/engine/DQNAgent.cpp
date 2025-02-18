@@ -94,24 +94,21 @@ Action Agent::tensorToAction( const torch::Tensor &tensor ) const
 
 
 void Agent::handleDone( const State &currentState,
-                        const unsigned stackDepth,
                         const unsigned numSplits,
                         const double prunedSubtrees )
 {
     // Insert all actions from actions buffer to the replay buffer and learn.
-    _replayedBuffer.handleDone( currentState, stackDepth, numSplits, prunedSubtrees );
+    _replayedBuffer.handleDone( currentState, numSplits, prunedSubtrees );
     _tStep = ( _tStep + 1 ) % GlobalConfiguration::DQN_EXPLORATION_RATE;
     learn();
 }
 
 void Agent::stepAlternativeAction( const State &stateBeforeSplit,
-                                   const unsigned depthBeforeSplit,
                                    const unsigned numSplits,
                                    unsigned &numInconsistent,
                                    const double prunedSubtrees )
 {
-    _replayedBuffer.applyNextAction(
-        stateBeforeSplit, depthBeforeSplit, numSplits, numInconsistent, prunedSubtrees );
+    _replayedBuffer.applyNextAction( stateBeforeSplit, numSplits, numInconsistent, prunedSubtrees );
     _tStep = ( _tStep + 1 ) % GlobalConfiguration::DQN_EXPLORATION_RATE;
     if ( _tStep == 0 &&
          _replayedBuffer.getNumRevisitExperiences() > GlobalConfiguration::DQN_BATCH_SIZE )
@@ -124,7 +121,6 @@ void Agent::stepNewAction( const State &previousState,
                            const double reward,
                            const State &currentState,
                            const bool done,
-                           const unsigned depth,
                            const unsigned numSplits,
                            const bool changeReward )
 {
@@ -134,11 +130,10 @@ void Agent::stepNewAction( const State &previousState,
                                                       static_cast<float>( reward ),
                                                       currentState,
                                                       done,
-                                                      depth,
                                                       numSplits,
                                                       changeReward );
     else
-        _replayedBuffer.pushActionEntry( action, previousState, currentState, depth, numSplits );
+        _replayedBuffer.pushActionEntry( action, previousState, currentState, numSplits );
 
     _tStep = ( _tStep + 1 ) % GlobalConfiguration::DQN_EXPLORATION_RATE;
     if ( _tStep == 0 &&
@@ -159,10 +154,7 @@ std::unique_ptr<Action> Agent::act( const State &state, const double eps )
     {
         mask[i * _numPhases] = -std::numeric_limits<float>::infinity(); // can not choose to convert
                                                                         // a constraint back to an
-                                                                        // unfixed phase. todo check
-        mask[i * _numPhases + DQN_RELU_OFF] =
-            -std::numeric_limits<float>::infinity(); // can not choose to convert a constraint to an
-                                                     // initialization inactive phase
+                                                                        // unfixed phase.
 
         if ( state.getData()[i][DQN_RELU_NOT_FIXED] == 0 ) // can not choose to change a fixed
                                                            // constraint.

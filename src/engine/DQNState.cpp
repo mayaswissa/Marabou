@@ -75,8 +75,3 @@ const std::vector<std::vector<double>> &State::getData() const
 {
     return _stateData;
 }
-
-bool State::constraintActive(const unsigned constraintIndex) const
-{
-    return this->getData()[constraintIndex][DQN_RELU_OFF] == 0;
-}

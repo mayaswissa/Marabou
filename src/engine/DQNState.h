@@ -7,7 +7,6 @@ enum DQNPhases : unsigned {
     DQN_RELU_NOT_FIXED = 0,
     DQN_RELU_ACTIVE = 1,
     DQN_RELU_INACTIVE = 2,
-    DQN_RELU_OFF = 3,
     DQN_NUM_PHASES
 };
 
@@ -21,7 +20,6 @@ public:
     void updateConstraintPhase( unsigned constraintIndex, unsigned newPhase );
     void updateBounds( unsigned constraintIndex, double upperBound, double lowerBound );
     const std::vector<std::vector<double>> &getData() const;
-    bool constraintActive( unsigned constraintIndex ) const;
 
 private:
     // each inner vector represents a pl-constraint in one-hot encoding:

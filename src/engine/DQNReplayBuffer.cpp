@@ -16,18 +16,15 @@ ReplayBuffer::ReplayBuffer( const unsigned actionSize,
 void ReplayBuffer::pushActionEntry( const Action &action,
                                     const State &stateBeforeAction,
                                     const State &stateAfterAction,
-                                    const unsigned depth,
                                     const unsigned numSplits )
 {
     auto *actionEntry =
-        new ActionsStack( action, stateBeforeAction, stateAfterAction, depth, numSplits );
+        new ActionsStack( action, stateBeforeAction, stateAfterAction, numSplits );
     _actionsStack.append( actionEntry );
-    // printf( "replay buffer: add action entry, depth %u\n", _actionsStack.size() );
-    // fflush( stdout );
+
 }
 
 void ReplayBuffer::handleDone( const State &currentState,
-                               const unsigned stackDepth,
                                const unsigned numSplits,
                                const double prunedSubtrees )
 {
@@ -37,7 +34,7 @@ void ReplayBuffer::handleDone( const State &currentState,
         ActionsStack *actionEntry = _actionsStack.back();
         // no need to insert alternative actions.
         while ( !actionEntry->_activeActions.empty() )
-            moveActionToRevisitBuffer( currentState, stackDepth, numSplits, actionEntry, prunedSubtrees );
+            moveActionToRevisitBuffer( currentState, numSplits, actionEntry, prunedSubtrees );
 
         delete _actionsStack.back();
         _actionsStack.popBack();
@@ -47,10 +44,9 @@ void ReplayBuffer::handleDone( const State &currentState,
 }
 
 void ReplayBuffer::moveActionToRevisitBuffer( const State &stateAfterAction,
-                                  const unsigned depth,
-                                  const unsigned numSplits,
-                                  ActionsStack *actionEntry,
-                                  const double prunedSubtrees )
+                                              const unsigned numSplits,
+                                              ActionsStack *actionEntry,
+                                              const double prunedSubtrees )
 {
     const auto activeAction = actionEntry->_activeActions.back();
     double splitsReward = ( static_cast<double>( activeAction._splitsBeforeActiveAction ) -
@@ -62,20 +58,18 @@ void ReplayBuffer::moveActionToRevisitBuffer( const State &stateAfterAction,
                   ( 1.0 - GlobalConfiguration::DQN_ALPHA_REWARDS ) * prunedSubtrees;
 
     addExperienceToRevisitBuffer( activeAction._stateBeforeAction,
-                             activeAction._action,
-                             reward,
-                             stateAfterAction,
-                             false,
-                             depth,
-                             numSplits,
-                             false );
+                                  activeAction._action,
+                                  reward,
+                                  stateAfterAction,
+                                  false,
+                                  numSplits,
+                                  false );
 
     actionEntry->_activeActions.popBack();
 }
 
 // go to next alternative action available in actionsStack.
 void ReplayBuffer::applyNextAction( const State &stateAfterAction,
-                                    const unsigned depth,
                                     const unsigned numSplits,
                                     unsigned &numInconsistent,
                                     const double prunedSubtrees )
@@ -96,7 +90,8 @@ void ReplayBuffer::applyNextAction( const State &stateAfterAction,
             actionEntry = _actionsStack.back();
             while ( !actionEntry->_activeActions.empty() )
             {
-                moveActionToRevisitBuffer( stateAfterAction, depth, numSplits, actionEntry, prunedSubtrees );
+                moveActionToRevisitBuffer(
+                    stateAfterAction, numSplits, actionEntry, prunedSubtrees );
                 // printf( "replay buffer: applyNextAction, pop activeAction\n" );
                 // fflush( stdout );
             }
@@ -116,7 +111,6 @@ void ReplayBuffer::applyNextAction( const State &stateAfterAction,
         actionEntry->_activeActions.append( ActiveAction( *action,
                                                           actionEntry->_stateBeforeAction,
                                                           stateAfterAction,
-                                                          actionEntry->_depthBeforeAction,
                                                           numSplits ) );
         actionEntry->_alternativeActions.erase( action );
         numInconsistent--;
@@ -128,19 +122,18 @@ void ReplayBuffer::applyNextAction( const State &stateAfterAction,
 
 
 void ReplayBuffer::addExperienceToRevisitBuffer( const State &state,
-                                            const Action &action,
-                                            double reward,
-                                            const State &nextState,
-                                            const bool done,
-                                            unsigned depth,
-                                            unsigned numSplits,
-                                            bool changeReward )
+                                                 const Action &action,
+                                                 double reward,
+                                                 const State &nextState,
+                                                 const bool done,
+                                                 unsigned numSplits,
+                                                 bool changeReward )
 {
     if ( _revisitExperiences.size() >= _bufferSize )
         _revisitExperiences.pop_front();
 
     auto experience = std::make_unique<Experience>(
-        state, action, reward, nextState, done, depth, numSplits, changeReward );
+        state, action, reward, nextState, done, numSplits, changeReward );
     _revisitExperiences.push_back( std::move( experience ) );
 }
 

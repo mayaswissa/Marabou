@@ -16,7 +16,6 @@ struct Experience
     double _reward;
     State _stateAfterAction;
     bool _done;
-    unsigned _depthAfter;
     unsigned _splitsBefore;
     bool _changeReward;
 
@@ -26,7 +25,6 @@ struct Experience
                 const double reward,
                 const State &stateAfterAction,
                 const bool done,
-                const unsigned depth,
                 const unsigned numSplits = 0,
                 const bool changeReward = true )
         : _stateBeforeAction( stateBeforeAction )
@@ -34,7 +32,6 @@ struct Experience
         , _reward( reward )
         , _stateAfterAction( stateAfterAction )
         , _done( done )
-        , _depthAfter( depth )
         , _splitsBefore( numSplits )
         , _changeReward( changeReward )
     {
@@ -46,7 +43,6 @@ struct Experience
         , _reward( other._reward )
         , _stateAfterAction( other._stateAfterAction )
         , _done( other._done )
-        , _depthAfter( other._depthAfter )
         , _splitsBefore( other._splitsBefore )
         , _changeReward( other._changeReward )
     {
@@ -58,7 +54,6 @@ struct Experience
         , _reward( other._reward )
         , _stateAfterAction( std::move( other._stateAfterAction ) )
         , _done( other._done )
-        , _depthAfter( other._depthAfter )
         , _splitsBefore( other._splitsBefore )
         , _changeReward( other._changeReward )
     {
@@ -73,7 +68,6 @@ struct Experience
             _reward = other._reward;
             _stateAfterAction = std::move( other._stateAfterAction );
             _done = other._done;
-            _depthAfter = other._depthAfter;
             _splitsBefore = other._splitsBefore;
             _changeReward = other._changeReward;
         }
@@ -86,17 +80,14 @@ struct ActiveAction
     Action _action;
     State _stateBeforeAction;
     State _stateAfterAction;
-    unsigned _depthBeforeAction;
     unsigned _splitsBeforeActiveAction;
     ActiveAction( const Action &action,
                   const State &stateBeforeAction,
                   const State &stateAfterAction,
-                  unsigned depthBeforeAction,
                   unsigned splitsBeforeAction )
         : _action( action )
         , _stateBeforeAction( stateBeforeAction )
         , _stateAfterAction( stateAfterAction )
-        , _depthBeforeAction( depthBeforeAction )
         , _splitsBeforeActiveAction( splitsBeforeAction )
     {
     }
@@ -108,22 +99,18 @@ struct ActionsStack
     List<ActiveAction> _activeActions;
     List<Action> _alternativeActions;
     State _stateBeforeAction;
-    unsigned _depthBeforeAction;
 
     ActionsStack( const Action &action,
                   const State &stateBeforeAction,
                   const State &stateAfterAction,
-                  const unsigned depthBeforeAction,
                   const unsigned splitsBeforeAction )
         : _stateBeforeAction( stateBeforeAction )
-        , _depthBeforeAction( depthBeforeAction )
 
     {
         _activeActions = List<ActiveAction>();
         _activeActions.append( ActiveAction( action,
                                              stateBeforeAction ,
                                              stateAfterAction,
-                                             _depthBeforeAction,
                                              splitsBeforeAction ) );
         _alternativeActions = List<Action>();
 
@@ -142,33 +129,26 @@ public:
     Vector<unsigned> sample() const;
     unsigned getNumRevisitExperiences() const;
     unsigned getBatchSize() const;
-    void addExperienceToRevisitBuffer( const State& state,
-                                  const Action& action,
-                                  double reward,
-                                  const State& nextState,
-                                  const bool done,
-                                  unsigned depth,
-                                  unsigned numSplits = 0,
-                                  bool changeReward = true );
+    void addExperienceToRevisitBuffer( const State &state,
+                                       const Action &action,
+                                       double reward,
+                                       const State &nextState,
+                                       const bool done,
+                                       unsigned numSplits = 0,
+                                       bool changeReward = true );
 
     bool compareStateWithAlternative( State &state ) const;
 
-    void pushActionEntry( const Action& action,
-                          const State& stateBeforeAction,
-                          const State& stateAfterAction,
-                          unsigned depth,
+    void pushActionEntry( const Action &action,
+                          const State &stateBeforeAction,
+                          const State &stateAfterAction,
                           unsigned numSplits );
-    void handleDone( const State &currentState,
-                     unsigned stackDepth,
-                     unsigned numSplits,
-                     double prunedSubtrees );
+    void handleDone( const State &currentState, unsigned numSplits, double prunedSubtrees );
     void moveActionToRevisitBuffer( const State &stateAfterAction,
-                        unsigned depth,
-                        unsigned numSplits,
-                        ActionsStack *actionEntry,
-                        double prunedSubtrees );
+                                    unsigned numSplits,
+                                    ActionsStack *actionEntry,
+                                    double prunedSubtrees );
     void applyNextAction( const State &state,
-                          unsigned depth,
                           unsigned numSplits,
                           unsigned &numInconsistent,
                           double prunedSubtrees );
@@ -180,7 +160,6 @@ private:
     unsigned _bufferSize;
     unsigned _batchSize;
     std::deque<std::unique_ptr<Experience>> _revisitExperiences;
-    void goToCurrentDepth( unsigned currentDepth );
     List<ActionsStack *> _actionsStack;
 };
 

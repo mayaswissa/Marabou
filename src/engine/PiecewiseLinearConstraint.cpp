@@ -199,8 +199,5 @@ void PiecewiseLinearConstraint::setStatistics( Statistics *statistics )
     _statistics = statistics;
 }
 
-List<PiecewiseLinearCaseSplit>
-PiecewiseLinearConstraint::getCaseSplitsByAgent( PhaseStatus /* DQNDirection */)
-{
-    return List<PiecewiseLinearCaseSplit>();
-}
+
+void PiecewiseLinearConstraint::setDirection( PhaseStatus /* DQNDirection */){}

@@ -17,23 +17,18 @@ public:
            const std::string &saveAgentPath,
            const std::string &trainedAgentPath = "" );
     void stepAlternativeAction( const State &stateBeforeSplit,
-                               unsigned depthBeforeSplit,
-                               unsigned numSplits,
-                               unsigned &numInconsistent,
-                               double prunedSubtrees );
+                                unsigned numSplits,
+                                unsigned &numInconsistent,
+                                double prunedSubtrees );
     void stepNewAction( const State &state,
-               const Action &action,
-               double reward,
-               const State &nextState,
-               bool done,
-               unsigned depth,
-               unsigned numSplits,
-               bool changeReward );
+                        const Action &action,
+                        double reward,
+                        const State &nextState,
+                        bool done,
+                        unsigned numSplits,
+                        bool changeReward );
 
-    void handleDone( const State &currentState,
-                     unsigned stackDepth,
-                     unsigned numSplits,
-                     double prunedSubtrees );
+    void handleDone( const State &currentState, unsigned numSplits, double prunedSubtrees );
     std::unique_ptr<Action> act( const State &state, double eps = 0.1 );
     double updateLR();
     Action tensorToAction( const torch::Tensor &tensor ) const;

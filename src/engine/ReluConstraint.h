@@ -115,7 +115,7 @@ public:
      */
     List<PiecewiseLinearCaseSplit> getCaseSplits() const override;
 
-    List<PiecewiseLinearCaseSplit> getCaseSplitsByAgent( PhaseStatus DQNDirection ) override;
+    void setDirection( PhaseStatus DQNDirection ) override;
 
     /*
       If the constraint's phase has been fixed, get the (valid) case split.
