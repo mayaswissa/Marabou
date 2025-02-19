@@ -10,14 +10,13 @@ Agent::Agent( const unsigned numPlConstraints,
     : _actionSpace( ActionSpace( numPlConstraints, numPhases ) )
     , _numPlConstraints( numPlConstraints )
     , _numPhases( numPhases )
-    , _embeddingDim( numPhases + 2 ) // todo change
     , _numActions( _actionSpace.getSpaceSize() )
     , _tStep( 0 )
     , device( torch::cuda::is_available() ? torch::kCUDA : torch::kCPU )
     , _saveAgentFilePath( saveAgentPath )
     , _trainedAgentFilePath( trainedAgentPath )
-    , _qNetworkLocal( QNetwork( _numPlConstraints, _numPhases, _embeddingDim, _numActions ) )
-    , _qNetworkTarget( QNetwork( _numPlConstraints, _numPhases, _embeddingDim, _numActions ) )
+    , _qNetworkLocal( QNetwork( _numPlConstraints, _numPhases + 3, _numActions ) ) // todo change numPhases to numFeatures
+    , _qNetworkTarget( QNetwork( _numPlConstraints, _numPhases + 3,  _numActions ) )
     , _optimizer( _qNetworkLocal.parameters(),
                   torch::optim::AdamOptions( GlobalConfiguration::DQN_LR ).weight_decay( 1e-4 ) )
     , _scheduler( _optimizer, 1, 0.9 )

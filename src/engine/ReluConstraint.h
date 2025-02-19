@@ -229,7 +229,7 @@ public:
       always between -1 and 1. The closer it is to 0, the more symmetric the
       bound is.
     */
-    double computePolarity() const;
+    double computePolarity() const override;
 
     /*
       Update the preferred direction for fixing and handling case split

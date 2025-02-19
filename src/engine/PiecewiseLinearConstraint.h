@@ -196,6 +196,8 @@ public:
     */
     virtual List<PiecewiseLinearCaseSplit> getCaseSplits() const = 0;
 
+    virtual double computePolarity() const;
+
     virtual void setDirection( PhaseStatus DQNDirection );
 
     /*

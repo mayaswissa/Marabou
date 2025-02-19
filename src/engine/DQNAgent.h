@@ -44,7 +44,7 @@ private:
     torch::Device getDevice() const;
 
     ActionSpace _actionSpace;
-    unsigned _numPlConstraints, _numPhases, _embeddingDim, _numActions;
+    unsigned _numPlConstraints, _numPhases, _numActions;
     unsigned _tStep;
     static constexpr double GAMMA = 0.9; // future rewards contribution to the current Q-value
     torch::Device device;

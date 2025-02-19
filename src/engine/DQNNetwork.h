@@ -10,7 +10,6 @@ class QNetwork final : public torch::nn::Module
 public:
     QNetwork( unsigned numPlConstraints,
               unsigned numPhases,
-              unsigned embeddingDim,
               unsigned numActions );
     torch::Tensor forward( const torch::Tensor &state );
     std::vector<torch::Tensor> getParameters() const;
@@ -27,8 +26,6 @@ private:
     void initWeights();
     unsigned _inputDim;
     unsigned _outputDim;
-    unsigned _numPhases;
-    unsigned _embeddingDim;
-    unsigned _numBounds;
+    unsigned _numFeatures;
     unsigned _numConstraints;
 };

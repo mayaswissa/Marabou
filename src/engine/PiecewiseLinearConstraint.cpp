@@ -199,5 +199,8 @@ void PiecewiseLinearConstraint::setStatistics( Statistics *statistics )
     _statistics = statistics;
 }
 
-
+double PiecewiseLinearConstraint::computePolarity() const
+{
+    return 0;
+}
 void PiecewiseLinearConstraint::setDirection( PhaseStatus /* DQNDirection */){}

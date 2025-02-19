@@ -2,7 +2,7 @@
 #include <GlobalConfiguration.h>
 
 State::State( const unsigned numConstraints )
-    : _stateData( numConstraints, std::vector<double>( DQN_NUM_PHASES + 2, 0.0f ) )
+    : _stateData( numConstraints, std::vector<double>( DQN_NUM_PHASES + 3, 0.0f ) )
     , _numPhases( DQN_NUM_PHASES )
 {
     // set all phases not fixed
@@ -30,20 +30,24 @@ State &State::operator=( const State &other )
 torch::Tensor State::toTensor() const {
     std::vector<int64_t> phaseData;
     std::vector< double> boundsData;
+    std::vector< double> polarityScores;
     unsigned numConstraints = _stateData.size();
     unsigned counter = 0;
     for (const auto& constraint : _stateData) {
         counter += constraint.size();
-        for (size_t i = 0; i < constraint.size() - 2; ++i)
+        for (size_t i = 0; i < constraint.size() - 3; ++i)
             phaseData.push_back(static_cast<int64_t>(constraint[i]));  // Collect phase indices
-        double upperBound = std::tanh(constraint[constraint.size() - 2]);
-        double lowerBound = std::tanh(constraint[constraint.size() - 1]);
+        double upperBound = std::tanh(constraint[constraint.size() - 3]);
+        double lowerBound = std::tanh(constraint[constraint.size() - 2]);
+        double polarityScore = constraint[constraint.size() - 1];
         boundsData.push_back(upperBound);
         boundsData.push_back(lowerBound);
+        polarityScores.push_back(polarityScore);
     }
     auto phaseTensor = torch::tensor(phaseData, torch::kInt64).view({numConstraints, _numPhases});
     auto boundsTensor = torch::tensor(boundsData, torch::kFloat32).view({numConstraints, 2});
-    auto tensorState = torch::cat({phaseTensor, boundsTensor}, 1);
+    auto scoreTensor = torch::tensor(polarityScores, torch::kFloat32).view({numConstraints, 1});
+    auto tensorState = torch::cat({phaseTensor, boundsTensor, scoreTensor}, 1);
     return tensorState;
 }
 
@@ -69,6 +73,12 @@ void State::updateBounds( const unsigned constraintIndex,
         _stateData[constraintIndex][_numPhases] = upperBound;
         _stateData[constraintIndex][_numPhases + 1] = lowerBound;
     }
+}
+
+void State::updatePolarity( const unsigned constraintIndex, const double polarityScore)
+{
+    if ( constraintIndex < _stateData.size() )
+        _stateData[constraintIndex][_numPhases +2] = polarityScore;
 }
 
 const std::vector<std::vector<double>> &State::getData() const

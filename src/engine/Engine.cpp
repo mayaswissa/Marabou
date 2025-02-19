@@ -135,6 +135,7 @@ void Engine::updateToCurrentDQNState( State &stateToUpdate )
         stateToUpdate.updateBounds( index,
                                     _boundManager.getUpperBound( variable ),
                                     _boundManager.getLowerBound( variable ) );
+        stateToUpdate.updatePolarity(index, plConstraint->computePolarity());
         index++;
     }
 }

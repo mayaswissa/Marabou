@@ -19,6 +19,7 @@ public:
     torch::Tensor toTensor() const;
     void updateConstraintPhase( unsigned constraintIndex, unsigned newPhase );
     void updateBounds( unsigned constraintIndex, double upperBound, double lowerBound );
+    void updatePolarity( unsigned constraintIndex, double polarityScore );
     const std::vector<std::vector<double>> &getData() const;
 
 private:

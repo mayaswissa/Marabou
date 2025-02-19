@@ -1,19 +1,13 @@
 #include "DQNNetwork.h"
 
 QNetwork::QNetwork( const unsigned numPlConstraints,
-                    unsigned numPhases,
-                    unsigned embeddingDim,
+                    unsigned numFeatures,
                     const unsigned numActions )
-    : _statusEmbedding(
-          register_module( "statusEmbedding", torch::nn::Embedding( numPhases, embeddingDim ) ) )
-    // , dropout( register_module( "dropout", torch::nn::Dropout( 0.3 ) ) )
-    , _numPhases( numPhases )
-    , _embeddingDim( embeddingDim )
-    , _numBounds( 2 )
+    :
+     _outputDim( numActions ), _numFeatures( numFeatures ) ,_numConstraints( numPlConstraints )
 {
-    _inputDim = numPlConstraints * ( _numPhases * embeddingDim + _numBounds );
-    _outputDim = numActions;
-    _numConstraints = numPlConstraints;
+    // , dropout( register_module( "dropout", torch::nn::Dropout( 0.3 ) ) )
+    _inputDim = numPlConstraints * _numFeatures;
     fc1 = register_module( "fc1", torch::nn::Linear( _inputDim, 64 ) );
     fc2 = register_module( "fc2", torch::nn::Linear( 64, 128 ) );
     fc3 = register_module( "fc3", torch::nn::Linear( 128, 256 ) );
@@ -45,44 +39,22 @@ torch::Tensor QNetwork::forward( const torch::Tensor &state )
     auto stateWithBatch = state.to( torch::kFloat32 );
     if ( state.sizes().size() == 2 )
         stateWithBatch = state.unsqueeze( 0 ); // Add batch dimension
-
-    const auto phases = stateWithBatch.narrow( 2, 0, _numPhases ).to( torch::kInt64 );
-    const auto bounds = stateWithBatch.narrow( 2, _numPhases, _numBounds ).to( torch::kFloat64 );
-
-    if ( phases.any().item<bool>() &&
-         ( phases.min().item<int>() < 0 ||
-           phases.max().item<int>() >=
-               static_cast<int>( _statusEmbedding->options.num_embeddings() ) ) )
-    {
-        std::cerr << "Phase index out of bounds: Min " << phases.min().item<int>() << ", Max "
-                  << phases.max().item<int>() << " vs num_embeddings "
-                  << _statusEmbedding->options.num_embeddings() << std::endl;
-        throw std::runtime_error( "Phase index out of embedding bounds." );
-    }
-
-    // Applying the embedding layer
-    auto embedded = _statusEmbedding->forward( phases );
-    auto embeddedFlattened = embedded.view( { embedded.size( 0 ), -1 } );
-
-    auto boundsFlattened = bounds.view( { bounds.size( 0 ), -1 } );
-    auto fullInput = torch::cat( { embeddedFlattened, boundsFlattened }, 1 );
-    fullInput = fullInput.to( torch::kFloat32 );
-
-    if ( fullInput.sizes().size() != 2 || fullInput.size( 1 ) != fc1->options.in_features() )
+    const auto features = stateWithBatch.narrow( 2, 0, _numFeatures ).to( torch::kFloat32 );
+    auto featuresFlattened = features.view( { features.size( 0 ), -1 } );
+    if ( featuresFlattened.sizes().size() != 2 || featuresFlattened.size( 1 ) != fc1->options.in_features() )
     {
         std::cerr << "Invalid input tensor size: Expected [batch_size, "
-                  << fc1->options.in_features() << "], got " << fullInput.sizes() << std::endl;
+                  << fc1->options.in_features() << "], got " << featuresFlattened.sizes() << std::endl;
         throw std::runtime_error( "Invalid input tensor size." );
     }
 
-    if ( torch::isnan( fullInput ).any().item<bool>() ||
-         torch::isinf( fullInput ).any().item<bool>() )
+    if ( torch::isnan( featuresFlattened ).any().item<bool>() ||
+         torch::isinf( featuresFlattened ).any().item<bool>() )
     {
         std::cerr << "Error: fullInput contains NaN or Inf values!" << std::endl;
         throw std::runtime_error( "NaN/Inf detected in fullInput." );
     }
-
-    auto x = torch::relu( fc1( fullInput ) );
+    auto x = torch::relu( fc1( featuresFlattened ) );
     x = torch::relu( fc2( x ) );
     x = torch::relu( fc3( x ) );
     auto output = fc4( x );
@@ -116,8 +88,6 @@ std::pair<int, int> QNetwork::getDims() const
 
 void QNetwork::save( torch::serialize::OutputArchive &archive ) const
 {
-    // Save weights and biases of the embedding and linear layers
-    archive.write( "statusEmbedding_weight", _statusEmbedding->weight );
     // Save weights and biases for each Linear layer
     archive.write( "fc1_weight", fc1->weight );
     archive.write( "fc1_bias", fc1->bias );
@@ -135,8 +105,6 @@ void QNetwork::save( torch::serialize::OutputArchive &archive ) const
 
 void QNetwork::load( torch::serialize::InputArchive &archive )
 {
-    // Load weights and biases of the embedding and linear layers
-    archive.read( "statusEmbedding_weight", _statusEmbedding->weight );
     // Load weights and biases for each Linear layer
     archive.read( "fc1_weight", fc1->weight );
     archive.read( "fc1_bias", fc1->bias );
