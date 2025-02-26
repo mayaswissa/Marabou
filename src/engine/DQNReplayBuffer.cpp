@@ -1,16 +1,26 @@
 #include "DQNReplayBuffer.h"
-
-#include <Debug.h>
-#include <memory>
 #include <random>
 
-ReplayBuffer::ReplayBuffer( const unsigned actionSize,
+ReplayBuffer::ReplayBuffer( const unsigned numConstraints,
                             const unsigned bufferSize,
                             const unsigned batchSize )
-    : _actionSize( actionSize )
+    : _numConstraints( numConstraints )
     , _bufferSize( bufferSize )
     , _batchSize( batchSize )
+    , _size( 0 )
+    , _writePosition( 0 )
 {
+    _actions = torch::zeros( { static_cast<long>( bufferSize) , 1 }, torch::kFloat32 );
+    _states = torch::zeros( { static_cast<long>( bufferSize ),
+                               _numConstraints ,
+                              NUM_FEATURES  },
+                            torch::kFloat32 );
+    _rewards = torch::zeros( { static_cast<long>( bufferSize ) }, torch::kFloat32 );
+    _nextStates = torch::zeros( { static_cast<long>( bufferSize ),
+                                  static_cast<long>( _numConstraints ),
+                                  static_cast<long>( NUM_FEATURES ) },
+                                torch::kFloat32 );
+    _dones = torch::zeros( { static_cast<long>( bufferSize ) }, torch::kInt );
 }
 
 void ReplayBuffer::pushActionEntry( const Action &action,
@@ -18,10 +28,8 @@ void ReplayBuffer::pushActionEntry( const Action &action,
                                     const State &stateAfterAction,
                                     const unsigned numSplits )
 {
-    auto *actionEntry =
-        new ActionsStack( action, stateBeforeAction, stateAfterAction, numSplits );
+    auto *actionEntry = new ActionsStack( action, stateBeforeAction, stateAfterAction, numSplits );
     _actionsStack.append( actionEntry );
-
 }
 
 void ReplayBuffer::handleDone( const State &currentState,
@@ -38,8 +46,6 @@ void ReplayBuffer::handleDone( const State &currentState,
 
         delete _actionsStack.back();
         _actionsStack.popBack();
-        // printf( "replay buffer: pop action entry, depth %u\n", _actionsStack.size() );
-        // fflush( stdout );
     }
 }
 
@@ -55,16 +61,10 @@ void ReplayBuffer::moveActionToRevisitBuffer( const State &stateAfterAction,
     splitsReward =
         std::copysign( std::log( 1.0 + std::abs( splitsReward ) / 10.0 + 1e-8 ), splitsReward );
     const auto reward = GlobalConfiguration::DQN_ALPHA_REWARDS * splitsReward +
-                  ( 1.0 - GlobalConfiguration::DQN_ALPHA_REWARDS ) * prunedSubtrees;
+                        ( 1.0 - GlobalConfiguration::DQN_ALPHA_REWARDS ) * prunedSubtrees;
 
-    addExperienceToRevisitBuffer( activeAction._stateBeforeAction,
-                                  activeAction._action,
-                                  reward,
-                                  stateAfterAction,
-                                  false,
-                                  numSplits,
-                                  false );
-
+    addExperienceToRevisitBuffer(
+        activeAction._stateBeforeAction, activeAction._action, reward, stateAfterAction, false );
     actionEntry->_activeActions.popBack();
 }
 
@@ -79,8 +79,6 @@ void ReplayBuffer::applyNextAction( const State &stateAfterAction,
 
     ActionsStack *actionEntry;
 
-    // printf( "ReplayBuffer::applyNextAction\n" );
-    // fflush( stdout );
     while ( numInconsistent > 0 )
     {
         //  no alternative splits for this action - pop the entry and move activeActions to
@@ -92,70 +90,58 @@ void ReplayBuffer::applyNextAction( const State &stateAfterAction,
             {
                 moveActionToRevisitBuffer(
                     stateAfterAction, numSplits, actionEntry, prunedSubtrees );
-                // printf( "replay buffer: applyNextAction, pop activeAction\n" );
-                // fflush( stdout );
             }
             delete _actionsStack.back();
             _actionsStack.popBack();
-            // printf( "replay buffer: pop entry, depth after pop: %u\n", _actionsStack.size() );
-            // fflush( stdout );
 
             if ( _actionsStack.empty() )
                 return;
-
         }
 
         // alternative action exists - push it to activeSplits with current numSplits:
         actionEntry = _actionsStack.back();
         auto action = actionEntry->_alternativeActions.begin();
-        actionEntry->_activeActions.append( ActiveAction( *action,
-                                                          actionEntry->_stateBeforeAction,
-                                                          stateAfterAction,
-                                                          numSplits ) );
+        actionEntry->_activeActions.append(
+            ActiveAction( *action, actionEntry->_stateBeforeAction, stateAfterAction, numSplits ) );
         actionEntry->_alternativeActions.erase( action );
         numInconsistent--;
-        // printf( "replay buffer: erased alternative, move it to active, depth: %u\n",
-        //         _actionsStack.size() );
-        // fflush( stdout );
     }
 }
-
 
 void ReplayBuffer::addExperienceToRevisitBuffer( const State &state,
                                                  const Action &action,
                                                  double reward,
                                                  const State &nextState,
-                                                 const bool done,
-                                                 unsigned numSplits,
-                                                 bool changeReward )
+                                                 const bool done )
 {
-    if ( _revisitExperiences.size() >= _bufferSize )
-        _revisitExperiences.pop_front();
+    const auto stateTensor = state.toTensor();
+    const auto actionTensor = action.actionToTensor();
+    const auto nextStateTensor = nextState.toTensor();
+    _states.index_put_(
+        { static_cast<long>( _writePosition ), torch::indexing::Slice(), torch::indexing::Slice() },
+        stateTensor );
+    _actions.index_put_( { static_cast<long>( _writePosition ), 0 }, actionTensor );
+    _rewards.index_put_( { static_cast<long>( _writePosition ) }, static_cast<double>( reward ) );
+    _nextStates.index_put_(
+        { static_cast<long>( _writePosition ), torch::indexing::Slice(), torch::indexing::Slice() },
+        nextStateTensor );
+    _dones.index_put_( { static_cast<long>( _writePosition ) }, done ? 1 : 0 );
 
-    auto experience = std::make_unique<Experience>(
-        state, action, reward, nextState, done, numSplits, changeReward );
-    _revisitExperiences.push_back( std::move( experience ) );
+    _writePosition = ( _writePosition + 1 ) % _bufferSize;
+    if ( _size < _bufferSize )
+        ++_size;
 }
 
-
-Experience &ReplayBuffer::getRevisitExperienceAt( const unsigned index ) const
+std::vector<unsigned> ReplayBuffer::sample() const
 {
-    if ( index >= getNumRevisitExperiences() )
-        throw std::out_of_range( "Index out of range in revisited experiences" ); // todo error
-    return *_revisitExperiences[index];
-}
+    std::vector<unsigned> sampledIndices;
 
-Vector<unsigned> ReplayBuffer::sample() const
-{
-    Vector<unsigned> sampledIndices;
-
-    if ( _batchSize == 0 || _revisitExperiences.empty() ||
-         _revisitExperiences.size() < _batchSize * GlobalConfiguration::DQN_MIN_SAMPLE_SIZE )
+    if ( _batchSize == 0 || _size < _batchSize * GlobalConfiguration::DQN_MIN_SAMPLE_SIZE )
     {
         return sampledIndices;
     }
     const unsigned startIndex = 0;
-    const unsigned endIndex = getNumRevisitExperiences() - 1;
+    const unsigned endIndex = _size - 1;
 
     const unsigned rangeSize = endIndex - startIndex + 1;
     const unsigned currentBatchSize = std::min( _batchSize, rangeSize );
@@ -166,18 +152,13 @@ Vector<unsigned> ReplayBuffer::sample() const
     std::random_device rd;
     std::mt19937 g( rd() );
     std::shuffle( indices.begin(), indices.end(), g );
-
-    for ( unsigned i = 0; i < currentBatchSize; ++i )
-    {
-        auto it = sampledIndices.end();
-        sampledIndices.insert( it, indices[i] );
-    }
+    sampledIndices.insert(sampledIndices.end(), indices.begin(), indices.begin() + currentBatchSize);
     return sampledIndices;
 }
 
 unsigned ReplayBuffer::getNumRevisitExperiences() const
 {
-    return _revisitExperiences.size();
+    return _size;
 }
 
 unsigned ReplayBuffer::getBatchSize() const
@@ -187,7 +168,28 @@ unsigned ReplayBuffer::getBatchSize() const
 
 int ReplayBuffer::getActionStackSize() const
 {
-    if ( _actionSize )
+    if ( !_actionsStack.empty() )
         return _actionsStack.size();
     return 0;
+}
+
+torch::Tensor ReplayBuffer::getStates()
+{
+    return _states;
+}
+torch::Tensor ReplayBuffer::getNextStates()
+{
+    return _nextStates;
+}
+torch::Tensor ReplayBuffer::getActions()
+{
+    return _actions;
+}
+torch::Tensor ReplayBuffer::getRewards()
+{
+    return _rewards;
+}
+torch::Tensor ReplayBuffer::getDones()
+{
+    return _dones;
 }

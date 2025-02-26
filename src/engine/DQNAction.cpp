@@ -76,6 +76,7 @@ unsigned Action::getActionPhase() const
 {
     return _assignmentIndex;
 }
+
 torch::Tensor Action::actionToTensor() const
 {
     int combinedIndex = static_cast<int>( _plConstraintActionIndex ) * _numPhases +

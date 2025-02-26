@@ -226,6 +226,11 @@ public:
 
     void updateScoreBasedOnPolarity() override;
 
+    /*
+    Return true iff b or f are out of bounds.
+  */
+    bool haveOutOfBoundVariables() const;
+
 
 private:
     unsigned _b, _f;
@@ -243,10 +248,6 @@ private:
 
     static String phaseToString( PhaseStatus phase );
 
-    /*
-      Return true iff b or f are out of bounds.
-    */
-    bool haveOutOfBoundVariables() const;
 
     /*
       Assign a variable as an aux variable by the tableau, related to the existing aux variable.

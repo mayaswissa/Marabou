@@ -9,7 +9,7 @@ class QNetwork final : public torch::nn::Module
 {
 public:
     QNetwork( unsigned numPlConstraints,
-              unsigned numPhases,
+              unsigned numFeatures,
               unsigned numActions );
     torch::Tensor forward( const torch::Tensor &state );
     std::vector<torch::Tensor> getParameters() const;

@@ -201,6 +201,9 @@ void PiecewiseLinearConstraint::setStatistics( Statistics *statistics )
 
 double PiecewiseLinearConstraint::computePolarity() const
 {
-    return 0;
+    throw MarabouError( MarabouError::FEATURE_NOT_YET_SUPPORTED );
 }
-void PiecewiseLinearConstraint::setDirection( PhaseStatus /* DQNDirection */){}
+void PiecewiseLinearConstraint::setDirection( PhaseStatus /* DQNDirection */)
+{
+    throw MarabouError( MarabouError::FEATURE_NOT_YET_SUPPORTED );
+}

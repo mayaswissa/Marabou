@@ -10,24 +10,28 @@ ActionSpace::ActionSpace(unsigned numConstraints,unsigned numPhases)
         }
     }
 }
+
 unsigned ActionSpace::getActionIndex(unsigned constraintIndex, unsigned phaseIndex ) const
 {
     return constraintIndex * _numPhases + phaseIndex;
 }
+
 std::pair<unsigned, unsigned> ActionSpace::decodeActionIndex(unsigned actionIndex) const {
     unsigned constraintIndex = actionIndex / _numPhases;
     unsigned phaseIndex = actionIndex % _numPhases;
     return {constraintIndex, phaseIndex};
 }
 
-unsigned ActionSpace::getSpaceSize() const
+unsigned ActionSpace::getNumActions() const
 {
     return _numConstraints * _numPhases;
 }
+
 unsigned ActionSpace::getNumPhases() const
 {
     return _numPhases;
 }
+
 unsigned ActionSpace::getNumConstraints() const
 {
     return _numConstraints;

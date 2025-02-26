@@ -19,7 +19,6 @@ struct Experience
     unsigned _splitsBefore;
     bool _changeReward;
 
-    // Existing constructor
     Experience( const State &stateBeforeAction,
                 const Action &action,
                 const double reward,
@@ -124,18 +123,15 @@ struct ActionsStack
 class ReplayBuffer
 {
 public:
-    ReplayBuffer( unsigned actionSize, unsigned bufferSize, unsigned batchSize );
-    Experience &getRevisitExperienceAt( unsigned index ) const;
-    Vector<unsigned> sample() const;
+    ReplayBuffer( unsigned numConstraints, unsigned bufferSize, unsigned batchSize );
+    std::vector<unsigned> sample() const;
     unsigned getNumRevisitExperiences() const;
     unsigned getBatchSize() const;
     void addExperienceToRevisitBuffer( const State &state,
                                        const Action &action,
                                        double reward,
                                        const State &nextState,
-                                       const bool done,
-                                       unsigned numSplits = 0,
-                                       bool changeReward = true );
+                                       const bool done );
 
     bool compareStateWithAlternative( State &state ) const;
 
@@ -153,14 +149,26 @@ public:
                           unsigned &numInconsistent,
                           double prunedSubtrees );
     int getActionStackSize() const;
-
+    torch::Tensor getStates();
+    torch::Tensor getActions();
+    torch::Tensor getRewards();
+    torch::Tensor getNextStates();
+    torch::Tensor getDones();
 
 private:
-    unsigned _actionSize;
+    unsigned _numConstraints;
     unsigned _bufferSize;
     unsigned _batchSize;
     std::deque<std::unique_ptr<Experience>> _revisitExperiences;
     List<ActionsStack *> _actionsStack;
+
+    unsigned _size; // valid entries in replayBuffer
+    unsigned _writePosition; //  pointer for the next empty position in experiences buffer
+    torch::Tensor _states; // [bufferSize, stateDim]
+    torch::Tensor _actions; // [bufferSize]
+    torch::Tensor _rewards; // [bufferSize]
+    torch::Tensor _nextStates; // [bufferSize, stateDim]
+    torch::Tensor _dones; // [bufferSize]
 };
 
 #endif

@@ -248,6 +248,10 @@ public:
                  ? MAX_PHASE_ELIMINATED
                  : static_cast<unsigned>( phase ) - MAX_VARIABLE_TO_PHASE_OFFSET;
     }
+    /*
+    Return true iff f or the elements are not all within bounds.
+  */
+    bool haveOutOfBoundVariables() const;
 
 private:
     unsigned _f;
@@ -289,10 +293,6 @@ private:
     */
     void eliminateCase( unsigned variable );
 
-    /*
-      Return true iff f or the elements are not all within bounds.
-    */
-    bool haveOutOfBoundVariables() const;
 
     void createElementTighteningRow( unsigned element );
     const List<unsigned> getNativeAuxVars() const override;

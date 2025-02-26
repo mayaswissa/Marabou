@@ -238,6 +238,10 @@ public:
     PhaseStatus getDirection() const;
 
     void updateScoreBasedOnPolarity() override;
+    /*
+    Return true iff b or f are out of bounds.
+  */
+    bool haveOutOfBoundVariables() const;
 
 private:
     unsigned _b, _f;
@@ -262,10 +266,6 @@ private:
 
     static String phaseToString( PhaseStatus phase );
 
-    /*
-      Return true iff b or f are out of bounds.
-    */
-    bool haveOutOfBoundVariables() const;
 
     void addTableauAuxVar( unsigned tableauAuxVar, unsigned constraintAuxVar ) override;
 

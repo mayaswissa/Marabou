@@ -10,7 +10,7 @@ public:
 
     // Decode an action index back to its parts
     std::pair<unsigned, unsigned> decodeActionIndex(unsigned actionIndex) const;
-    unsigned getSpaceSize() const;
+    unsigned getNumActions() const;
     unsigned getNumPhases() const;
     unsigned getNumConstraints() const;
 

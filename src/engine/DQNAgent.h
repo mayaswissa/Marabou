@@ -20,10 +20,10 @@ public:
                                 unsigned numSplits,
                                 unsigned &numInconsistent,
                                 double prunedSubtrees );
-    void stepNewAction( const State &state,
+    void stepNewAction( const State &previousState,
                         const Action &action,
                         double reward,
-                        const State &nextState,
+                        const State &currentState,
                         bool done,
                         unsigned numSplits,
                         bool changeReward );

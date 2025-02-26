@@ -54,10 +54,6 @@ Marabou::~Marabou()
         _onnxParser = NULL;
     }
 }
-unsigned Marabou::numPLConstraints() const
-{
-    return _engine->numPlConstraints();
-}
 
 void Marabou::run()
 {

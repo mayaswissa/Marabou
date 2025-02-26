@@ -31,9 +31,6 @@ bool GlobalConfiguration::USE_DEEPSOI_LOCAL_SEARCH = false;
 
 //Use Deep Q-Network to decide which branch to take first in a case split
 bool GlobalConfiguration::USE_DQN = true;
-bool GlobalConfiguration::DQN_TRAINING = true;
-
-unsigned int GlobalConfiguration::AGENT_ITERATIONS = 0;
 
 const double GlobalConfiguration::SCORE_BUMP_FOR_PL_CONSTRAINTS_NOT_IN_SOI = 5;
 

@@ -242,6 +242,10 @@ public:
     void updateScoreBasedOnPolarity() override;
 
     const List<unsigned> getNativeAuxVars() const override;
+    /*
+      Return true iff b or f are out of bounds.
+    */
+    bool haveOutOfBoundVariables() const;
 
 private:
     unsigned _b, _f;
@@ -261,10 +265,6 @@ private:
 
     static String phaseToString( PhaseStatus phase );
 
-    /*
-      Return true iff b or f are out of bounds.
-    */
-    bool haveOutOfBoundVariables() const;
 
     std::shared_ptr<TableauRow> _tighteningRow;
 

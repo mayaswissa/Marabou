@@ -34,7 +34,6 @@ public:
     void run();
     void prepareInputQuery();
 
-    unsigned numPLConstraints() const;
     std::unique_ptr<Agent> runAgentTraining( double epsilon,
                                              bool training = true,
                                              std::unique_ptr<Agent> agent = nullptr,

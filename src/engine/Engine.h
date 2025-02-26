@@ -81,6 +81,10 @@ public:
 
     Engine();
     ~Engine();
+    void updateSoIScoreForConstraintInState( State &stateToUpdate,
+                                             int index,
+                                             PiecewiseLinearConstraint *const &plConstraint,
+                                             const Map<unsigned, double> &currentAssignment );
 
     /*
       Attempt to find a feasible solution for the input within a time limit
@@ -932,10 +936,8 @@ private:
       DQN functions
      */
     void updateToCurrentDQNState( State &state );
-    void initializeDQNState( State &stateToUpdate );
-    unsigned getNumFixedConstraints() const;
-    PiecewiseLinearConstraint *indexToConstraint( int index, List<PiecewiseLinearConstraint *>* constraints );
-    PhaseStatus valueToPhase( unsigned index ); // todo this is not really the value but the index
+    PiecewiseLinearConstraint *indexToConstraint( int index,
+                                                  List<PiecewiseLinearConstraint *> *constraints );
 };
 
 #endif // __Engine_h__

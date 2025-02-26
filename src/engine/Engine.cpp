@@ -118,10 +118,35 @@ Engine::~Engine()
 
 // todo DQN functions:
 
+void Engine::updateSoIScoreForConstraintInState( State &stateToUpdate,
+                                                 const int index,
+                                                 PiecewiseLinearConstraint *const &plConstraint,
+                                                 const Map<unsigned, double> &currentAssignment )
+{
+    auto currentPhase = plConstraint->getPhaseStatus();
+    if ( currentPhase == RELU_PHASE_ACTIVE || currentPhase == RELU_PHASE_INACTIVE ||
+         plConstraint->haveOutOfBoundVariables() )
+    {
+        stateToUpdate.updateSoIScore( index, 0, 0 );
+        return;
+    }
+    LinearExpression costComponent;
+    LinearExpression activeCostComponent;
+    plConstraint->getCostFunctionComponent( activeCostComponent, RELU_PHASE_ACTIVE );
+    const double activeSoiScore = activeCostComponent.evaluate( currentAssignment );
+    LinearExpression inactiveCostComponent;
+    plConstraint->getCostFunctionComponent( inactiveCostComponent, RELU_PHASE_INACTIVE );
+    const double inactiveSoiScore = inactiveCostComponent.evaluate( currentAssignment );
+    stateToUpdate.updateSoIScore( index, activeSoiScore, inactiveSoiScore );
+}
+
 void Engine::updateToCurrentDQNState( State &stateToUpdate )
 {
     int index = 0;
     int phase;
+    Map<unsigned, double> currentAssignment;
+    for ( unsigned i = 0; i < getInputQuery()->getNumberOfVariables(); ++i )
+        currentAssignment[i] = _tableau->getValue( i );
     for ( const auto &plConstraint : _plConstraints )
     {
         if ( !plConstraint->isActive() && !plConstraint->phaseFixed() )
@@ -129,50 +154,11 @@ void Engine::updateToCurrentDQNState( State &stateToUpdate )
         else
             phase = plConstraint->getPhaseStatus();
         stateToUpdate.updateConstraintPhase( index, phase );
-
-
-        const auto variable = plConstraint->getParticipatingVariables().front();
-        stateToUpdate.updateBounds( index,
-                                    _boundManager.getUpperBound( variable ),
-                                    _boundManager.getLowerBound( variable ) );
-        stateToUpdate.updatePolarity(index, plConstraint->computePolarity());
+        updateSoIScoreForConstraintInState( stateToUpdate, index, plConstraint, currentAssignment );
+        stateToUpdate.updatePolarity( index, plConstraint->computePolarity() );
         index++;
     }
 }
-
-void Engine::initializeDQNState( State &stateToUpdate )
-{
-    int index = 0;
-    for ( const auto &plConstraint : _plConstraints )
-    {
-        auto phase = static_cast<int>( plConstraint->getPhaseStatus() );
-        if ( !plConstraint->isActive() && !plConstraint->phaseFixed())
-            phase = static_cast<int>( DQN_RELU_ACTIVE );
-        stateToUpdate.updateConstraintPhase( index, phase );
-        const auto variable = plConstraint->getParticipatingVariables().front();
-        stateToUpdate.updateBounds( index,
-                                    _boundManager.getUpperBound( variable ),
-                                    _boundManager.getLowerBound( variable ) );
-        index++;
-    }
-}
-
-
-unsigned Engine::numPlConstraints() const
-{
-    return _plConstraints.size();
-}
-unsigned Engine::getNumFixedConstraints() const
-{
-    unsigned numFixed = 0;
-    for ( auto &plConstraint : _plConstraints )
-    {
-        if ( plConstraint->getPhaseStatus() != PHASE_NOT_FIXED )
-            numFixed++;
-    }
-    return numFixed;
-}
-
 
 void Engine::setVerbosity( unsigned verbosity )
 {
@@ -260,11 +246,6 @@ Engine::indexToConstraint( const int index, List<PiecewiseLinearConstraint *> *c
     return *it;
 }
 
-PhaseStatus Engine::valueToPhase( unsigned phaseValue )
-{
-    return static_cast<PhaseStatus>( phaseValue );
-}
-
 bool Engine::solve( double timeoutInSeconds, const std::string &trainedAgentPath, int *numSplits )
 {
     SignalHandler::getInstance()->initialize();
@@ -307,16 +288,16 @@ bool Engine::solve( double timeoutInSeconds, const std::string &trainedAgentPath
     // for DQN use:
     if ( GlobalConfiguration::USE_DQN )
     {
+        unsigned numPlConstraints = _plConstraints.size();
         if ( trainedAgentPath.empty() )
             throw std::runtime_error( "Agent is not set" );
-        unsigned numPhases = DQN_NUM_PHASES;
-        _currentDQNState = std::make_unique<State>( _plConstraints.size() );
-        initializeDQNState( *_currentDQNState );
+        _currentDQNState = std::make_unique<State>( numPlConstraints );
+        updateToCurrentDQNState( *_currentDQNState );
         _agent = std::make_unique<Agent>(
-            _plConstraints.size(), numPhases, trainedAgentPath, trainedAgentPath );
-        _action = std::make_unique<Action>( numPhases, _plConstraints.size() );
-        _previousState = std::make_unique<State>( _plConstraints.size() );
-        initializeDQNState( *_previousState );
+            numPlConstraints, DQN_NUM_PHASES, trainedAgentPath, trainedAgentPath );
+        _action = std::make_unique<Action>( DQN_NUM_PHASES, numPlConstraints );
+        _previousState = std::make_unique<State>( numPlConstraints );
+        updateToCurrentDQNState( *_previousState );
     }
     unsigned DQNIterations = 5;
     _eps = GlobalConfiguration::DQN_EPSILON_END;
@@ -405,7 +386,7 @@ bool Engine::solve( double timeoutInSeconds, const std::string &trainedAgentPath
             {
                 if ( GlobalConfiguration::USE_DQN )
                 {
-                    PhaseStatus phaseStatus = valueToPhase( _action->getActionPhase() );
+                    auto phaseStatus = static_cast<PhaseStatus>( _action->getActionPhase() );
                     _smtCore.performSplit( &phaseStatus );
                     updateToCurrentDQNState( *_previousState ); // prevState = currentState
                 }
@@ -602,32 +583,32 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
     unsigned numInconsistent = 0;
 
     // DQN CODE:
+    unsigned numPlConstraints = _plConstraints.size();
     _eps = epsilon; // exploration
     printf( "epsilon = %g\n", _eps );
     fflush( stdout );
     std::deque<int> smtSteps;
-    unsigned numPhases = DQN_NUM_PHASES;
     if ( agent == nullptr )
     {
         printf( "no agent provided! creating new\n" );
         fflush( stdout );
-        _agent = std::make_unique<Agent>( _plConstraints.size(), numPhases, trainedAgentPath );
+        _agent = std::make_unique<Agent>( numPlConstraints, DQN_NUM_PHASES, trainedAgentPath );
     }
     else
         _agent = std::move( agent );
-    _action = std::make_unique<Action>( numPhases, _plConstraints.size() );
-    _currentDQNState = std::make_unique<State>( _plConstraints.size() );
-    initializeDQNState( *_currentDQNState );
-    _previousState = std::make_unique<State>( _plConstraints.size() );
-    initializeDQNState( *_previousState );
+    _action = std::make_unique<Action>( DQN_NUM_PHASES, numPlConstraints );
+    _currentDQNState = std::make_unique<State>( numPlConstraints );
+    updateToCurrentDQNState( *_currentDQNState );
+    _previousState = std::make_unique<State>( numPlConstraints );
+    updateToCurrentDQNState( *_previousState );
     const unsigned maxSplitsByAgent = 500;
     unsigned numSplitsByAgent = 0;
-    unsigned marabouIterations = 0;
-    unsigned maxMarabouIterations = 1000000;
+    unsigned mainLoopIterations = 0;
+    unsigned maxMarabouIterations = 100000;
 
-    while ( numSplitsByAgent <= maxSplitsByAgent && marabouIterations <= maxMarabouIterations )
+    while ( numSplitsByAgent <= maxSplitsByAgent && mainLoopIterations <= maxMarabouIterations )
     {
-        marabouIterations ++;
+        mainLoopIterations++;
         struct timespec mainLoopEnd = TimeUtils::sampleMicro();
         _statistics.incLongAttribute( Statistics::TIME_MAIN_LOOP_MICRO,
                                       TimeUtils::timePassed( mainLoopStart, mainLoopEnd ) );
@@ -636,7 +617,7 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
         if ( shouldExitDueToTimeout( timeoutInSeconds ) )
         {
             updateToCurrentDQNState( *_currentDQNState );
-            auto prunedSubtrees = _smtCore.prunedSubtrees( numPlConstraints() );
+            auto prunedSubtrees = _smtCore.prunedSubtrees( numPlConstraints );
 
             _agent->stepNewAction( *_previousState,
                                    *_action,
@@ -683,7 +664,7 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                 }
             }
 
-            updateToCurrentDQNState( *_currentDQNState );
+            // updateToCurrentDQNState( *_currentDQNState );
             if ( splitJustPerformed )
             {
                 performBoundTighteningAfterCaseSplit();
@@ -697,18 +678,17 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                 {
                     const auto smtStep = smtSteps.front();
                     smtSteps.pop_front();
+                    updateToCurrentDQNState( *_currentDQNState );
                     // smtCore performed pop
                     if ( smtStep == 1 )
                     {
-                        updateToCurrentDQNState( *_currentDQNState );
-                        auto prunedSubtrees = _smtCore.prunedSubtrees( numPlConstraints() );
+                        auto prunedSubtrees = _smtCore.prunedSubtrees( numPlConstraints );
                         _agent->stepAlternativeAction(
                             *_currentDQNState, numSplitsByAgent, numInconsistent, prunedSubtrees );
                     }
                     // smtCore performed split
                     else if ( smtStep == 2 )
                     {
-                        updateToCurrentDQNState( *_currentDQNState );
                         _agent->stepNewAction( *_previousState,
                                                *_action,
                                                0,
@@ -719,8 +699,9 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                     }
                 }
 
-                ASSERT( _agent->getActionStackSize() == static_cast<int>(_smtCore.getStackDepth()) )
-                PhaseStatus phaseStatus = valueToPhase( _action->getAssignmentIndex() );
+                ASSERT( _agent->getActionStackSize() ==
+                        static_cast<int>( _smtCore.getStackDepth() ) )
+                PhaseStatus phaseStatus = static_cast<PhaseStatus>( _action->getAssignmentIndex() );
                 if ( _smtCore.performSplit( &phaseStatus ) )
                     smtSteps.push_back( 2 );
 
@@ -758,7 +739,7 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                         _exitCode = Engine::SAT;
 
                         updateToCurrentDQNState( *_currentDQNState );
-                        auto rewardForDone = _smtCore.prunedSubtrees( numPlConstraints() );
+                        auto rewardForDone = _smtCore.prunedSubtrees( numPlConstraints );
 
                         _agent->stepNewAction( *_previousState,
                                                *_action,
@@ -767,7 +748,7 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                                                true,
                                                numSplitsByAgent,
                                                false );
-                        auto prunedSubtrees = _smtCore.prunedSubtrees( numPlConstraints() );
+                        auto prunedSubtrees = _smtCore.prunedSubtrees( numPlConstraints );
                         _agent->handleDone( *_currentDQNState, numSplitsByAgent, prunedSubtrees );
                         printf( "success!" );
                         fflush( stdout );
@@ -791,7 +772,7 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                                                true,
                                                numSplitsByAgent,
                                                false );
-                        auto prunedSubtrees = _smtCore.prunedSubtrees( numPlConstraints() );
+                        auto prunedSubtrees = _smtCore.prunedSubtrees( numPlConstraints );
                         _agent->handleDone( *_currentDQNState, numSplitsByAgent, prunedSubtrees );
                         printf( "fail!" );
                         fflush( stdout );
@@ -833,7 +814,7 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                                        true,
                                        numSplitsByAgent,
                                        false );
-                auto prunedSubtrees = _smtCore.prunedSubtrees( numPlConstraints() );
+                auto prunedSubtrees = _smtCore.prunedSubtrees( numPlConstraints );
                 _agent->handleDone( *_currentDQNState, numSplitsByAgent, prunedSubtrees );
                 return std::move( _agent );
             }
@@ -859,7 +840,7 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                 printf( "done unsat!\n" );
                 fflush( stdout );
                 updateToCurrentDQNState( *_currentDQNState );
-                auto rewardForDone = _smtCore.prunedSubtrees( numPlConstraints() );
+                auto rewardForDone = _smtCore.prunedSubtrees( numPlConstraints );
                 // double rewardForDone = 0;
                 _agent->stepNewAction( *_previousState,
                                        *_action,
@@ -868,7 +849,7 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                                        true,
                                        numSplitsByAgent,
                                        false );
-                auto prunedSubtrees = _smtCore.prunedSubtrees( numPlConstraints() );
+                auto prunedSubtrees = _smtCore.prunedSubtrees( numPlConstraints );
                 _agent->handleDone( *_currentDQNState, numSplitsByAgent, prunedSubtrees );
 
                 _exitCode = Engine::UNSAT;
@@ -896,7 +877,7 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                                           TimeUtils::timePassed( mainLoopStart, mainLoopEnd ) );
             _agent->stepNewAction(
                 *_previousState, *_action, -1, *_currentDQNState, true, numSplitsByAgent, false );
-            auto prunedSubtrees = _smtCore.prunedSubtrees( numPlConstraints() );
+            auto prunedSubtrees = _smtCore.prunedSubtrees( numPlConstraints );
             _agent->handleDone( *_currentDQNState, numSplitsByAgent, prunedSubtrees );
             return std::move( _agent );
         }
@@ -911,7 +892,7 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
         }
     }
     updateToCurrentDQNState( *_currentDQNState );
-    auto rewardForDone = _smtCore.prunedSubtrees( numPlConstraints() );
+    auto rewardForDone = _smtCore.prunedSubtrees( numPlConstraints );
     _agent->stepNewAction( *_previousState,
                            *_action,
                            rewardForDone,
@@ -919,7 +900,7 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                            true,
                            numSplitsByAgent,
                            false );
-    auto prunedSubtrees = _smtCore.prunedSubtrees( numPlConstraints() );
+    auto prunedSubtrees = _smtCore.prunedSubtrees( numPlConstraints );
     _agent->handleDone( *_currentDQNState, numSplitsByAgent, prunedSubtrees );
     printf( "done iters!\n" );
     fflush( stdout );
@@ -3257,16 +3238,18 @@ int Engine::findPlConstraintsIndex( const int index,
 
 PiecewiseLinearConstraint *Engine::pickSplitPLConstraintByAgent()
 {
-
     updateToCurrentDQNState( *_currentDQNState );
     _action = std::move( _agent->act( *_currentDQNState, _eps ) );
     if ( _action == nullptr )
         return NULL;
 
-    PiecewiseLinearConstraint *plConstraint = indexToConstraint( _action->getPlConstraintAction(), &_plConstraints );
+    PiecewiseLinearConstraint *plConstraint =
+        indexToConstraint( _action->getPlConstraintAction(), &_plConstraints );
     unsigned phase = _action->getActionPhase();
     // can not split on fixed or inactive plConstraint
-    while ( plConstraint == nullptr || !plConstraint->isActive() || plConstraint->phaseFixed() || phase == DQN_RELU_NOT_FIXED ){
+    while ( plConstraint == nullptr || !plConstraint->isActive() || plConstraint->phaseFixed() ||
+            phase == DQN_RELU_NOT_FIXED )
+    {
         printf( "trying to insert bad stepNewAction\n" );
         fflush( stdout );
         _agent->stepNewAction(
@@ -3277,7 +3260,6 @@ PiecewiseLinearConstraint *Engine::pickSplitPLConstraintByAgent()
             plConstraint = nullptr;
         else
             plConstraint = indexToConstraint( _action->getPlConstraintAction(), &_plConstraints );
-
     }
     return plConstraint;
 }

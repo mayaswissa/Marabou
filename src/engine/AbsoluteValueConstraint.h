@@ -216,6 +216,10 @@ public:
     };
 
     const List<unsigned> getNativeAuxVars() const override;
+    /*
+      Return true iff _b and _f are not both within bounds.
+    */
+    bool haveOutOfBoundVariables() const;
 
 private:
     /*
@@ -242,10 +246,6 @@ private:
     PiecewiseLinearCaseSplit getPositiveSplit() const;
     PiecewiseLinearCaseSplit getNegativeSplit() const;
 
-    /*
-      Return true iff _b and _f are not both within bounds.
-    */
-    bool haveOutOfBoundVariables() const;
 
     std::shared_ptr<TableauRow> _posTighteningRow;
     std::shared_ptr<TableauRow> _negTighteningRow;
