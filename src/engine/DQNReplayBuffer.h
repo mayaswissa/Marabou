@@ -92,14 +92,14 @@ struct ActiveAction
     }
 };
 
-struct ActionsStack
+struct ActionEntry
 {
     // pairs of actions and numSplits when act
     List<ActiveAction> _activeActions;
     List<Action> _alternativeActions;
     State _stateBeforeAction;
 
-    ActionsStack( const Action &action,
+    ActionEntry( const Action &action,
                   const State &stateBeforeAction,
                   const State &stateAfterAction,
                   const unsigned splitsBeforeAction )
@@ -107,15 +107,19 @@ struct ActionsStack
 
     {
         _activeActions = List<ActiveAction>();
-        _activeActions.append( ActiveAction( action,
-                                             stateBeforeAction ,
-                                             stateAfterAction,
-                                             splitsBeforeAction ) );
+        _activeActions.append(
+            ActiveAction( action, stateBeforeAction, stateAfterAction, splitsBeforeAction ) );
         _alternativeActions = List<Action>();
 
-        const unsigned actionPhase = action.getAssignmentIndex() == 2 ? 1 : 2;
-        const auto alternateAction =
-            Action( action.getNumPhases(), action.getNumPlConstraints(), action.getPlConstraintActionIndex(), actionPhase );
+        auto const actionPhase = action.getActionPhase();
+        ASSERT(actionPhase == RELU_PHASE_ACTIVE || actionPhase == RELU_PHASE_INACTIVE);
+        const unsigned alternativeActionPhase = actionPhase == RELU_PHASE_ACTIVE
+                                                  ? RELU_PHASE_INACTIVE
+                                                  : RELU_PHASE_ACTIVE;
+        const auto alternateAction = Action( action.getNumPhases(),
+                                             action.getNumPlConstraints(),
+                                             action.getActionPlConstraintIndex(),
+                                             alternativeActionPhase );
         _alternativeActions.append( alternateAction );
     }
 };
@@ -142,7 +146,7 @@ public:
     void handleDone( const State &currentState, unsigned numSplits, double prunedSubtrees );
     void moveActionToRevisitBuffer( const State &stateAfterAction,
                                     unsigned numSplits,
-                                    ActionsStack *actionEntry,
+                                    ActionEntry *actionEntry,
                                     double prunedSubtrees );
     void applyNextAction( const State &state,
                           unsigned numSplits,
@@ -159,16 +163,15 @@ private:
     unsigned _numConstraints;
     unsigned _bufferSize;
     unsigned _batchSize;
-    std::deque<std::unique_ptr<Experience>> _revisitExperiences;
-    List<ActionsStack *> _actionsStack;
+    List<ActionEntry *> _actionsStack;
 
-    unsigned _size; // valid entries in replayBuffer
-    unsigned _writePosition; //  pointer for the next empty position in experiences buffer
-    torch::Tensor _states; // [bufferSize, stateDim]
-    torch::Tensor _actions; // [bufferSize]
-    torch::Tensor _rewards; // [bufferSize]
+    unsigned _size;            // valid entries in replayBuffer
+    unsigned _writePosition;   //  pointer for the next empty position in experiences buffer
+    torch::Tensor _states;     // [bufferSize, stateDim]
+    torch::Tensor _actions;    // [bufferSize, 1]
+    torch::Tensor _rewards;    // [bufferSize]
     torch::Tensor _nextStates; // [bufferSize, stateDim]
-    torch::Tensor _dones; // [bufferSize]
+    torch::Tensor _dones;      // [bufferSize]
 };
 
 #endif

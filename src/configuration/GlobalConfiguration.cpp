@@ -119,7 +119,7 @@ const bool GlobalConfiguration::WRITE_JSON_PROOF = false;
 
 const unsigned GlobalConfiguration::BACKWARD_BOUND_PROPAGATION_DEPTH = 3;
 const unsigned GlobalConfiguration::MAX_ROUNDS_OF_BACKWARD_ANALYSIS = 10;
-unsigned GlobalConfiguration::DQN_EXPLORATION_RATE = 4;
+unsigned GlobalConfiguration::DQN_EXPLORATION_RATE = 2;
 unsigned GlobalConfiguration::DQN_BUFFER_SIZE = 8000;
 unsigned GlobalConfiguration::DQN_BATCH_SIZE = 256;
 unsigned GlobalConfiguration::DQN_MIN_SAMPLE_SIZE = 1;

@@ -13,21 +13,17 @@ public:
     Action &operator=( Action &&other ) noexcept;
     Action &operator=( const Action &other );
     unsigned getPlConstraintAction() const;
-
-    unsigned getActionPhase() const;
-
     torch::Tensor actionToTensor() const;
-
     unsigned getNumPhases() const;
     unsigned getNumPlConstraints() const;
-    unsigned getPlConstraintActionIndex() const;
-    unsigned getAssignmentIndex() const;
+    unsigned getActionPlConstraintIndex() const;
+    unsigned getActionPhase() const;
 
 private:
     unsigned _numPhases;
     unsigned _numPlConstraints;
     unsigned _plConstraintActionIndex;
-    unsigned _assignmentIndex;
+    unsigned _phaseActionIndex;
 };
 
 

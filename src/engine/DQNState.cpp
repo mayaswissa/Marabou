@@ -55,7 +55,7 @@ void State::updateConstraintPhase( const unsigned constraintIndex, const unsigne
     rowPtr[newPhase] = 1.0;
 }
 
-void State::updateSoIScore( const unsigned constraintIndex,
+void State::updateSoIScoreForAgent( const unsigned constraintIndex,
                             const double SoiActiveScore,
                             const double SoiInactiveScore )
 {

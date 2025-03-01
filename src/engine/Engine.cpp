@@ -115,9 +115,7 @@ Engine::~Engine()
         _UNSATCertificateCurrentPointer->deleteSelf();
 }
 
-
-// todo DQN functions:
-
+// DQN methods:
 void Engine::updateSoIScoreForConstraintInState( State &stateToUpdate,
                                                  const int index,
                                                  PiecewiseLinearConstraint *const &plConstraint,
@@ -127,7 +125,7 @@ void Engine::updateSoIScoreForConstraintInState( State &stateToUpdate,
     if ( currentPhase == RELU_PHASE_ACTIVE || currentPhase == RELU_PHASE_INACTIVE ||
          plConstraint->haveOutOfBoundVariables() )
     {
-        stateToUpdate.updateSoIScore( index, 0, 0 );
+        stateToUpdate.updateSoIScoreForAgent( index, 0, 0 );
         return;
     }
     LinearExpression costComponent;
@@ -137,7 +135,7 @@ void Engine::updateSoIScoreForConstraintInState( State &stateToUpdate,
     LinearExpression inactiveCostComponent;
     plConstraint->getCostFunctionComponent( inactiveCostComponent, RELU_PHASE_INACTIVE );
     const double inactiveSoiScore = inactiveCostComponent.evaluate( currentAssignment );
-    stateToUpdate.updateSoIScore( index, activeSoiScore, inactiveSoiScore );
+    stateToUpdate.updateSoIScoreForAgent( index, activeSoiScore, inactiveSoiScore );
 }
 
 void Engine::updateToCurrentDQNState( State &stateToUpdate )
@@ -587,9 +585,12 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
     _eps = epsilon; // exploration
     printf( "epsilon = %g\n", _eps );
     fflush( stdout );
-    std::deque<int> smtSteps;
+    std::deque<unsigned> smtSteps;
+    unsigned ALTERNATIVE_ACTION = 1;
+    unsigned NEW_ACTION = 2;
     if ( agent == nullptr )
     {
+
         printf( "no agent provided! creating new\n" );
         fflush( stdout );
         _agent = std::make_unique<Agent>( numPlConstraints, DQN_NUM_PHASES, trainedAgentPath );
@@ -601,7 +602,7 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
     updateToCurrentDQNState( *_currentDQNState );
     _previousState = std::make_unique<State>( numPlConstraints );
     updateToCurrentDQNState( *_previousState );
-    const unsigned maxSplitsByAgent = 500;
+    const unsigned maxSplitsByAgent = 1000;
     unsigned numSplitsByAgent = 0;
     unsigned mainLoopIterations = 0;
     unsigned maxMarabouIterations = 100000;
@@ -676,18 +677,18 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
             {
                 while ( !smtSteps.empty() )
                 {
-                    const auto smtStep = smtSteps.front();
+                    auto smtStep = smtSteps.front();
                     smtSteps.pop_front();
                     updateToCurrentDQNState( *_currentDQNState );
                     // smtCore performed pop
-                    if ( smtStep == 1 )
+                    if ( smtStep == ALTERNATIVE_ACTION )
                     {
                         auto prunedSubtrees = _smtCore.prunedSubtrees( numPlConstraints );
                         _agent->stepAlternativeAction(
                             *_currentDQNState, numSplitsByAgent, numInconsistent, prunedSubtrees );
                     }
                     // smtCore performed split
-                    else if ( smtStep == 2 )
+                    else if ( smtStep == NEW_ACTION )
                     {
                         _agent->stepNewAction( *_previousState,
                                                *_action,
@@ -701,9 +702,9 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
 
                 ASSERT( _agent->getActionStackSize() ==
                         static_cast<int>( _smtCore.getStackDepth() ) )
-                PhaseStatus phaseStatus = static_cast<PhaseStatus>( _action->getAssignmentIndex() );
+                PhaseStatus phaseStatus = static_cast<PhaseStatus>( _action->getActionPhase() );
                 if ( _smtCore.performSplit( &phaseStatus ) )
-                    smtSteps.push_back( 2 );
+                    smtSteps.push_back( NEW_ACTION );
 
                 numSplitsByAgent++;
                 splitJustPerformed = true;
@@ -858,7 +859,7 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
             else
             {
                 splitJustPerformed = true;
-                smtSteps.push_back( 1 );
+                smtSteps.push_back( ALTERNATIVE_ACTION );
             }
         }
         catch ( const VariableOutOfBoundDuringOptimizationException & )

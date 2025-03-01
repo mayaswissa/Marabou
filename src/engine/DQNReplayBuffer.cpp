@@ -28,7 +28,7 @@ void ReplayBuffer::pushActionEntry( const Action &action,
                                     const State &stateAfterAction,
                                     const unsigned numSplits )
 {
-    auto *actionEntry = new ActionsStack( action, stateBeforeAction, stateAfterAction, numSplits );
+    auto *actionEntry = new ActionEntry( action, stateBeforeAction, stateAfterAction, numSplits );
     _actionsStack.append( actionEntry );
 }
 
@@ -39,7 +39,7 @@ void ReplayBuffer::handleDone( const State &currentState,
     // Go over all actions in actionsStack and move them to revisitExperiences
     while ( !_actionsStack.empty() )
     {
-        ActionsStack *actionEntry = _actionsStack.back();
+        ActionEntry *actionEntry = _actionsStack.back();
         // no need to insert alternative actions.
         while ( !actionEntry->_activeActions.empty() )
             moveActionToRevisitBuffer( currentState, numSplits, actionEntry, prunedSubtrees );
@@ -51,7 +51,7 @@ void ReplayBuffer::handleDone( const State &currentState,
 
 void ReplayBuffer::moveActionToRevisitBuffer( const State &stateAfterAction,
                                               const unsigned numSplits,
-                                              ActionsStack *actionEntry,
+                                              ActionEntry *actionEntry,
                                               const double prunedSubtrees )
 {
     const auto activeAction = actionEntry->_activeActions.back();
@@ -77,7 +77,7 @@ void ReplayBuffer::applyNextAction( const State &stateAfterAction,
     if ( _actionsStack.empty() )
         return;
 
-    ActionsStack *actionEntry;
+    ActionEntry *actionEntry;
 
     while ( numInconsistent > 0 )
     {
@@ -168,9 +168,7 @@ unsigned ReplayBuffer::getBatchSize() const
 
 int ReplayBuffer::getActionStackSize() const
 {
-    if ( !_actionsStack.empty() )
-        return _actionsStack.size();
-    return 0;
+    return _actionsStack.size();
 }
 
 torch::Tensor ReplayBuffer::getStates()

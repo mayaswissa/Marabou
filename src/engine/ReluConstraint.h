@@ -245,7 +245,7 @@ public:
     /*
       Return true iff b or f are out of bounds.
     */
-    bool haveOutOfBoundVariables() const;
+    bool haveOutOfBoundVariables() const override;
 
 private:
     unsigned _b, _f;

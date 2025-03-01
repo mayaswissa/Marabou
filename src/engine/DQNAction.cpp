@@ -4,24 +4,24 @@ Action::Action( unsigned numPhases, unsigned numPlConstraints )
     : _numPhases( numPhases )
     , _numPlConstraints( numPlConstraints )
     , _plConstraintActionIndex( 0 )
-    , _assignmentIndex( 0 )
+    , _phaseActionIndex( 0 )
 {
 }
-Action::Action( unsigned numPhases,
-                unsigned numPlConstraints,
-                unsigned plConstraintActionIndex,
-                unsigned assignmentIndex )
+Action::Action( const unsigned numPhases,
+                const unsigned numPlConstraints,
+                const unsigned plConstraintActionIndex,
+                const unsigned assignmentIndex )
     : _numPhases( numPhases )
     , _numPlConstraints( numPlConstraints )
     , _plConstraintActionIndex( plConstraintActionIndex )
-    , _assignmentIndex( assignmentIndex )
+    , _phaseActionIndex( assignmentIndex )
 {
 }
 Action::Action( const Action &other )
     : _numPhases( other.getNumPhases() )
     , _numPlConstraints( other.getNumPlConstraints() )
-    , _plConstraintActionIndex( other.getPlConstraintActionIndex() )
-    , _assignmentIndex( other.getAssignmentIndex() )
+    , _plConstraintActionIndex( other.getActionPlConstraintIndex() )
+    , _phaseActionIndex( other.getActionPhase() )
 {
 }
 
@@ -35,14 +35,9 @@ unsigned Action::getNumPlConstraints() const
 {
     return _numPlConstraints;
 }
-unsigned Action::getPlConstraintActionIndex() const
+unsigned Action::getActionPlConstraintIndex() const
 {
     return _plConstraintActionIndex;
-}
-
-unsigned Action::getAssignmentIndex() const
-{
-    return _assignmentIndex;
 }
 
 Action &Action::operator=( Action &&other ) noexcept
@@ -50,8 +45,8 @@ Action &Action::operator=( Action &&other ) noexcept
     if ( this != &other )
     {
         _numPhases = other.getNumPhases();
-        _plConstraintActionIndex = other.getPlConstraintActionIndex();
-        _assignmentIndex = other.getAssignmentIndex();
+        _plConstraintActionIndex = other.getActionPlConstraintIndex();
+        _phaseActionIndex = other.getActionPhase();
     }
     return *this;
 }
@@ -61,8 +56,8 @@ Action &Action::operator=( const Action &other )
     if ( this != &other )
     {
         _numPhases = other.getNumPhases();
-        _plConstraintActionIndex = other.getPlConstraintActionIndex();
-        _assignmentIndex = other.getAssignmentIndex();
+        _plConstraintActionIndex = other.getActionPlConstraintIndex();
+        _phaseActionIndex = other.getActionPhase();
     }
     return *this;
 }
@@ -74,12 +69,12 @@ unsigned Action::getPlConstraintAction() const
 
 unsigned Action::getActionPhase() const
 {
-    return _assignmentIndex;
+    return _phaseActionIndex;
 }
 
 torch::Tensor Action::actionToTensor() const
 {
     int combinedIndex = static_cast<int>( _plConstraintActionIndex ) * _numPhases +
-                        static_cast<int>( _assignmentIndex );
+                        static_cast<int>( _phaseActionIndex );
     return torch::tensor( { combinedIndex }, torch::dtype( torch::kInt64 ) );
 }

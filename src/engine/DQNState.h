@@ -29,7 +29,7 @@ public:
 
     torch::Tensor toTensor() const;
     void updateConstraintPhase( unsigned constraintIndex, unsigned newPhase );
-    void updateSoIScore( unsigned constraintIndex, double SoiActiveScore, double SoiInactiveScore );
+    void updateSoIScoreForAgent( unsigned constraintIndex, double SoiActiveScore, double SoiInactiveScore );
     void updateBounds( unsigned constraintIndex, double upperBound, double lowerBound );
     void updatePolarity( unsigned constraintIndex, double polarityScore );
     const std::vector<std::vector<double>> &getData() const;

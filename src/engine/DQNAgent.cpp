@@ -81,16 +81,6 @@ bool Agent::handleInvalidGradients()
     return invalid;
 }
 
-Action Agent::tensorToAction( const torch::Tensor &tensor ) const
-{
-    const int combinedIndex = tensor.item<int>();
-
-    const int plConstraintActionIndex = combinedIndex / _numPhases;
-    const int assignmentIndex = combinedIndex % _numPhases;
-
-    return Action( _numPhases, _numPlConstraints, plConstraintActionIndex, assignmentIndex );
-}
-
 
 void Agent::handleDone( const State &currentState,
                         const unsigned numSplits,

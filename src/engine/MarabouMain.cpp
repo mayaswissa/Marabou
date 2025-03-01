@@ -134,7 +134,7 @@ int marabouMain( int argc, char **argv )
 #endif
             if ( GlobalConfiguration::USE_DQN )
             {
-                unsigned epochs = 9;
+                unsigned epochs = 12;
                 double currEpisodeScore = 0;
                 std::vector<double> learningRates = { 1e-2 };
 
