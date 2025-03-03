@@ -55,19 +55,26 @@ void State::updateConstraintPhase( const unsigned constraintIndex, const unsigne
     rowPtr[newPhase] = 1.0;
 }
 
-void State::updateSoIScoreForAgent( const unsigned constraintIndex,
-                            const double SoiActiveScore,
-                            const double SoiInactiveScore )
-{
-    if ( constraintIndex >= _numConstraints )
-        return;
-    _stateData[constraintIndex * NUM_FEATURES + SOI_ACTIVE_SCORE] = SoiActiveScore;
-    _stateData[constraintIndex * NUM_FEATURES + SOI_INACTIVE_SCORE] = SoiInactiveScore;
-}
+// void State::updateSoIScoreForAgent( const unsigned constraintIndex,
+//                             const double SoiActiveScore,
+//                             const double SoiInactiveScore )
+// {
+//     if ( constraintIndex >= _numConstraints )
+//         return;
+//     _stateData[constraintIndex * NUM_FEATURES + SOI_ACTIVE_SCORE] = SoiActiveScore;
+//     _stateData[constraintIndex * NUM_FEATURES + SOI_INACTIVE_SCORE] = SoiInactiveScore;
+// }
 
 void State::updatePolarity( const unsigned constraintIndex, const double polarityScore )
 {
     if ( constraintIndex >= _numConstraints )
         return;
     _stateData[constraintIndex * NUM_FEATURES + POLARITY_SCORE] = polarityScore;
+}
+
+void State::updateSatisfied( const unsigned constraintIndex, unsigned const satisfied )
+{
+    if ( constraintIndex >= _numConstraints )
+        return;
+    _stateData[constraintIndex * NUM_FEATURES + SATISFIED] = satisfied;
 }

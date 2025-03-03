@@ -116,35 +116,35 @@ Engine::~Engine()
 }
 
 // DQN methods:
-void Engine::updateSoIScoreForConstraintInState( State &stateToUpdate,
-                                                 const int index,
-                                                 PiecewiseLinearConstraint *const &plConstraint,
-                                                 const Map<unsigned, double> &currentAssignment )
-{
-    auto currentPhase = plConstraint->getPhaseStatus();
-    if ( currentPhase == RELU_PHASE_ACTIVE || currentPhase == RELU_PHASE_INACTIVE ||
-         plConstraint->haveOutOfBoundVariables() )
-    {
-        stateToUpdate.updateSoIScoreForAgent( index, 0, 0 );
-        return;
-    }
-    LinearExpression costComponent;
-    LinearExpression activeCostComponent;
-    plConstraint->getCostFunctionComponent( activeCostComponent, RELU_PHASE_ACTIVE );
-    const double activeSoiScore = activeCostComponent.evaluate( currentAssignment );
-    LinearExpression inactiveCostComponent;
-    plConstraint->getCostFunctionComponent( inactiveCostComponent, RELU_PHASE_INACTIVE );
-    const double inactiveSoiScore = inactiveCostComponent.evaluate( currentAssignment );
-    stateToUpdate.updateSoIScoreForAgent( index, activeSoiScore, inactiveSoiScore );
-}
+// void Engine::updateSoIScoreForConstraintInState( State &stateToUpdate,
+//                                                  const int index,
+//                                                  PiecewiseLinearConstraint *const &plConstraint,
+//                                                  const Map<unsigned, double> &currentAssignment )
+// {
+//     auto currentPhase = plConstraint->getPhaseStatus();
+//     if ( currentPhase == RELU_PHASE_ACTIVE || currentPhase == RELU_PHASE_INACTIVE ||
+//          plConstraint->haveOutOfBoundVariables() )
+//     {
+//         stateToUpdate.updateSoIScoreForAgent( index, 0, 0 );
+//         return;
+//     }
+//     LinearExpression costComponent;
+//     LinearExpression activeCostComponent;
+//     plConstraint->getCostFunctionComponent( activeCostComponent, RELU_PHASE_ACTIVE );
+//     const double activeSoiScore = activeCostComponent.evaluate( currentAssignment );
+//     LinearExpression inactiveCostComponent;
+//     plConstraint->getCostFunctionComponent( inactiveCostComponent, RELU_PHASE_INACTIVE );
+//     const double inactiveSoiScore = inactiveCostComponent.evaluate( currentAssignment );
+//     stateToUpdate.updateSoIScoreForAgent( index, activeSoiScore, inactiveSoiScore );
+// }
 
 void Engine::updateToCurrentDQNState( State &stateToUpdate )
 {
     int index = 0;
     int phase;
-    Map<unsigned, double> currentAssignment;
-    for ( unsigned i = 0; i < getInputQuery()->getNumberOfVariables(); ++i )
-        currentAssignment[i] = _tableau->getValue( i );
+    // Map<unsigned, double> currentAssignment;
+    // for ( unsigned i = 0; i < getInputQuery()->getNumberOfVariables(); ++i )
+        // currentAssignment[i] = _tableau->getValue( i );
     for ( const auto &plConstraint : _plConstraints )
     {
         if ( !plConstraint->isActive() && !plConstraint->phaseFixed() )
@@ -152,8 +152,9 @@ void Engine::updateToCurrentDQNState( State &stateToUpdate )
         else
             phase = plConstraint->getPhaseStatus();
         stateToUpdate.updateConstraintPhase( index, phase );
-        updateSoIScoreForConstraintInState( stateToUpdate, index, plConstraint, currentAssignment );
+        // updateSoIScoreForConstraintInState( stateToUpdate, index, plConstraint, currentAssignment );
         stateToUpdate.updatePolarity( index, plConstraint->computePolarity() );
+        stateToUpdate.updateSatisfied( index, plConstraint->satisfied() );
         index++;
     }
 }
@@ -589,12 +590,7 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
     unsigned ALTERNATIVE_ACTION = 1;
     unsigned NEW_ACTION = 2;
     if ( agent == nullptr )
-    {
-
-        printf( "no agent provided! creating new\n" );
-        fflush( stdout );
         _agent = std::make_unique<Agent>( numPlConstraints, DQN_NUM_PHASES, trainedAgentPath );
-    }
     else
         _agent = std::move( agent );
     _action = std::make_unique<Action>( DQN_NUM_PHASES, numPlConstraints );
@@ -703,12 +699,17 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                 ASSERT( _agent->getActionStackSize() ==
                         static_cast<int>( _smtCore.getStackDepth() ) )
                 PhaseStatus phaseStatus = static_cast<PhaseStatus>( _action->getActionPhase() );
+                auto tempState = State(*_previousState);
+                updateToCurrentDQNState(tempState);
                 if ( _smtCore.performSplit( &phaseStatus ) )
+                {
                     smtSteps.push_back( NEW_ACTION );
+                    *_previousState = tempState;
+                    numSplitsByAgent++;
+                    splitJustPerformed = true;
+                }
 
-                numSplitsByAgent++;
-                splitJustPerformed = true;
-                updateToCurrentDQNState( *_previousState );
+                // updateToCurrentDQNState( *_previousState );
                 continue;
             }
 

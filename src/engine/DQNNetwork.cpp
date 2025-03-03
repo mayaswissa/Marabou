@@ -8,10 +8,10 @@ QNetwork::QNetwork( const unsigned numPlConstraints,
 {
     // , dropout( register_module( "dropout", torch::nn::Dropout( 0.3 ) ) )
     _inputDim = numPlConstraints * _numFeatures;
-    fc1 = register_module( "fc1", torch::nn::Linear( _inputDim, 64 ) );
-    fc2 = register_module( "fc2", torch::nn::Linear( 64, 128 ) );
-    fc3 = register_module( "fc3", torch::nn::Linear( 128, 256 ) );
-    fc4 = register_module( "fc4", torch::nn::Linear( 256, _outputDim ) );
+    fc1 = register_module( "fc1", torch::nn::Linear( _inputDim, 128 ) );
+    fc2 = register_module( "fc2", torch::nn::Linear( 128, 256 ) );
+    fc3 = register_module( "fc3", torch::nn::Linear( 256, _outputDim ) );
+    // fc4 = register_module( "fc4", torch::nn::Linear( 128, _outputDim ) );
     initWeights();
 }
 
@@ -21,7 +21,7 @@ void QNetwork::initWeights()
     torch::nn::init::kaiming_normal_( fc1->weight, 0.0, torch::kFanOut, torch::kReLU );
     torch::nn::init::kaiming_normal_( fc2->weight, 0.0, torch::kFanOut, torch::kReLU );
     torch::nn::init::kaiming_normal_( fc3->weight, 0.0, torch::kFanOut, torch::kReLU );
-    torch::nn::init::kaiming_normal_( fc4->weight, 0.0, torch::kFanOut, torch::kReLU );
+    // torch::nn::init::kaiming_normal_( fc4->weight, 0.0, torch::kFanOut, torch::kReLU );
 
     // Initialize biases to zero if biases are used
     if ( fc1->bias.defined() )
@@ -30,8 +30,8 @@ void QNetwork::initWeights()
         torch::nn::init::constant_( fc2->bias, 0.0 );
     if ( fc3->bias.defined() )
         torch::nn::init::constant_( fc3->bias, 0.0 );
-    if ( fc4->bias.defined() )
-        torch::nn::init::constant_( fc4->bias, 0.0 );
+    // if ( fc4->bias.defined() )
+    //     torch::nn::init::constant_( fc4->bias, 0.0 );
 }
 
 torch::Tensor QNetwork::forward( const torch::Tensor &state )
@@ -56,8 +56,8 @@ torch::Tensor QNetwork::forward( const torch::Tensor &state )
     }
     auto x = torch::relu( fc1( featuresFlattened ) );
     x = torch::relu( fc2( x ) );
-    x = torch::relu( fc3( x ) );
-    auto output = fc4( x );
+    // x = torch::relu( fc3( x ) );
+    auto output = fc3( x );
     // If the input was a single state, remove batch dimension from output
     if ( state.sizes().size() == 2 )
     {
@@ -95,8 +95,8 @@ void QNetwork::save( torch::serialize::OutputArchive &archive ) const
     archive.write( "fc2_bias", fc2->bias );
     archive.write( "fc3_weight", fc3->weight );
     archive.write( "fc3_bias", fc3->bias );
-    archive.write( "fc4_weight", fc4->weight );
-    archive.write( "fc4_bias", fc4->bias );
+    // archive.write( "fc4_weight", fc4->weight );
+    // archive.write( "fc4_bias", fc4->bias );
     // check_weights(fc1, "FC1");
     // check_weights(fc2, "FC2");
     // check_weights(fc3, "FC3");
@@ -112,8 +112,8 @@ void QNetwork::load( torch::serialize::InputArchive &archive )
     archive.read( "fc2_bias", fc2->bias );
     archive.read( "fc3_weight", fc3->weight );
     archive.read( "fc3_bias", fc3->bias );
-    archive.read( "fc4_weight", fc4->weight );
-    archive.read( "fc4_bias", fc4->bias );
+    // archive.read( "fc4_weight", fc4->weight );
+    // archive.read( "fc4_bias", fc4->bias );
     // check_weights(fc1, "FC1");
     // check_weights(fc2, "FC2");
     // check_weights(fc3, "FC3");
