@@ -82,12 +82,10 @@ bool Agent::handleInvalidGradients()
 }
 
 
-void Agent::handleDone( const State &currentState,
-                        const unsigned numSplits,
-                        const double prunedSubtrees )
+void Agent::handleDone( const State &currentState, const unsigned numSplits, const double soiScore )
 {
     // Insert all actions from actions buffer to the replay buffer and learn.
-    _replayedBuffer.handleDone( currentState, numSplits, prunedSubtrees );
+    _replayedBuffer.handleDone( currentState, numSplits, soiScore );
     _tStep = ( _tStep + 1 ) % GlobalConfiguration::DQN_EXPLORATION_RATE;
     learn();
 }
@@ -95,9 +93,9 @@ void Agent::handleDone( const State &currentState,
 void Agent::stepAlternativeAction( const State &stateBeforeSplit,
                                    const unsigned numSplits,
                                    unsigned &numInconsistent,
-                                   const double prunedSubtrees )
+                                   const double soiScore )
 {
-    _replayedBuffer.applyNextAction( stateBeforeSplit, numSplits, numInconsistent, prunedSubtrees );
+    _replayedBuffer.applyNextAction( stateBeforeSplit, numSplits, numInconsistent, soiScore );
     _tStep = ( _tStep + 1 ) % GlobalConfiguration::DQN_EXPLORATION_RATE;
     if ( _tStep == 0 )
         learn();
@@ -110,13 +108,14 @@ auto Agent::stepNewAction( const State &previousState,
                            const State &currentState,
                            const bool done,
                            const unsigned numSplits,
-                           const bool changeReward ) -> void
+                           const bool changeReward,
+                           const double soiScore ) -> void
 {
     if ( !changeReward || done )
         _replayedBuffer.addExperienceToRevisitBuffer(
             previousState, action, static_cast<float>( reward ), currentState, done );
     else
-        _replayedBuffer.pushActionEntry( action, previousState, currentState, numSplits );
+        _replayedBuffer.pushActionEntry( action, previousState, numSplits, soiScore );
 
     _tStep = ( _tStep + 1 ) % GlobalConfiguration::DQN_EXPLORATION_RATE;
     if ( _tStep == 0 )

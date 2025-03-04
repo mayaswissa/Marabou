@@ -1,4 +1,5 @@
 #include "DQNReplayBuffer.h"
+
 #include <random>
 
 ReplayBuffer::ReplayBuffer( const unsigned numConstraints,
@@ -10,10 +11,8 @@ ReplayBuffer::ReplayBuffer( const unsigned numConstraints,
     , _size( 0 )
     , _writePosition( 0 )
 {
-    _actions = torch::zeros( { static_cast<long>( bufferSize) , 1 }, torch::kFloat32 );
-    _states = torch::zeros( { static_cast<long>( bufferSize ),
-                               _numConstraints ,
-                              NUM_FEATURES  },
+    _actions = torch::zeros( { static_cast<long>( bufferSize ), 1 }, torch::kFloat32 );
+    _states = torch::zeros( { static_cast<long>( bufferSize ), _numConstraints, NUM_FEATURES },
                             torch::kFloat32 );
     _rewards = torch::zeros( { static_cast<long>( bufferSize ) }, torch::kFloat32 );
     _nextStates = torch::zeros( { static_cast<long>( bufferSize ),
@@ -25,16 +24,16 @@ ReplayBuffer::ReplayBuffer( const unsigned numConstraints,
 
 void ReplayBuffer::pushActionEntry( const Action &action,
                                     const State &stateBeforeAction,
-                                    const State &stateAfterAction,
-                                    const unsigned numSplits )
+                                    const unsigned numSplitsBeforeAction,
+                                    const double soiScoreBeforeAction )
 {
-    auto *actionEntry = new ActionEntry( action, stateBeforeAction, stateAfterAction, numSplits );
+    auto *actionEntry = new ActionEntry( action, stateBeforeAction, numSplitsBeforeAction, soiScoreBeforeAction );
     _actionsStack.append( actionEntry );
 }
 
 void ReplayBuffer::handleDone( const State &currentState,
                                const unsigned numSplits,
-                               const double prunedSubtrees )
+                               const double soiScore )
 {
     // Go over all actions in actionsStack and move them to revisitExperiences
     while ( !_actionsStack.empty() )
@@ -42,7 +41,7 @@ void ReplayBuffer::handleDone( const State &currentState,
         ActionEntry *actionEntry = _actionsStack.back();
         // no need to insert alternative actions.
         while ( !actionEntry->_activeActions.empty() )
-            moveActionToRevisitBuffer( currentState, numSplits, actionEntry, prunedSubtrees );
+            moveActionToRevisitBuffer( currentState, numSplits, actionEntry, soiScore );
 
         delete _actionsStack.back();
         _actionsStack.popBack();
@@ -50,18 +49,23 @@ void ReplayBuffer::handleDone( const State &currentState,
 }
 
 void ReplayBuffer::moveActionToRevisitBuffer( const State &stateAfterAction,
-                                              const unsigned numSplits,
+                                              const unsigned numSplitsAfterAction,
                                               ActionEntry *actionEntry,
-                                              const double prunedSubtrees )
+                                              double soiScoreAfterAction )
 {
     const auto activeAction = actionEntry->_activeActions.back();
     double splitsReward = ( static_cast<double>( activeAction._splitsBeforeActiveAction ) -
-                            static_cast<double>( numSplits ) ) /
+                            static_cast<double>( numSplitsAfterAction ) ) /
                           activeAction._action.getNumPlConstraints();
     splitsReward =
         std::copysign( std::log( 1.0 + std::abs( splitsReward ) / 10.0 + 1e-8 ), splitsReward );
+    double soiReward = (activeAction._soiScoreBeforeActiveAction - soiScoreAfterAction);
+    soiReward =
+        std::copysign( std::log( 1.0 + std::abs( soiReward ) / 10.0 + 1e-8 ), soiReward );
+    std::cout << "splits reward : " << splitsReward << std::endl;
+    std::cout << "soi reward : " << soiReward << std::endl;
     const auto reward = GlobalConfiguration::DQN_ALPHA_REWARDS * splitsReward +
-                        ( 1.0 - GlobalConfiguration::DQN_ALPHA_REWARDS ) * prunedSubtrees;
+                        ( 1.0 - GlobalConfiguration::DQN_ALPHA_REWARDS ) * soiReward;
 
     addExperienceToRevisitBuffer(
         activeAction._stateBeforeAction, activeAction._action, reward, stateAfterAction, false );
@@ -72,7 +76,7 @@ void ReplayBuffer::moveActionToRevisitBuffer( const State &stateAfterAction,
 void ReplayBuffer::applyNextAction( const State &stateAfterAction,
                                     const unsigned numSplits,
                                     unsigned &numInconsistent,
-                                    const double prunedSubtrees )
+                                    const double soiScore )
 {
     if ( _actionsStack.empty() )
         return;
@@ -88,8 +92,7 @@ void ReplayBuffer::applyNextAction( const State &stateAfterAction,
             actionEntry = _actionsStack.back();
             while ( !actionEntry->_activeActions.empty() )
             {
-                moveActionToRevisitBuffer(
-                    stateAfterAction, numSplits, actionEntry, prunedSubtrees );
+                moveActionToRevisitBuffer( stateAfterAction, numSplits, actionEntry, soiScore );
             }
             delete _actionsStack.back();
             _actionsStack.popBack();
@@ -102,7 +105,8 @@ void ReplayBuffer::applyNextAction( const State &stateAfterAction,
         actionEntry = _actionsStack.back();
         auto action = actionEntry->_alternativeActions.begin();
         actionEntry->_activeActions.append(
-            ActiveAction( *action, actionEntry->_stateBeforeAction, stateAfterAction, numSplits ) );
+            ActiveAction( *action, actionEntry->_stateBeforeAction, numSplits, soiScore ) ); // todo check what value the
+                                                                    // state before should have
         actionEntry->_alternativeActions.erase( action );
         numInconsistent--;
     }
@@ -152,7 +156,8 @@ std::vector<unsigned> ReplayBuffer::sample() const
     std::random_device rd;
     std::mt19937 g( rd() );
     std::shuffle( indices.begin(), indices.end(), g );
-    sampledIndices.insert(sampledIndices.end(), indices.begin(), indices.begin() + currentBatchSize);
+    sampledIndices.insert(
+        sampledIndices.end(), indices.begin(), indices.begin() + currentBatchSize );
     return sampledIndices;
 }
 

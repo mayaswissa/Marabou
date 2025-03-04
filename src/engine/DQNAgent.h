@@ -19,16 +19,17 @@ public:
     void stepAlternativeAction( const State &stateBeforeSplit,
                                 unsigned numSplits,
                                 unsigned &numInconsistent,
-                                double prunedSubtrees );
+                                double soiScore );
     void stepNewAction( const State &previousState,
                         const Action &action,
                         double reward,
                         const State &currentState,
                         bool done,
                         unsigned numSplits,
-                        bool changeReward );
+                        bool changeReward,
+                        double soiScore );
 
-    void handleDone( const State &currentState, unsigned numSplits, double prunedSubtrees );
+    void handleDone( const State &currentState, unsigned numSplits, double soiScore );
     std::unique_ptr<Action> act( const State &state, double eps = 0.1 );
     double updateLR();
     void saveNetworks() const;

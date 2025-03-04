@@ -78,16 +78,16 @@ struct ActiveAction
 {
     Action _action;
     State _stateBeforeAction;
-    State _stateAfterAction;
     unsigned _splitsBeforeActiveAction;
+    double _soiScoreBeforeActiveAction;
     ActiveAction( const Action &action,
                   const State &stateBeforeAction,
-                  const State &stateAfterAction,
-                  unsigned splitsBeforeAction )
+                  unsigned splitsBeforeAction,
+                  double soiScoreBeforeActiveAction )
         : _action( action )
         , _stateBeforeAction( stateBeforeAction )
-        , _stateAfterAction( stateAfterAction )
         , _splitsBeforeActiveAction( splitsBeforeAction )
+        , _soiScoreBeforeActiveAction( soiScoreBeforeActiveAction )
     {
     }
 };
@@ -100,22 +100,20 @@ struct ActionEntry
     State _stateBeforeAction;
 
     ActionEntry( const Action &action,
-                  const State &stateBeforeAction,
-                  const State &stateAfterAction,
-                  const unsigned splitsBeforeAction )
+                 const State &stateBeforeAction,
+                 const unsigned splitsBeforeAction,
+                 const double soiBeforeAction)
         : _stateBeforeAction( stateBeforeAction )
 
     {
         _activeActions = List<ActiveAction>();
-        _activeActions.append(
-            ActiveAction( action, stateBeforeAction, stateAfterAction, splitsBeforeAction ) );
+        _activeActions.append( ActiveAction( action, stateBeforeAction, splitsBeforeAction, soiBeforeAction ) );
         _alternativeActions = List<Action>();
 
         auto const actionPhase = action.getActionPhase();
-        ASSERT(actionPhase == RELU_PHASE_ACTIVE || actionPhase == RELU_PHASE_INACTIVE);
-        const unsigned alternativeActionPhase = actionPhase == RELU_PHASE_ACTIVE
-                                                  ? RELU_PHASE_INACTIVE
-                                                  : RELU_PHASE_ACTIVE;
+        ASSERT( actionPhase == RELU_PHASE_ACTIVE || actionPhase == RELU_PHASE_INACTIVE );
+        const unsigned alternativeActionPhase =
+            actionPhase == RELU_PHASE_ACTIVE ? RELU_PHASE_INACTIVE : RELU_PHASE_ACTIVE;
         const auto alternateAction = Action( action.getNumPhases(),
                                              action.getNumPlConstraints(),
                                              action.getActionPlConstraintIndex(),
@@ -139,19 +137,20 @@ public:
 
     bool compareStateWithAlternative( State &state ) const;
 
-    void pushActionEntry( const Action &action,
+    void
+    pushActionEntry( const Action &action,
                           const State &stateBeforeAction,
-                          const State &stateAfterAction,
-                          unsigned numSplits );
-    void handleDone( const State &currentState, unsigned numSplits, double prunedSubtrees );
+                          unsigned numSplitsBeforeAction,
+                          double soiScoreBeforeAction );
+    void handleDone( const State &currentState, unsigned numSplits, double soiScore );
     void moveActionToRevisitBuffer( const State &stateAfterAction,
-                                    unsigned numSplits,
+                                    unsigned numSplitsAfterAction,
                                     ActionEntry *actionEntry,
-                                    double prunedSubtrees );
+                                    double soiScoreAfterAction );
     void applyNextAction( const State &state,
                           unsigned numSplits,
                           unsigned &numInconsistent,
-                          double prunedSubtrees );
+                          double soiScore );
     int getActionStackSize() const;
     torch::Tensor getStates();
     torch::Tensor getActions();

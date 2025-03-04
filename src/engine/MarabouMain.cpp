@@ -134,13 +134,13 @@ int marabouMain( int argc, char **argv )
 #endif
             if ( GlobalConfiguration::USE_DQN )
             {
-                unsigned epochs = 12;
+                unsigned epochs = 500;
                 double currEpisodeScore = 0;
                 std::vector<double> learningRates = { 1e-2 };
 
                 std::vector<double> alphas = { 0, 0.2, 0.4, 0.8, 1 };
-                std::vector<unsigned> batchSizes = {256, 512, 1024 };
-                std::vector<unsigned> bufferSizes = {  8000, 64000 };
+                std::vector<unsigned> batchSizes = {8, 512, 1024 };
+                std::vector<unsigned> bufferSizes = {  32, 64000 };
                 int numRuns = 12;
                 unsigned bestBufferSize = 64;
                 unsigned bestBatchSize = 64;
@@ -185,7 +185,7 @@ int marabouMain( int argc, char **argv )
                                     for ( int i = 0; i < numRuns; i++ )
                                     {
                                         numSplits = 0;
-                                        GlobalConfiguration::USE_DEEPSOI_LOCAL_SEARCH = false;
+                                        // GlobalConfiguration::USE_DEEPSOI_LOCAL_SEARCH = false;
                                         GlobalConfiguration::USE_DQN = true;
                                         std::unique_ptr<Agent> agent = nullptr;
                                         double epsilon = GlobalConfiguration::DQN_EPSILON_START;
@@ -211,7 +211,7 @@ int marabouMain( int argc, char **argv )
                                         if ( agent != nullptr )
                                             agent->saveNetworks();
                                         Marabou().runAgentTraining(
-                                            1, false, std::move( agent ), &numSplits );
+                                            GlobalConfiguration::DQN_EPSILON_END, false, std::move( agent ), &numSplits );
                                         avgNumSplits += numSplits;
                                         printf( "numsplits marabouMain: %d\n", numSplits );
                                         fflush( stdout );
