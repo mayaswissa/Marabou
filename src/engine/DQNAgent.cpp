@@ -37,11 +37,19 @@ Agent::Agent( const unsigned numPlConstraints,
 
 void Agent::saveNetworks() const
 {
-    torch::serialize::OutputArchive output_archive;
-    _qNetworkLocal.save( output_archive );
-    output_archive.save_to( _saveAgentFilePath + "_local.pth" );
-    _qNetworkTarget.save( output_archive );
-    output_archive.save_to( _saveAgentFilePath + "_target.pth" );
+    // Save local network
+    {
+        torch::serialize::OutputArchive local_archive;
+        _qNetworkLocal.save(local_archive);
+        local_archive.save_to(_saveAgentFilePath + "_local.pth");
+    }
+
+    // Save target network
+    {
+        torch::serialize::OutputArchive target_archive;
+        _qNetworkTarget.save(target_archive);
+        target_archive.save_to(_saveAgentFilePath + "_target.pth");
+    }
 }
 
 
@@ -49,11 +57,19 @@ void Agent::loadNetworks()
 {
     try
     {
-        torch::serialize::InputArchive input_archive;
-        input_archive.load_from( _trainedAgentFilePath + "_local.pth" );
-        _qNetworkLocal.load( input_archive );
-        input_archive.load_from( _trainedAgentFilePath + "_target.pth" );
-        _qNetworkTarget.load( input_archive );
+        // Load local network
+        {
+            torch::serialize::InputArchive local_archive;
+            local_archive.load_from(_trainedAgentFilePath + "_local.pth");
+            _qNetworkLocal.load(local_archive);
+        }
+
+        // Load target network
+        {
+            torch::serialize::InputArchive target_archive;
+            target_archive.load_from(_trainedAgentFilePath + "_target.pth");
+            _qNetworkTarget.load(target_archive);
+        }
     }
     catch ( const torch::Error &e )
     {
