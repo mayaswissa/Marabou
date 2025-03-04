@@ -139,8 +139,8 @@ int marabouMain( int argc, char **argv )
                 std::vector<double> learningRates = { 1e-2 };
 
                 std::vector<double> alphas = { 0, 0.2, 0.4, 0.8, 1 };
-                std::vector<unsigned> batchSizes = {8, 512, 1024 };
-                std::vector<unsigned> bufferSizes = {  32, 64000 };
+                std::vector<unsigned> batchSizes = {8, 16, 32 };
+                std::vector<unsigned> bufferSizes = {  64, 124, 256, 512 };
                 int numRuns = 12;
                 unsigned bestBufferSize = 64;
                 unsigned bestBatchSize = 64;
