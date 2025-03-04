@@ -14,6 +14,7 @@ class Agent
 public:
     Agent( unsigned numPlConstraints,
            unsigned numPhases,
+           bool isTraining,
            const std::string &saveAgentPath,
            const std::string &trainedAgentPath = "" );
     void stepAlternativeAction( const State &stateBeforeSplit,
@@ -36,6 +37,7 @@ public:
     int getActionStackSize() const;
     int getReplayBufferSize() const;
     void schedulersStep();
+    void setTrainingMode( bool isTraining );
 
 private:
     static void softUpdate( const QNetwork &localModel, const QNetwork &targetModel );
@@ -53,6 +55,7 @@ private:
     torch::optim::Adam _optimizer;
     torch::optim::StepLR _scheduler;
     ReplayBuffer _replayedBuffer;
+    bool _isTraining;
     bool handleInvalidGradients();
 };
 #endif

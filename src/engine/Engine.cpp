@@ -138,7 +138,7 @@ Engine::~Engine()
 //     stateToUpdate.updateSoIScoreForAgent( index, activeSoiScore, inactiveSoiScore );
 // }
 
-void Engine::updateToCurrentDQNState( State &stateToUpdate )
+void Engine::updateDQNState( State &state )
 {
     int index = 0;
     int phase;
@@ -151,10 +151,10 @@ void Engine::updateToCurrentDQNState( State &stateToUpdate )
             phase = DQN_RELU_ACTIVE;
         else
             phase = plConstraint->getPhaseStatus();
-        stateToUpdate.updateConstraintPhase( index, phase );
+        state.updateConstraintPhase( index, phase );
         // updateSoIScoreForConstraintInState( stateToUpdate, index, plConstraint, currentAssignment );
-        stateToUpdate.updatePolarity( index, plConstraint->computePolarity() );
-        stateToUpdate.updateSatisfied( index, plConstraint->satisfied() );
+        state.updatePolarity( index, plConstraint->computePolarity() );
+        state.updateSatisfied( index, plConstraint->satisfied() );
         index++;
     }
 }
@@ -236,9 +236,7 @@ PiecewiseLinearConstraint *
 Engine::indexToConstraint( const int index, List<PiecewiseLinearConstraint *> *constraints )
 {
     if ( index < 0 || index >= static_cast<int>( constraints->size() ) )
-    {
         return nullptr;
-    }
 
     auto it = constraints->begin();
     std::advance( it, index );
@@ -291,12 +289,13 @@ bool Engine::solve( double timeoutInSeconds, const std::string &trainedAgentPath
         if ( trainedAgentPath.empty() )
             throw std::runtime_error( "Agent is not set" );
         _currentDQNState = std::make_unique<State>( numPlConstraints );
-        updateToCurrentDQNState( *_currentDQNState );
+        updateDQNState( *_currentDQNState );
         _agent = std::make_unique<Agent>(
-            numPlConstraints, DQN_NUM_PHASES, trainedAgentPath, trainedAgentPath );
+            numPlConstraints, DQN_NUM_PHASES, false, trainedAgentPath, trainedAgentPath );
+        _agent->setTrainingMode( false );
         _action = std::make_unique<Action>( DQN_NUM_PHASES, numPlConstraints );
         _previousState = std::make_unique<State>( numPlConstraints );
-        updateToCurrentDQNState( *_previousState );
+        updateDQNState( *_previousState );
     }
     unsigned DQNIterations = 5;
     _eps = GlobalConfiguration::DQN_EPSILON_END;
@@ -387,7 +386,7 @@ bool Engine::solve( double timeoutInSeconds, const std::string &trainedAgentPath
                 {
                     auto phaseStatus = static_cast<PhaseStatus>( _action->getActionPhase() );
                     _smtCore.performSplit( &phaseStatus );
-                    updateToCurrentDQNState( *_previousState ); // prevState = currentState
+                    updateDQNState( *_previousState ); // prevState = currentState
                 }
                 else
                     _smtCore.performSplit();
@@ -550,11 +549,6 @@ bool Engine::solve( double timeoutInSeconds, const std::string &trainedAgentPath
     }
 }
 
-void Engine::loadAgentNetworks( Agent &agent )
-{
-    agent.loadNetworks();
-}
-
 std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                                               std::unique_ptr<Agent> agent,
                                               double timeoutInSeconds,
@@ -590,14 +584,14 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
     unsigned ALTERNATIVE_ACTION = 1;
     unsigned NEW_ACTION = 2;
     if ( agent == nullptr )
-        _agent = std::make_unique<Agent>( numPlConstraints, DQN_NUM_PHASES, trainedAgentPath );
+        _agent = std::make_unique<Agent>( numPlConstraints, DQN_NUM_PHASES, true, trainedAgentPath );
     else
         _agent = std::move( agent );
     _action = std::make_unique<Action>( DQN_NUM_PHASES, numPlConstraints );
     _currentDQNState = std::make_unique<State>( numPlConstraints );
-    updateToCurrentDQNState( *_currentDQNState );
+    updateDQNState( *_currentDQNState );
     _previousState = std::make_unique<State>( numPlConstraints );
-    updateToCurrentDQNState( *_previousState );
+    updateDQNState( *_previousState );
     const unsigned maxSplitsByAgent = 1000;
     unsigned numSplitsByAgent = 0;
     unsigned mainLoopIterations = 0;
@@ -613,7 +607,7 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
 
         if ( shouldExitDueToTimeout( timeoutInSeconds ) )
         {
-            updateToCurrentDQNState( *_currentDQNState );
+            updateDQNState( *_currentDQNState );
             auto prunedSubtrees = _smtCore.prunedSubtrees( numPlConstraints );
 
             _agent->stepNewAction( *_previousState,
@@ -661,7 +655,7 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                 }
             }
 
-            // updateToCurrentDQNState( *_currentDQNState );
+            // updateDQNState( *_currentDQNState );
             if ( splitJustPerformed )
             {
                 performBoundTighteningAfterCaseSplit();
@@ -675,7 +669,7 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                 {
                     auto smtStep = smtSteps.front();
                     smtSteps.pop_front();
-                    updateToCurrentDQNState( *_currentDQNState );
+                    updateDQNState( *_currentDQNState );
                     // smtCore performed pop
                     if ( smtStep == ALTERNATIVE_ACTION )
                     {
@@ -700,7 +694,7 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                         static_cast<int>( _smtCore.getStackDepth() ) )
                 PhaseStatus phaseStatus = static_cast<PhaseStatus>( _action->getActionPhase() );
                 auto tempState = State(*_previousState);
-                updateToCurrentDQNState(tempState);
+                updateDQNState(tempState);
                 if ( _smtCore.performSplit( &phaseStatus ) )
                 {
                     smtSteps.push_back( NEW_ACTION );
@@ -709,7 +703,7 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                     splitJustPerformed = true;
                 }
 
-                // updateToCurrentDQNState( *_previousState );
+                // updateDQNState( *_previousState );
                 continue;
             }
 
@@ -740,7 +734,7 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
 
                         _exitCode = Engine::SAT;
 
-                        updateToCurrentDQNState( *_currentDQNState );
+                        updateDQNState( *_currentDQNState );
                         auto rewardForDone = _smtCore.prunedSubtrees( numPlConstraints );
 
                         _agent->stepNewAction( *_previousState,
@@ -765,7 +759,7 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                         if ( _verbosity > 0 )
                             printf( "\nEngine::solve: at leaf node but solving inconclusive\n" );
 
-                        updateToCurrentDQNState( *_currentDQNState );
+                        updateDQNState( *_currentDQNState );
                         double rewardForDone = -1;
                         _agent->stepNewAction( *_previousState,
                                                *_action,
@@ -841,9 +835,9 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
 
                 printf( "done unsat!\n" );
                 fflush( stdout );
-                updateToCurrentDQNState( *_currentDQNState );
-                auto rewardForDone = _smtCore.prunedSubtrees( numPlConstraints );
-                // double rewardForDone = 0;
+                updateDQNState( *_currentDQNState );
+                // auto rewardForDone = _smtCore.prunedSubtrees( numPlConstraints );
+                double rewardForDone = 0;
                 _agent->stepNewAction( *_previousState,
                                        *_action,
                                        rewardForDone,
@@ -893,7 +887,7 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
             return std::move( _agent );
         }
     }
-    updateToCurrentDQNState( *_currentDQNState );
+    updateDQNState( *_currentDQNState );
     auto rewardForDone = _smtCore.prunedSubtrees( numPlConstraints );
     _agent->stepNewAction( *_previousState,
                            *_action,
@@ -3240,7 +3234,7 @@ int Engine::findPlConstraintsIndex( const int index,
 
 PiecewiseLinearConstraint *Engine::pickSplitPLConstraintByAgent()
 {
-    updateToCurrentDQNState( *_currentDQNState );
+    updateDQNState( *_currentDQNState );
     _action = std::move( _agent->act( *_currentDQNState, _eps ) );
     if ( _action == nullptr )
         return NULL;

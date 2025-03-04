@@ -47,12 +47,9 @@ void State::updateConstraintPhase( const unsigned constraintIndex, const unsigne
 {
     if ( constraintIndex >= _numConstraints || newPhase >= _numPhases )
         return;
-    // Get pointer to the start of the row for this constraint.
-    double *rowPtr = &_stateData[constraintIndex * NUM_FEATURES];
-    // Reset the first _numPhases entries (phase indicators) to 0.0.
-    std::fill( rowPtr, rowPtr + _numPhases, 0.0 );
-    // Set the new phase.
-    rowPtr[newPhase] = 1.0;
+    double *constraintPtr = &_stateData[constraintIndex * NUM_FEATURES];
+    std::fill( constraintPtr, constraintPtr + _numPhases, 0.0 );
+    constraintPtr[newPhase] = 1.0;
 }
 
 // void State::updateSoIScoreForAgent( const unsigned constraintIndex,

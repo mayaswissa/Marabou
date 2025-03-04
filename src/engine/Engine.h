@@ -313,8 +313,6 @@ public:
 
     unsigned numPlConstraints() const;
 
-    void loadAgentNetworks( Agent &agent );
-
     std::unique_ptr<Agent> trainDQNAgent( double epsilon,
                                           std::unique_ptr<Agent> agent,
                                           double timeoutInSeconds,
@@ -935,7 +933,7 @@ private:
     /*
       DQN functions
      */
-    void updateToCurrentDQNState( State &state );
+    void updateDQNState( State &state );
     PiecewiseLinearConstraint *indexToConstraint( int index,
                                                   List<PiecewiseLinearConstraint *> *constraints );
 };

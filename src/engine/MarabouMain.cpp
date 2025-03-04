@@ -201,8 +201,8 @@ int marabouMain( int argc, char **argv )
                                             epsilon = std::max(
                                                 GlobalConfiguration::DQN_EPSILON_END,
                                                 epsilon * GlobalConfiguration::DQN_EPSILON_DECAY );
-                                            // if (agent)
-                                            //     agent->schedulersStep();
+                                            if (agent)
+                                                agent->schedulersStep();
                                         }
                                         printf( "start solving with trained agent\n" );
                                         fflush( stdout );
@@ -210,8 +210,14 @@ int marabouMain( int argc, char **argv )
                                         GlobalConfiguration::USE_DEEPSOI_LOCAL_SEARCH = true;
                                         if ( agent != nullptr )
                                             agent->saveNetworks();
+                                        else
+                                        {
+                                            printf("no agent provided for solving !! \n");
+                                            fflush( stdout );
+                                            continue;
+                                        }
                                         Marabou().runAgentTraining(
-                                            1, false, std::move( agent ), &numSplits );
+                                            GlobalConfiguration::DQN_EPSILON_END, false, std::move( agent ), &numSplits );
                                         avgNumSplits += numSplits;
                                         printf( "numsplits marabouMain: %d\n", numSplits );
                                         fflush( stdout );
