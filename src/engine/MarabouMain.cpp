@@ -185,8 +185,8 @@ int marabouMain( int argc, char **argv )
                                     for ( int i = 0; i < numRuns; i++ )
                                     {
                                         numSplits = 0;
-                                        // GlobalConfiguration::USE_DEEPSOI_LOCAL_SEARCH = false;
                                         GlobalConfiguration::USE_DQN = true;
+                                        GlobalConfiguration::USE_DEEPSOI_LOCAL_SEARCH = true;
                                         std::unique_ptr<Agent> agent = nullptr;
                                         double epsilon = GlobalConfiguration::DQN_EPSILON_START;
                                         for ( unsigned int episode = 0; episode < epochs;

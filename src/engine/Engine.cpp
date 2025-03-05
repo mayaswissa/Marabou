@@ -581,7 +581,6 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
     unsigned numInconsistent = 0;
 
     // DQN CODE:
-    GlobalConfiguration::USE_DEEPSOI_LOCAL_SEARCH = true;
     unsigned numPlConstraints = _plConstraints.size();
     _eps = epsilon; // exploration
     printf( "epsilon = %g\n", _eps );
