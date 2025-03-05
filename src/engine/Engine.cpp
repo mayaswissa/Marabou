@@ -297,7 +297,7 @@ bool Engine::solve( double timeoutInSeconds, const std::string &trainedAgentPath
         _previousState = std::make_unique<State>( numPlConstraints );
         updateToCurrentDQNState( *_previousState );
     }
-    unsigned DQNIterations = 5;
+    // unsigned DQNIterations = 5;
     _eps = GlobalConfiguration::DQN_EPSILON_END;
     bool splitJustPerformed = true;
     struct timespec mainLoopStart = TimeUtils::sampleMicro();
@@ -339,15 +339,15 @@ bool Engine::solve( double timeoutInSeconds, const std::string &trainedAgentPath
         {
             DEBUG( _tableau->verifyInvariants() );
 
-            if ( GlobalConfiguration::USE_DQN && *numSplits >= static_cast<int>( DQNIterations ) )
-            {
-                printf( "changed to SOI\n" );
-                fflush( stdout );
-                ( *numSplits )++;
-                GlobalConfiguration::USE_DQN = false;
-                GlobalConfiguration::USE_DEEPSOI_LOCAL_SEARCH = true;
-                decideBranchingHeuristics();
-            }
+            // if ( GlobalConfiguration::USE_DQN && *numSplits >= static_cast<int>( DQNIterations ) )
+            // {
+            //     printf( "changed to SOI\n" );
+            //     fflush( stdout );
+            //     ( *numSplits )++;
+            //     GlobalConfiguration::USE_DQN = false;
+            //     GlobalConfiguration::USE_DEEPSOI_LOCAL_SEARCH = true;
+            //     decideBranchingHeuristics();
+            // }
             mainLoopStatistics();
             if ( _verbosity > 1 &&
                  _statistics.getLongAttribute( Statistics::NUM_MAIN_LOOP_ITERATIONS ) %
