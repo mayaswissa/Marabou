@@ -57,15 +57,22 @@ void ReplayBuffer::moveActionToRevisitBuffer( const State &stateAfterAction,
     double splitsReward = ( static_cast<double>( activeAction._splitsBeforeActiveAction ) -
                             static_cast<double>( numSplitsAfterAction ) ) /
                           activeAction._action.getNumPlConstraints();
-    splitsReward =
-        std::copysign( std::log( 1.0 + std::abs( splitsReward ) / 10.0 + 1e-8 ), splitsReward );
-    double soiReward = (activeAction._soiScoreBeforeActiveAction - soiScoreAfterAction);
+    if (splitsReward == 0)
+    {
+        actionEntry->_activeActions.popBack();
+        return;
+    }
+    double soiReward = -2; // this is the reward for soiBefore < soiAfter
+    if (activeAction._soiScoreBeforeActiveAction > soiScoreAfterAction)
+    {
+        soiReward = soiScoreAfterAction - activeAction._soiScoreBeforeActiveAction;
+    }
+    else if (activeAction._soiScoreBeforeActiveAction == soiScoreAfterAction)
+        soiReward = -0.5;
     soiReward =
         std::copysign( std::log( 1.0 + std::abs( soiReward ) / 10.0 + 1e-8 ), soiReward );
-    std::cout << "splits reward : " << splitsReward << std::endl;
-    std::cout << "soi reward : " << soiReward << std::endl;
-    const auto reward = GlobalConfiguration::DQN_ALPHA_REWARDS * splitsReward +
-                        ( 1.0 - GlobalConfiguration::DQN_ALPHA_REWARDS ) * soiReward;
+    // std::cout << "soi reward : " << soiReward << std::endl;
+    const auto reward =   soiReward;
 
     addExperienceToRevisitBuffer(
         activeAction._stateBeforeAction, activeAction._action, reward, stateAfterAction, false );

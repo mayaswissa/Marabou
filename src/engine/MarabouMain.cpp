@@ -137,11 +137,9 @@ int marabouMain( int argc, char **argv )
                 unsigned epochs = 500;
                 double currEpisodeScore = 0;
                 std::vector<double> learningRates = { 1e-2 };
-
-                std::vector<double> alphas = { 0, 0.2, 0.4, 0.8, 1 };
-                std::vector<unsigned> batchSizes = {8, 16, 32 };
-                std::vector<unsigned> bufferSizes = {  64, 124, 256, 512 };
-                int numRuns = 12;
+                std::vector<unsigned> batchSizes = {64, 32, 16 };
+                std::vector<unsigned> bufferSizes = {   256, 512 };
+                int numRuns = 20;
                 unsigned bestBufferSize = 64;
                 unsigned bestBatchSize = 64;
                 double bestLR = 0;
@@ -154,16 +152,13 @@ int marabouMain( int argc, char **argv )
                     {
                         for ( auto lr : learningRates )
                         {
-                            for ( auto alpha : alphas )
-                            {
+
                                 int avgNumSplits = 0;
                                 int numSplits = 0;
                                 GlobalConfiguration::DQN_BUFFER_SIZE = bufferSize;
                                 GlobalConfiguration::DQN_BATCH_SIZE = batchSize;
-                                GlobalConfiguration::DQN_ALPHA_REWARDS = alpha;
                                 GlobalConfiguration::DQN_LR = lr;
                                 printf("learning rate = %g\n", GlobalConfiguration::DQN_LR);
-                                printf("alpha = %g\n", GlobalConfiguration::DQN_ALPHA_REWARDS);
                                 printf("bufferSize = %u\n", GlobalConfiguration::DQN_BUFFER_SIZE);
                                 printf("batchSize = %u\n", GlobalConfiguration::DQN_BATCH_SIZE);
                                 std::ostringstream currentRunFile;
@@ -171,8 +166,7 @@ int marabouMain( int argc, char **argv )
                                     << "/home/maya-swisa/Documents/Lab/DRL/Marabou/schedulerResults/"
                                     << "buffer-" << bufferSize << "batchSize-" << batchSize
                                     << "results_lr-" << std::scientific << std::setprecision( 1 )
-                                    << lr << "_alpha-" << std::fixed << std::setprecision( 2 )
-                                    << alpha << ".txt";
+                                    << lr << ".txt";
 
                                 // Open file with generated name
                                 std::ofstream outFile( currentRunFile.str() );
@@ -180,8 +174,8 @@ int marabouMain( int argc, char **argv )
                                 if ( outFile.is_open() )
                                 {
                                     outFile << "Results for buffer size: " << bufferSize
-                                            << "batchSize" << batchSize << ", learning rate: " << lr
-                                            << " and alpha: " << alpha << "\n";
+                                            << "batchSize" << batchSize << ", learning rate: " << lr<<
+                                             "\n";
                                     for ( int i = 0; i < numRuns; i++ )
                                     {
                                         numSplits = 0;
@@ -226,11 +220,10 @@ int marabouMain( int argc, char **argv )
                                         bestBufferSize = bufferSize;
                                         bestBatchSize = batchSize;
                                         bestLR = lr;
-                                        bestAlpha = alpha;
                                     }
                                     outFile << "\n number of splits for BufferSize " << bufferSize
                                             << "BatchSize : " << batchSize << " learning rate "
-                                            << lr << " and alpha " << alpha << " :" << avgNumSplits
+                                            << lr << " :" << avgNumSplits
                                             << "\n";
                                     outFile.close();
                                 }
@@ -239,7 +232,7 @@ int marabouMain( int argc, char **argv )
                                     std::cerr << "Failed to open file: " << currentRunFile.str()
                                               << std::endl;
                                 }
-                            }
+
                         }
                     }
                 }
