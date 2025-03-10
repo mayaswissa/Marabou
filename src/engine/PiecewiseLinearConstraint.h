@@ -199,6 +199,7 @@ public:
     virtual double computePolarity() const;
 
     virtual void setDirection( PhaseStatus DQNDirection );
+    virtual PhaseStatus getDirection();
 
     /*
       Check if the constraint's phase has been fixed.

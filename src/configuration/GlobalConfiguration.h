@@ -33,6 +33,7 @@ public:
 
     // Use Deep Q-Network to improve local search for satisfying assignments.
     static bool USE_DQN;
+    static bool DQN_LEARN_SOI_SPLITS;
     static bool DQN_TRAINING;
 
     static unsigned int AGENT_ITERATIONS;

@@ -122,15 +122,14 @@ void Engine::updateSoIScoreForConstraintInState( State &stateToUpdate,
                                                  const Map<unsigned, double> &currentAssignment )
 {
     auto currentPhase = plConstraint->getPhaseStatus();
-    if ( currentPhase == RELU_PHASE_ACTIVE || currentPhase == RELU_PHASE_INACTIVE)
+    if ( currentPhase == RELU_PHASE_ACTIVE || currentPhase == RELU_PHASE_INACTIVE )
     {
         stateToUpdate.updateSoIScoreForAgent( index, 0, 0 );
         return;
     }
     if ( plConstraint->haveOutOfBoundVariables() )
     {
-        stateToUpdate.updateSoIScoreForAgent( index, 10, 10
-            );
+        stateToUpdate.updateSoIScoreForAgent( index, 10, 10 );
         return;
     }
     LinearExpression costComponent;
@@ -302,7 +301,6 @@ bool Engine::solve( double timeoutInSeconds, const std::string &trainedAgentPath
         _previousState = std::make_unique<State>( numPlConstraints );
         updateToCurrentDQNState( *_previousState );
     }
-    // unsigned DQNIterations = 5;
     _eps = GlobalConfiguration::DQN_EPSILON_END;
     bool splitJustPerformed = true;
     struct timespec mainLoopStart = TimeUtils::sampleMicro();
@@ -343,16 +341,6 @@ bool Engine::solve( double timeoutInSeconds, const std::string &trainedAgentPath
         try
         {
             DEBUG( _tableau->verifyInvariants() );
-
-            // if ( GlobalConfiguration::USE_DQN && *numSplits >= static_cast<int>( DQNIterations ) )
-            // {
-            //     printf( "changed to SOI\n" );
-            //     fflush( stdout );
-            //     ( *numSplits )++;
-            //     GlobalConfiguration::USE_DQN = false;
-            //     GlobalConfiguration::USE_DEEPSOI_LOCAL_SEARCH = true;
-            //     decideBranchingHeuristics();
-            // }
             mainLoopStatistics();
             if ( _verbosity > 1 &&
                  _statistics.getLongAttribute( Statistics::NUM_MAIN_LOOP_ITERATIONS ) %
@@ -396,7 +384,7 @@ bool Engine::solve( double timeoutInSeconds, const std::string &trainedAgentPath
                 else
                     _smtCore.performSplit();
                 ( *numSplits )++;
-                printf( "numSplits:%u\n", *numSplits );
+                printf( "solve numSplits: %u\n", *numSplits );
                 fflush( stdout );
                 splitJustPerformed = true;
                 continue;
@@ -566,7 +554,7 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
 {
     SignalHandler::getInstance()->initialize();
     SignalHandler::getInstance()->registerClient( this );
-
+    _numSplits = 0;
 
     // Register the boundManager with all the PL constraints
     for ( auto &plConstraint : _plConstraints )
@@ -586,7 +574,6 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
     unsigned numInconsistent = 0;
 
     // DQN CODE:
-    GlobalConfiguration::USE_DEEPSOI_LOCAL_SEARCH = true;
     unsigned numPlConstraints = _plConstraints.size();
     _eps = epsilon; // exploration
     printf( "epsilon = %g\n", _eps );
@@ -608,12 +595,8 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
     _previousState = std::make_unique<State>( numPlConstraints );
     updateToCurrentDQNState( *_previousState );
     const unsigned maxSplitsByAgent = 1000;
-    unsigned numSplitsByAgent = 0;
-    unsigned mainLoopIterations = 0;
-    unsigned maxMarabouIterations = 100000;
-    while ( numSplitsByAgent <= maxSplitsByAgent && mainLoopIterations <= maxMarabouIterations )
+    while ( _numSplits < maxSplitsByAgent)
     {
-        mainLoopIterations++;
         struct timespec mainLoopEnd = TimeUtils::sampleMicro();
         _statistics.incLongAttribute( Statistics::TIME_MAIN_LOOP_MICRO,
                                       TimeUtils::timePassed( mainLoopStart, mainLoopEnd ) );
@@ -631,11 +614,10 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                                    costOfLastAcceptedPhasePattern,
                                    *_currentDQNState,
                                    true,
-                                   numSplitsByAgent,
+                                   _numSplits,
                                    false,
                                    costOfLastAcceptedPhasePattern );
-            _agent->handleDone(
-                *_currentDQNState, numSplitsByAgent, costOfLastAcceptedPhasePattern );
+            _agent->handleDone( *_currentDQNState, _numSplits, costOfLastAcceptedPhasePattern );
 
             if ( _verbosity > 0 )
                 printf( "\n\nEngine: quitting due to timeout...\n\n" );
@@ -695,19 +677,30 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                     {
                         // auto prunedSubtrees = _smtCore.prunedSubtrees( numPlConstraints );
                         _agent->stepAlternativeAction( *_currentDQNState,
-                                                       numSplitsByAgent,
+                                                       _numSplits,
                                                        numInconsistent,
                                                        costOfLastAcceptedPhasePattern );
                     }
                     // smtCore performed split
                     else if ( smtStep == NEW_ACTION )
                     {
+                        if ( GlobalConfiguration::DQN_LEARN_SOI_SPLITS )
+                        {
+                            auto constraintForSplitting = _smtCore.getConstraintForSplitting();
+                            auto constraintIndex = _constraintToIndex.exists( constraintForSplitting )
+                                ? _constraintToIndex[constraintForSplitting]
+                                : numPlConstraints;
+                            ASSERT( constraintIndex < numPlConstraints );
+                            auto constraintPhase = constraintForSplitting->getDirection();
+                            _action = std::make_unique<Action>(
+                                DQN_NUM_PHASES, numPlConstraints, constraintIndex, constraintPhase );
+                        }
                         _agent->stepNewAction( *_previousState,
                                                *_action,
                                                0,
                                                *_currentDQNState,
                                                false,
-                                               numSplitsByAgent,
+                                               _numSplits,
                                                true,
                                                costOfLastAcceptedPhasePattern );
                     }
@@ -716,18 +709,16 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                 ASSERT( _agent->getActionStackSize() ==
                         static_cast<int>( _smtCore.getStackDepth() ) )
                 PhaseStatus phaseStatus = static_cast<PhaseStatus>( _action->getActionPhase() );
-                auto tempState = State(*_previousState);
-                updateToCurrentDQNState(tempState);
+                auto tempState = State( *_previousState );
+                updateToCurrentDQNState( tempState );
                 if ( _smtCore.performSplit( &phaseStatus ) )
                 {
                     smtSteps.push_back( NEW_ACTION );
                     *_previousState = tempState;
-                    numSplitsByAgent++;
+                    ++_numSplits;
+                    std::cout<<"_num Splits" << _numSplits << std::endl;
                     splitJustPerformed = true;
                 }
-
-
-                // updateToCurrentDQNState( *_previousState );
                 continue;
             }
 
@@ -746,7 +737,6 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                 bool solutionFound = adjustAssignmentToSatisfyNonLinearConstraints();
                 if ( solutionFound )
                 {
-                    // solution found => agent done
                     if ( allNonlinearConstraintsHold() )
                     {
                         mainLoopEnd = TimeUtils::sampleMicro();
@@ -767,12 +757,12 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                                                0,
                                                *_currentDQNState,
                                                true,
-                                               numSplitsByAgent,
+                                               _numSplits,
                                                false,
                                                costOfLastAcceptedPhasePattern );
                         // auto prunedSubtrees = _smtCore.prunedSubtrees( numPlConstraints );
                         _agent->handleDone(
-                            *_currentDQNState, numSplitsByAgent, costOfLastAcceptedPhasePattern );
+                            *_currentDQNState, _numSplits, costOfLastAcceptedPhasePattern );
                         printf( "success!" );
                         fflush( stdout );
                         return std::move( _agent );
@@ -794,12 +784,12 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                                                rewardForDone,
                                                *_currentDQNState,
                                                true,
-                                               numSplitsByAgent,
+                                               _numSplits,
                                                false,
                                                costOfLastAcceptedPhasePattern );
                         // auto prunedSubtrees = _smtCore.prunedSubtrees( numPlConstraints );
                         _agent->handleDone(
-                            *_currentDQNState, numSplitsByAgent, costOfLastAcceptedPhasePattern );
+                            *_currentDQNState, _numSplits, costOfLastAcceptedPhasePattern );
                         printf( "fail!" );
                         fflush( stdout );
 
@@ -840,12 +830,11 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                                        -1,
                                        *_currentDQNState,
                                        true,
-                                       numSplitsByAgent,
+                                       _numSplits,
                                        false,
                                        costOfLastAcceptedPhasePattern );
                 // auto prunedSubtrees = _smtCore.prunedSubtrees( numPlConstraints );
-                _agent->handleDone(
-                    *_currentDQNState, numSplitsByAgent, costOfLastAcceptedPhasePattern );
+                _agent->handleDone( *_currentDQNState, _numSplits, costOfLastAcceptedPhasePattern );
                 return std::move( _agent );
             }
         }
@@ -867,22 +856,24 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                     printf( "\nEngine::solve: unsat query\n" );
                 }
 
-                std::cout << "done unsat training! num Splits : " << numSplitsByAgent << std::endl;
+                std::cout << "done unsat training! num Splits : " << _numSplits << std::endl;
                 fflush( stdout );
+                int negNumSplits = -_numSplits;
+                auto rewardForDone = std::copysign( std::log( 1.0 +  std::abs( negNumSplits )  / 10.0 + 1e-8 ), negNumSplits ) ;
+                std::cout << "reward for done : << " <<rewardForDone << std::endl;
                 updateToCurrentDQNState( *_currentDQNState );
                 double costOfLastAcceptedPhasePattern =
                     computeHeuristicCost( _soiManager->getCurrentSoIPhasePattern() );
                 _agent->stepNewAction( *_previousState,
                                        *_action,
-                                       0,
+                                       rewardForDone,
                                        *_currentDQNState,
                                        true,
-                                       numSplitsByAgent,
+                                       _numSplits,
                                        false,
                                        costOfLastAcceptedPhasePattern );
                 // auto prunedSubtrees = _smtCore.prunedSubtrees( numPlConstraints );
-                _agent->handleDone(
-                    *_currentDQNState, numSplitsByAgent, costOfLastAcceptedPhasePattern );
+                _agent->handleDone( *_currentDQNState, _numSplits, costOfLastAcceptedPhasePattern );
 
                 _exitCode = Engine::UNSAT;
                 return std::move( _agent );
@@ -914,12 +905,11 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                                    -1,
                                    *_currentDQNState,
                                    true,
-                                   numSplitsByAgent,
+                                   _numSplits,
                                    false,
                                    costOfLastAcceptedPhasePattern );
             // auto prunedSubtrees = _smtCore.prunedSubtrees( numPlConstraints );
-            _agent->handleDone(
-                *_currentDQNState, numSplitsByAgent, costOfLastAcceptedPhasePattern );
+            _agent->handleDone( *_currentDQNState, _numSplits, costOfLastAcceptedPhasePattern );
             return std::move( _agent );
         }
         catch ( ... )
@@ -941,11 +931,11 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                            costOfLastAcceptedPhasePattern,
                            *_currentDQNState,
                            true,
-                           numSplitsByAgent,
+                           _numSplits,
                            false,
                            costOfLastAcceptedPhasePattern );
     // auto prunedSubtrees = _smtCore.prunedSubtrees( numPlConstraints );
-    _agent->handleDone( *_currentDQNState, numSplitsByAgent, costOfLastAcceptedPhasePattern );
+    _agent->handleDone( *_currentDQNState, _numSplits, costOfLastAcceptedPhasePattern );
     printf( "done iters!\n" );
     fflush( stdout );
     _exitCode = Engine::MAX_ITERATIONS;
@@ -1316,7 +1306,6 @@ bool Engine::performSimplexStep()
     _activeEntryStrategy->postPivotHook( _tableau, fakePivot );
     _boundManager.propagateTightenings();
     _costFunctionManager->invalidateCostFunction();
-    // todo have a flag --> assignment changed.
 
     struct timespec end = TimeUtils::sampleMicro();
     _statistics.incLongAttribute( Statistics::TIME_SIMPLEX_STEPS_MICRO,
@@ -1879,8 +1868,11 @@ void Engine::initializeTableau( const double *constraintMatrix, const List<unsig
 void Engine::initializeBoundsAndConstraintWatchersInTableau( unsigned numberOfVariables )
 {
     _plConstraints = _preprocessedQuery->getPiecewiseLinearConstraints();
+    unsigned index = 0;
     for ( const auto &constraint : _plConstraints )
     {
+        _constraintToIndex[constraint] = index;
+        ++index;
         constraint->registerAsWatcher( _tableau );
         constraint->setStatistics( &_statistics );
 
@@ -3263,23 +3255,6 @@ PiecewiseLinearConstraint *Engine::pickSplitPLConstraintBasedOnPolarity()
         return NULL;
 }
 
-int Engine::findPlConstraintsIndex( const int index,
-                                    List<PiecewiseLinearConstraint *> *constraints )
-{
-    const PiecewiseLinearConstraint *plConstraintFromIndex =
-        indexToConstraint( index, &_plConstraints );
-    if ( plConstraintFromIndex != nullptr )
-    {
-        int i = 0;
-        for ( const auto &plConstraint : *constraints )
-        {
-            if ( plConstraint == plConstraintFromIndex )
-                return i;
-            i++;
-        }
-    }
-    return -1;
-}
 
 PiecewiseLinearConstraint *Engine::pickSplitPLConstraintByAgent()
 {
@@ -3378,8 +3353,10 @@ PiecewiseLinearConstraint *Engine::pickSplitPLConstraintBasedOnIntervalWidth()
 
 PiecewiseLinearConstraint *Engine::pickSplitPLConstraint( DivideStrategy strategy )
 {
+
+    // todo prevState here?
+
     ENGINE_LOG( Stringf( "Picking a split PLConstraint..." ).ascii() );
-// todo maybe state before is here.
     PiecewiseLinearConstraint *candidatePLConstraint = NULL;
     if ( strategy == DivideStrategy::PseudoImpact )
     {
@@ -3401,7 +3378,8 @@ PiecewiseLinearConstraint *Engine::pickSplitPLConstraint( DivideStrategy strateg
     else if ( strategy == DivideStrategy::EarliestReLU )
         candidatePLConstraint = pickSplitPLConstraintBasedOnTopology();
     else if ( strategy == DivideStrategy::DQN )
-        candidatePLConstraint = pickSplitPLConstraintByAgent(); // todo every x steps, pick by soi and learn this step.
+        candidatePLConstraint = pickSplitPLConstraintByAgent();
+
     else if ( strategy == DivideStrategy::LargestInterval &&
               ( ( _smtCore.getStackDepth() + 1 ) %
                     GlobalConfiguration::INTERVAL_SPLITTING_FREQUENCY !=

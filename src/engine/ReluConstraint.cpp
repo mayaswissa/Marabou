@@ -1067,6 +1067,11 @@ void ReluConstraint::setDirection(PhaseStatus DQNDirection)
     _direction = DQNDirection;
 }
 
+PhaseStatus ReluConstraint::getDirection()
+{
+    return _direction;
+}
+
 PhaseStatus ReluConstraint::getDirection() const
 {
     return _direction;

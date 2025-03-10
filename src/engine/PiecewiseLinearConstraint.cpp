@@ -207,3 +207,8 @@ void PiecewiseLinearConstraint::setDirection( PhaseStatus /* DQNDirection */)
 {
     throw MarabouError( MarabouError::FEATURE_NOT_YET_SUPPORTED );
 }
+
+PhaseStatus PiecewiseLinearConstraint::getDirection()
+{
+    throw MarabouError( MarabouError::FEATURE_NOT_YET_SUPPORTED );
+}

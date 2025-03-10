@@ -368,6 +368,8 @@ private:
     */
     List<PiecewiseLinearConstraint *> _plConstraints;
 
+    Map<PiecewiseLinearConstraint *, unsigned> _constraintToIndex;
+
     /*
       The existing nonlinear constraints.
     */
@@ -772,7 +774,6 @@ private:
       K is equal to GlobalConfiguration::POLARITY_CANDIDATES_THRESHOLD
     */
     PiecewiseLinearConstraint *pickSplitPLConstraintBasedOnPolarity();
-    int findPlConstraintsIndex( int index, List<PiecewiseLinearConstraint *> *constraints );
     PiecewiseLinearConstraint *pickSplitPLConstraintByAgent();
 
     /*

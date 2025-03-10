@@ -173,6 +173,7 @@ public:
       if a constraint for splitting is successfully picked
     */
     bool pickSplitPLConstraint();
+    PiecewiseLinearConstraint *getConstraintForSplitting() const;
 
     /*
       For debugging purposes only - store a correct possible solution

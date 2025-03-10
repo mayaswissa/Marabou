@@ -647,3 +647,8 @@ bool SmtCore::pickSplitPLConstraint()
     }
     return _constraintForSplitting != NULL;
 }
+
+PiecewiseLinearConstraint* SmtCore::getConstraintForSplitting() const
+{
+    return _constraintForSplitting;
+}
