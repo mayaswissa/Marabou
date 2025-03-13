@@ -172,21 +172,9 @@ int marabouMain( int argc, char **argv )
                                     double epsilon = GlobalConfiguration::DQN_EPSILON_START;
                                     std::unique_ptr<Agent> agent = nullptr;
 
-                                    // learn soi splits:
-                                    std::cout << "start training agent with SoI splits"
-                                              << std::endl;
-                                    unsigned epochsLearnSoi = 10;
-                                    GlobalConfiguration::USE_DQN = false;
-                                    GlobalConfiguration::DQN_LEARN_SOI_SPLITS = true;
-                                    for ( unsigned int episode = 0; episode < epochsLearnSoi;
-                                          ++episode )
-                                        agent = Marabou().runAgentTraining(
-                                            epsilon, true, std::move( agent ) );
-
                                     std::cout << "start training agent with its own splits"
                                               << std::endl;
                                     GlobalConfiguration::USE_DQN = true;
-                                    GlobalConfiguration::DQN_LEARN_SOI_SPLITS = false;
                                     for ( unsigned int episode = 0; episode < epochs; ++episode )
                                     {
                                         agent = Marabou().runAgentTraining(
@@ -197,8 +185,6 @@ int marabouMain( int argc, char **argv )
                                     }
                                     printf( "start solving with trained agent\n" );
                                     fflush( stdout );
-                                    GlobalConfiguration::USE_DQN = true;
-                                    GlobalConfiguration::USE_DEEPSOI_LOCAL_SEARCH = false;
                                     if ( agent != nullptr )
                                         agent->saveNetworks();
                                     Marabou().runAgentTraining(

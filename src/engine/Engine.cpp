@@ -377,11 +377,10 @@ bool Engine::solve( double timeoutInSeconds, const std::string &trainedAgentPath
             // Perform any SmtCore-initiated case splits
             if ( _smtCore.needToSplit() )
             {
-                if ( GlobalConfiguration::USE_DQN )
+                if ( _newSplitByAgent )
                 {
                     auto phaseStatus = static_cast<PhaseStatus>( _action->getActionPhase() );
                     _smtCore.performSplit( &phaseStatus );
-                    updateToCurrentDQNState( *_previousState ); // prevState = currentState
                 }
                 else
                     _smtCore.performSplit();
@@ -703,8 +702,6 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                 }
                 else
                     phaseStatus = static_cast<PhaseStatus>( _action->getActionPhase() );
-                auto tempState = State( *_previousState );
-                updateToCurrentDQNState( tempState );
                 bool performSplit;
                 if ( _action == nullptr )
                     performSplit = _smtCore.performSplit();
@@ -713,7 +710,6 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                 if ( performSplit )
                 {
                     smtSteps.push_back( NEW_ACTION );
-                    *_previousState = tempState;
                     ++_numSplits;
                     splitJustPerformed = true;
                 }
@@ -3207,8 +3203,8 @@ PiecewiseLinearConstraint *Engine::pickSplitPLConstraintBasedOnPolarity()
 
 PiecewiseLinearConstraint *Engine::pickSplitPLConstraintByAgent()
 {
-    updateToCurrentDQNState( *_currentDQNState );
-    _action = std::move( _agent->act( *_currentDQNState, _eps ) );
+    updateToCurrentDQNState( *_previousState );
+    _action = std::move( _agent->act( *_previousState, _eps ) );
     if ( _action == nullptr )
         return nullptr;
     PiecewiseLinearConstraint *plConstraint =
