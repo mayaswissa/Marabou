@@ -864,6 +864,8 @@ private:
     std::unique_ptr<Action> _action;
     std::unique_ptr<State> _currentDQNState;
     std::unique_ptr<State> _previousState;
+    unsigned _numSplits;
+    bool _newSplitByAgent;
 
     /*
       Returns true iff there is a variable with bounds that can explain infeasibility of the tableau

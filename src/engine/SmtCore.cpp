@@ -152,8 +152,7 @@ double SmtCore::prunedSubtrees( const unsigned numPlConstraints )
 
 bool SmtCore::performSplit( const PhaseStatus *directionByAgent )
 {
-    // printf("entering SmtCore::performSplit\n");
-    // fflush(stdout);
+
     ASSERT( _needToSplit );
 
     _numRejectedPhasePatternProposal = 0;
@@ -180,7 +179,7 @@ bool SmtCore::performSplit( const PhaseStatus *directionByAgent )
     // Before storing the state of the engine, we:
     //   1. Obtain the splits.
     //   2. Disable the constraint, so that it is marked as disbaled in the EngineState.
-    if ( GlobalConfiguration::USE_DQN )
+    if ( directionByAgent != nullptr )
         _constraintForSplitting->setDirection( *directionByAgent );
     List<PiecewiseLinearCaseSplit> splits = _constraintForSplitting->getCaseSplits();
 

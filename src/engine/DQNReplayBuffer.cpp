@@ -8,6 +8,7 @@ ReplayBuffer::ReplayBuffer( const unsigned numConstraints,
     : _numConstraints( numConstraints )
     , _bufferSize( bufferSize )
     , _batchSize( batchSize )
+    , _fakeActionIndex(numConstraints + 1)
     , _size( 0 )
     , _writePosition( 0 )
 {
@@ -22,18 +23,24 @@ ReplayBuffer::ReplayBuffer( const unsigned numConstraints,
     _dones = torch::zeros( { static_cast<long>( bufferSize ) }, torch::kInt );
 }
 
+void ReplayBuffer::pushFakeActionEntry( const State &stateBeforeAction,
+                                        const unsigned numSplitsBeforeAction )
+{
+    const auto fakeAction = Action(DQN_NUM_PHASES, _numConstraints, _fakeActionIndex, DQN_RELU_ACTIVE);
+    auto *actionEntry = new ActionEntry( fakeAction, stateBeforeAction, numSplitsBeforeAction, true, false );
+    _actionsStack.append(actionEntry);
+}
+
 void ReplayBuffer::pushActionEntry( const Action &action,
                                     const State &stateBeforeAction,
                                     const unsigned numSplitsBeforeAction,
-                                    const double soiScoreBeforeAction )
+                                    const bool done )
 {
-    auto *actionEntry = new ActionEntry( action, stateBeforeAction, numSplitsBeforeAction, soiScoreBeforeAction );
+    auto *actionEntry = new ActionEntry( action, stateBeforeAction, numSplitsBeforeAction, false, done );
     _actionsStack.append( actionEntry );
 }
 
-void ReplayBuffer::handleDone( const State &currentState,
-                               const unsigned numSplits,
-                               const double soiScore )
+void ReplayBuffer::handleDone( const State &currentState, const unsigned numSplits )
 {
     // Go over all actions in actionsStack and move them to revisitExperiences
     while ( !_actionsStack.empty() )
@@ -41,43 +48,55 @@ void ReplayBuffer::handleDone( const State &currentState,
         ActionEntry *actionEntry = _actionsStack.back();
         // no need to insert alternative actions.
         while ( !actionEntry->_activeActions.empty() )
-            moveActionToRevisitBuffer( currentState, numSplits, actionEntry, soiScore );
+            moveActionToRevisitBuffer( currentState, numSplits, actionEntry, actionEntry->_done );
 
         delete _actionsStack.back();
         _actionsStack.popBack();
     }
 }
 
+double ReplayBuffer::currentSubtreeSize( ) const
+{
+    const unsigned currentDepth = getActionStackSize();
+    if (currentDepth >= _numConstraints)
+        return 0.0;
+    return (_numConstraints - currentDepth) * std::log(2.0L);
+}
+
+
 void ReplayBuffer::moveActionToRevisitBuffer( const State &stateAfterAction,
                                               const unsigned numSplitsAfterAction,
                                               ActionEntry *actionEntry,
-                                              double soiScoreAfterAction )
+                                              const bool done )
 {
     const auto activeAction = actionEntry->_activeActions.back();
-    double splitsReward = ( static_cast<double>( activeAction._splitsBeforeActiveAction ) -
-                            static_cast<double>( numSplitsAfterAction ) ) /
-                          activeAction._action.getNumPlConstraints();
-    if ( splitsReward == 0 )
+    if (actionEntry->_isFake)
     {
         actionEntry->_activeActions.popBack();
         return;
     }
-    // const double soiReward = - soiScoreAfterAction;
-    //      std::copysign( std::log( 1.0 + std::abs( soiReward ) / 10.0 + 1e-8 ), soiReward ) ;
-    // soft normalization
-    unsigned T =5; // todo param
-    auto soiReward =  -(1.0 - std::exp( - soiScoreAfterAction / T));
-    std::cout << "soi reward : " << soiReward << std::endl;
+
+    const double deltaSplit = static_cast<double>( activeAction._splitsBeforeActiveAction ) -
+                            static_cast<double>( numSplitsAfterAction );
+    if (deltaSplit == 0 && !done) // todo what is the reward when done iters?
+    {
+        actionEntry->_activeActions.popBack();
+        return;
+    }
+
+    auto reward = currentSubtreeSize() != 0 ? deltaSplit / currentSubtreeSize() : 0;
+    double alpha = 10.0;
+    reward =   std::copysign(std::tanh(alpha * std::abs(reward)), reward);
     addExperienceToRevisitBuffer(
-        activeAction._stateBeforeAction, activeAction._action, soiReward, stateAfterAction, false );
+        activeAction._stateBeforeAction, activeAction._action, reward, stateAfterAction, done );
+    std::cout << "reward : " << reward << std::endl;
     actionEntry->_activeActions.popBack();
 }
 
 // go to next alternative action available in actionsStack.
 void ReplayBuffer::applyNextAction( const State &stateAfterAction,
                                     const unsigned numSplits,
-                                    unsigned &numInconsistent,
-                                    const double soiScore )
+                                    unsigned &numInconsistent )
 {
     if ( _actionsStack.empty() )
         return;
@@ -92,9 +111,7 @@ void ReplayBuffer::applyNextAction( const State &stateAfterAction,
         {
             actionEntry = _actionsStack.back();
             while ( !actionEntry->_activeActions.empty() )
-            {
-                moveActionToRevisitBuffer( stateAfterAction, numSplits, actionEntry, soiScore );
-            }
+                moveActionToRevisitBuffer( stateAfterAction, numSplits, actionEntry );
             delete _actionsStack.back();
             _actionsStack.popBack();
 
@@ -106,7 +123,7 @@ void ReplayBuffer::applyNextAction( const State &stateAfterAction,
         actionEntry = _actionsStack.back();
         auto action = actionEntry->_alternativeActions.begin();
         actionEntry->_activeActions.append(
-            ActiveAction( *action, actionEntry->_stateBeforeAction, numSplits, soiScore ) ); // todo check what value the
+            ActiveAction( *action, actionEntry->_stateBeforeAction, numSplits ) ); // todo check what value the
                                                                     // state before should have
         actionEntry->_alternativeActions.erase( action );
         numInconsistent--;

@@ -79,42 +79,43 @@ struct ActiveAction
     Action _action;
     State _stateBeforeAction;
     unsigned _splitsBeforeActiveAction;
-    double _soiScoreBeforeActiveAction;
     ActiveAction( const Action &action,
                   const State &stateBeforeAction,
-                  unsigned splitsBeforeAction,
-                  double soiScoreBeforeActiveAction )
+                  unsigned splitsBeforeAction )
         : _action( action )
         , _stateBeforeAction( stateBeforeAction )
         , _splitsBeforeActiveAction( splitsBeforeAction )
-        , _soiScoreBeforeActiveAction( soiScoreBeforeActiveAction )
     {
     }
 };
 
 struct ActionEntry
 {
-    // pairs of actions and numSplits when act
     List<ActiveAction> _activeActions;
     List<Action> _alternativeActions;
     State _stateBeforeAction;
+    bool _isFake;
+    bool _done;
+
 
     ActionEntry( const Action &action,
                  const State &stateBeforeAction,
                  const unsigned splitsBeforeAction,
-                 const double soiBeforeAction)
+                 const bool isFake,
+                 const bool done = false )
         : _stateBeforeAction( stateBeforeAction )
-
+        , _isFake(isFake)
+        , _done( done )
     {
         _activeActions = List<ActiveAction>();
-        _activeActions.append( ActiveAction( action, stateBeforeAction, splitsBeforeAction, soiBeforeAction ) );
+        _activeActions.append( ActiveAction( action, stateBeforeAction, splitsBeforeAction ) );
         _alternativeActions = List<Action>();
 
         auto const actionPhase = action.getActionPhase();
         ASSERT( actionPhase == RELU_PHASE_ACTIVE || actionPhase == RELU_PHASE_INACTIVE );
         const unsigned alternativeActionPhase =
             actionPhase == RELU_PHASE_ACTIVE ? RELU_PHASE_INACTIVE : RELU_PHASE_ACTIVE;
-        const auto alternateAction = Action( action.getNumPhases(),
+        const auto alternateAction = Action( DQN_NUM_PHASES,
                                              action.getNumPlConstraints(),
                                              action.getActionPlConstraintIndex(),
                                              alternativeActionPhase );
@@ -126,6 +127,7 @@ class ReplayBuffer
 {
 public:
     ReplayBuffer( unsigned numConstraints, unsigned bufferSize, unsigned batchSize );
+    void pushFakeActionEntry( const State &stateBeforeAction, unsigned numSplitsBeforeAction );
     std::vector<unsigned> sample() const;
     unsigned getNumRevisitExperiences() const;
     unsigned getBatchSize() const;
@@ -137,20 +139,17 @@ public:
 
     bool compareStateWithAlternative( State &state ) const;
 
-    void
-    pushActionEntry( const Action &action,
+    void pushActionEntry( const Action &action,
                           const State &stateBeforeAction,
                           unsigned numSplitsBeforeAction,
-                          double soiScoreBeforeAction );
-    void handleDone( const State &currentState, unsigned numSplits, double soiScore );
+                          bool done = false );
+    void handleDone( const State &currentState, unsigned numSplits );
+    double currentSubtreeSize() const;
     void moveActionToRevisitBuffer( const State &stateAfterAction,
                                     unsigned numSplitsAfterAction,
                                     ActionEntry *actionEntry,
-                                    double soiScoreAfterAction );
-    void applyNextAction( const State &state,
-                          unsigned numSplits,
-                          unsigned &numInconsistent,
-                          double soiScore );
+                                    bool done = false );
+    void applyNextAction( const State &state, unsigned numSplits, unsigned &numInconsistent );
     int getActionStackSize() const;
     torch::Tensor getStates();
     torch::Tensor getActions();
@@ -163,7 +162,7 @@ private:
     unsigned _bufferSize;
     unsigned _batchSize;
     List<ActionEntry *> _actionsStack;
-
+    unsigned _fakeActionIndex;
     unsigned _size;            // valid entries in replayBuffer
     unsigned _writePosition;   //  pointer for the next empty position in experiences buffer
     torch::Tensor _states;     // [bufferSize, stateDim]

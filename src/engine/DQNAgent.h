@@ -18,18 +18,14 @@ public:
            const std::string &trainedAgentPath = "" );
     void stepAlternativeAction( const State &stateBeforeSplit,
                                 unsigned numSplits,
-                                unsigned &numInconsistent,
-                                double soiScore );
+                                unsigned &numInconsistent );
+    void stepFakeAction( const State &stateBeforeAction, unsigned numSplitsBeforeAction );
     void stepNewAction( const State &previousState,
                         const Action &action,
-                        double reward,
-                        const State &currentState,
                         bool done,
-                        unsigned numSplits,
-                        bool changeReward,
-                        double soiScore );
+                        unsigned numSplits );
 
-    void handleDone( const State &currentState, unsigned numSplits, double soiScore );
+    void handleDone( const State &currentState, unsigned numSplits );
     std::unique_ptr<Action> act( const State &state, double eps = 0.1 );
     double updateLR();
     void saveNetworks() const;

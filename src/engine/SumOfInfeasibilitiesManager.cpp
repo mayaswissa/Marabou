@@ -48,11 +48,7 @@ LinearExpression SumOfInfeasibilitiesManager::getCurrentSoIPhasePattern() const
 
     LinearExpression cost;
     for ( const auto &pair : _currentPhasePattern )
-    {
-        if (!pair.first->haveOutOfBoundVariables()) // todo check why happen
-            pair.first->getCostFunctionComponent( cost, pair.second );
-
-    }
+        pair.first->getCostFunctionComponent( cost, pair.second );
 
     if ( _statistics )
     {

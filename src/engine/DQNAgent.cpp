@@ -98,41 +98,35 @@ bool Agent::handleInvalidGradients()
 }
 
 
-void Agent::handleDone( const State &currentState, const unsigned numSplits, const double soiScore )
+void Agent::handleDone( const State &currentState, const unsigned numSplits )
 {
     // Insert all actions from actions buffer to the replay buffer and learn.
-    _replayedBuffer.handleDone( currentState, numSplits, soiScore );
+    _replayedBuffer.handleDone( currentState, numSplits );
     _tStep = ( _tStep + 1 ) % GlobalConfiguration::DQN_EXPLORATION_RATE;
     learn();
 }
 
 void Agent::stepAlternativeAction( const State &stateBeforeSplit,
                                    const unsigned numSplits,
-                                   unsigned &numInconsistent,
-                                   const double soiScore )
+                                   unsigned &numInconsistent )
 {
-    _replayedBuffer.applyNextAction( stateBeforeSplit, numSplits, numInconsistent, soiScore );
+    _replayedBuffer.applyNextAction( stateBeforeSplit, numSplits, numInconsistent);
     _tStep = ( _tStep + 1 ) % GlobalConfiguration::DQN_EXPLORATION_RATE;
     if ( _tStep == 0 )
         learn();
 }
 
-
-auto Agent::stepNewAction( const State &previousState,
-                           const Action &action,
-                           const double reward,
-                           const State &currentState,
-                           const bool done,
-                           const unsigned numSplits,
-                           const bool changeReward,
-                           const double soiScore ) -> void
+void Agent::stepFakeAction( const State &stateBeforeAction, const unsigned numSplitsBeforeAction )
 {
-    if ( !changeReward || done )
-        _replayedBuffer.addExperienceToRevisitBuffer(
-            previousState, action, static_cast<float>( reward ), currentState, done );
-    else
-        _replayedBuffer.pushActionEntry( action, previousState, numSplits, soiScore );
+    _replayedBuffer.pushFakeActionEntry( stateBeforeAction, numSplitsBeforeAction );
+}
 
+void Agent::stepNewAction( const State &previousState,
+                           const Action &action,
+                           const bool done,
+                           const unsigned numSplits )
+{
+    _replayedBuffer.pushActionEntry( action, previousState, numSplits, done );
     _tStep = ( _tStep + 1 ) % GlobalConfiguration::DQN_EXPLORATION_RATE;
     if ( _tStep == 0 )
         learn();
