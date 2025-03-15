@@ -14,6 +14,8 @@ State::State( const unsigned numConstraints )
     for ( unsigned i = 0; i < numConstraints; ++i )
     {
         _stateData[i * NUM_FEATURES + DQN_RELU_NOT_FIXED] = 1.0;
+        _stateData[i * NUM_FEATURES + SOI_ACTIVE_SCORE] = 0;
+        _stateData[i * NUM_FEATURES + SOI_INACTIVE_SCORE] = 0;
     }
 }
 

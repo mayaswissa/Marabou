@@ -168,13 +168,10 @@ int marabouMain( int argc, char **argv )
                                 for ( int i = 0; i < numRuns; i++ )
                                 {
                                     numSplits = 0;
-                                    GlobalConfiguration::USE_DEEPSOI_LOCAL_SEARCH = true;
                                     double epsilon = GlobalConfiguration::DQN_EPSILON_START;
                                     std::unique_ptr<Agent> agent = nullptr;
-
                                     std::cout << "start training agent with its own splits"
                                               << std::endl;
-                                    GlobalConfiguration::USE_DQN = true;
                                     for ( unsigned int episode = 0; episode < epochs; ++episode )
                                     {
                                         agent = Marabou().runAgentTraining(

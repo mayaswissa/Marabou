@@ -938,7 +938,7 @@ private:
     /*
       DQN functions
      */
-    void updateToCurrentDQNState( State &state );
+    void updateToCurrentDQNState( State &stateToUpdate );
     PiecewiseLinearConstraint *indexToConstraint( int index,
                                                   List<PiecewiseLinearConstraint *> *constraints );
 };

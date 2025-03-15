@@ -147,6 +147,7 @@ void Engine::updateSoIScoreForConstraintInState( State &stateToUpdate,
 void Engine::updateToCurrentDQNState( State &stateToUpdate )
 {
     int index = 0;
+    auto constraintsToUpdateSoI = _soiManager->getConstraintsUpdatedInLastProposal();
     int phase;
     Map<unsigned, double> currentAssignment;
     for ( unsigned i = 0; i < getInputQuery()->getNumberOfVariables(); ++i )
@@ -158,7 +159,8 @@ void Engine::updateToCurrentDQNState( State &stateToUpdate )
         else
             phase = plConstraint->getPhaseStatus();
         stateToUpdate.updateConstraintPhase( index, phase );
-        updateSoIScoreForConstraintInState( stateToUpdate, index, plConstraint, currentAssignment );
+        if (constraintsToUpdateSoI.exists( plConstraint ))
+            updateSoIScoreForConstraintInState( stateToUpdate, index, plConstraint, currentAssignment );
         stateToUpdate.updatePolarity( index, plConstraint->computePolarity() );
         index++;
     }
@@ -292,6 +294,7 @@ bool Engine::solve( double timeoutInSeconds, const std::string &trainedAgentPath
     // for DQN use:
     if ( GlobalConfiguration::USE_DQN )
     {
+        std::cout << "running with agent" << std::endl;
         unsigned numPlConstraints = _plConstraints.size();
         if ( trainedAgentPath.empty() )
             throw std::runtime_error( "Agent is not set" );
@@ -306,7 +309,6 @@ bool Engine::solve( double timeoutInSeconds, const std::string &trainedAgentPath
     _eps = GlobalConfiguration::DQN_EPSILON_END;
     bool splitJustPerformed = true;
     struct timespec mainLoopStart = TimeUtils::sampleMicro();
-    GlobalConfiguration::USE_DEEPSOI_LOCAL_SEARCH = false;
     while ( true )
     {
         struct timespec mainLoopEnd = TimeUtils::sampleMicro();
@@ -379,6 +381,7 @@ bool Engine::solve( double timeoutInSeconds, const std::string &trainedAgentPath
             {
                 if ( _newSplitByAgent )
                 {
+                    std::cout <<"split by agent ! " << std::endl;
                     auto phaseStatus = static_cast<PhaseStatus>( _action->getActionPhase() );
                     _smtCore.performSplit( &phaseStatus );
                 }
@@ -611,7 +614,7 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
             else
                 _agent->stepNewAction( *_previousState,
                                        *_action,
-                                       true, // todo change
+                                       true,
                                        _numSplits );
             _agent->handleDone( *_currentDQNState, _numSplits );
 
@@ -3129,13 +3132,7 @@ void Engine::updateDirections()
 void Engine::decideBranchingHeuristics()
 {
     DivideStrategy divideStrategy = Options::get()->getDivideStrategy();
-    if ( GlobalConfiguration::USE_DQN )
-    {
-        divideStrategy = DivideStrategy::DQN;
-        if ( _verbosity >= 2 )
-            printf( "Branching heuristics set to DQN\n" );
-    }
-    else if ( divideStrategy == DivideStrategy::Auto )
+    if ( divideStrategy == DivideStrategy::Auto )
     {
         if ( !_produceUNSATProofs && !_preprocessedQuery->getInputVariables().empty() &&
              _preprocessedQuery->getInputVariables().size() <

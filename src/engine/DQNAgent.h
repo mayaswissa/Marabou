@@ -27,7 +27,6 @@ public:
 
     void handleDone( const State &currentState, unsigned numSplits );
     std::unique_ptr<Action> act( const State &state, double eps = 0.1 );
-    double updateLR();
     void saveNetworks() const;
     void loadNetworks();
     int getActionStackSize() const;

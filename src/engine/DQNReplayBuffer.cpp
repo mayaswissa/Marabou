@@ -78,7 +78,8 @@ void ReplayBuffer::moveActionToRevisitBuffer( const State &stateAfterAction,
 
     const double deltaSplit = static_cast<double>( activeAction._splitsBeforeActiveAction ) -
                             static_cast<double>( numSplitsAfterAction );
-    if (deltaSplit == 0 && !done) // todo what is the reward when done iters?
+
+    if (deltaSplit == 0 && !done)
     {
         actionEntry->_activeActions.popBack();
         return;
