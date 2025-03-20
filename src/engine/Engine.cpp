@@ -72,7 +72,7 @@ Engine::Engine()
     , _produceUNSATProofs( Options::get()->getBool( Options::PRODUCE_PROOFS ) )
     , _groundBoundManager( _context )
     , _UNSATCertificate( NULL )
-    , _eps( GlobalConfiguration::DQN_EPSILON_END )
+    , _eps( GlobalConfiguration::DQN_EPSILON_PURE_EXPLOIT )
     , _currentDQNState( nullptr )
     , _numSplits( 0 )
     , _newSplitByAgent( false )
@@ -306,7 +306,7 @@ bool Engine::solve( double timeoutInSeconds, const std::string &trainedAgentPath
         _previousState = std::make_unique<State>( numPlConstraints );
         updateToCurrentDQNState( *_previousState );
     }
-    _eps = GlobalConfiguration::DQN_EPSILON_END;
+    _eps = GlobalConfiguration::DQN_EPSILON_PURE_EXPLOIT;
     bool splitJustPerformed = true;
     struct timespec mainLoopStart = TimeUtils::sampleMicro();
     while ( true )
@@ -381,7 +381,6 @@ bool Engine::solve( double timeoutInSeconds, const std::string &trainedAgentPath
             {
                 if ( _newSplitByAgent )
                 {
-                    std::cout <<"split by agent ! " << std::endl;
                     auto phaseStatus = static_cast<PhaseStatus>( _action->getActionPhase() );
                     _smtCore.performSplit( &phaseStatus );
                 }
