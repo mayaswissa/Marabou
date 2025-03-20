@@ -274,6 +274,7 @@ public:
     static const double DQN_EPSILON_START;
     static const double DQN_EPSILON_END;
     static const double DQN_EPSILON_DECAY;
+    static const double DQN_EPSILON_PURE_EXPLOIT;
     static double DQN_ALPHA_REWARDS;
     static double DQN_LR;
     static double DQN_TAU; // Soft Update Parameter for target network

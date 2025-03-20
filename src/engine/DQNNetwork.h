@@ -22,7 +22,6 @@ public:
 private:
     torch::nn::Linear fc1{ nullptr }, fc2{ nullptr }, fc3{ nullptr }, fc4{ nullptr };
     torch::nn::Embedding _statusEmbedding{ nullptr };
-    // torch::nn::Dropout dropout; todo add
     void initWeights();
     unsigned _inputDim;
     unsigned _outputDim;

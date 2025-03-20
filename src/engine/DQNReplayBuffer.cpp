@@ -55,12 +55,12 @@ void ReplayBuffer::handleDone( const State &currentState, const unsigned numSpli
     }
 }
 
-double ReplayBuffer::currentSubtreeSize( ) const
+double ReplayBuffer::potentialSubtreeSize() const
 {
     const unsigned currentDepth = getActionStackSize();
-    if (currentDepth >= _numConstraints)
+    if ( currentDepth >= _numConstraints )
         return 0.0;
-    return (_numConstraints - currentDepth) * std::log(2.0L);
+    return ( _numConstraints - currentDepth ) * std::log( 2.0L );
 }
 
 
@@ -70,7 +70,7 @@ void ReplayBuffer::moveActionToRevisitBuffer( const State &stateAfterAction,
                                               const bool done )
 {
     const auto activeAction = actionEntry->_activeActions.back();
-    if (actionEntry->_isFake)
+    if ( actionEntry->_isFake )
     {
         actionEntry->_activeActions.popBack();
         return;
@@ -79,13 +79,13 @@ void ReplayBuffer::moveActionToRevisitBuffer( const State &stateAfterAction,
     const double deltaSplit = static_cast<double>( activeAction._splitsBeforeActiveAction ) -
                             static_cast<double>( numSplitsAfterAction );
 
-    if (deltaSplit == 0 && !done)
+    if ( deltaSplit == 0 && !done )
     {
         actionEntry->_activeActions.popBack();
         return;
     }
 
-    auto reward = currentSubtreeSize() != 0 ? deltaSplit / currentSubtreeSize() : 0;
+    auto reward = potentialSubtreeSize() != 0 ? deltaSplit / potentialSubtreeSize() : 0;
     double alpha = 10.0;
     reward =   std::copysign(std::tanh(alpha * std::abs(reward)), reward);
     addExperienceToRevisitBuffer(
@@ -119,13 +119,11 @@ void ReplayBuffer::applyNextAction( const State &stateAfterAction,
             if ( _actionsStack.empty() )
                 return;
         }
-
         // alternative action exists - push it to activeSplits with current numSplits:
         actionEntry = _actionsStack.back();
         auto action = actionEntry->_alternativeActions.begin();
         actionEntry->_activeActions.append(
-            ActiveAction( *action, actionEntry->_stateBeforeAction, numSplits ) ); // todo check what value the
-                                                                    // state before should have
+            ActiveAction( *action, actionEntry->_stateBeforeAction, numSplits ) );
         actionEntry->_alternativeActions.erase( action );
         numInconsistent--;
     }

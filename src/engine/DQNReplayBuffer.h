@@ -144,7 +144,8 @@ public:
                           unsigned numSplitsBeforeAction,
                           bool done = false );
     void handleDone( const State &currentState, unsigned numSplits );
-    double currentSubtreeSize() const;
+    double potentialSubtreeSize() const;
+    double computeLogarithmicReward( double splitsDelta ) const;
     void moveActionToRevisitBuffer( const State &stateAfterAction,
                                     unsigned numSplitsAfterAction,
                                     ActionEntry *actionEntry,

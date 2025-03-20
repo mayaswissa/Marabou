@@ -31,6 +31,7 @@ Agent::Agent( const unsigned numPlConstraints,
     // If a load path is provided, load the networks
     if ( !trainedAgentPath.empty() )
     {
+        std::cout << "loaded trained agent networks"  << std::endl;
         loadNetworks();
     }
 }
@@ -310,7 +311,7 @@ void Agent::learn()
     // Backpropagation
     _optimizer.zero_grad();
     loss.backward();
-    torch::nn::utils::clip_grad_norm_( _qNetworkLocal.parameters(), 0.5 );
+    torch::nn::utils::clip_grad_norm_( _qNetworkLocal.parameters(), 1.0 );
     if ( !handleInvalidGradients() )
         _optimizer.step();
     softUpdate( _qNetworkLocal, _qNetworkTarget );

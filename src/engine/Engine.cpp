@@ -654,7 +654,6 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                 }
             }
 
-            // updateToCurrentDQNState( *_currentDQNState );
             if ( splitJustPerformed )
             {
                 performBoundTighteningAfterCaseSplit();
@@ -3542,7 +3541,8 @@ bool Engine::performDeepSoILocalSearch()
                     return true;
                 }
             }
-            else if ( FloatUtils::isZero( costOfLastAcceptedPhasePattern ) )
+
+            else if ( FloatUtils::isZero( costOfLastAcceptedPhasePattern - costOfProposedPhasePattern ) )
             {
                 // Corner case: the SoI is minimal but there are still some PL
                 // constraints (those not in the SoI) unsatisfied.

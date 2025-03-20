@@ -136,9 +136,9 @@ int marabouMain( int argc, char **argv )
             {
                 unsigned epochs = 50;
                 std::vector<double> learningRates = { 1e-2 };
-                std::vector<unsigned> batchSizes = { 32, 64, 16 };
-                std::vector<unsigned> bufferSizes = { 256, 512 };
-                int numRuns = 20;
+                std::vector<unsigned> batchSizes = { 64};
+                std::vector<unsigned> bufferSizes = { 100000 };
+                int numRuns = 10;
                 for ( auto bufferSize : bufferSizes )
                 {
                     for ( auto batchSize : batchSizes )
@@ -169,6 +169,7 @@ int marabouMain( int argc, char **argv )
                                 {
                                     numSplits = 0;
                                     double epsilon = GlobalConfiguration::DQN_EPSILON_START;
+                                    // double epsilon = 0.5;
                                     std::unique_ptr<Agent> agent = nullptr;
                                     std::cout << "start training agent with its own splits"
                                               << std::endl;
@@ -185,7 +186,7 @@ int marabouMain( int argc, char **argv )
                                     if ( agent != nullptr )
                                         agent->saveNetworks();
                                     Marabou().runAgentTraining(
-                                        GlobalConfiguration::DQN_EPSILON_END,
+                                        GlobalConfiguration::DQN_EPSILON_PURE_EXPLOIT,
                                         false,
                                         std::move( agent ),
                                         &numSplits );

@@ -6,7 +6,6 @@ QNetwork::QNetwork( const unsigned numPlConstraints,
     :
      _outputDim( numActions ), _numFeatures( numFeatures ) ,_numConstraints( numPlConstraints )
 {
-    // , dropout( register_module( "dropout", torch::nn::Dropout( 0.3 ) ) )
     _inputDim = numPlConstraints * _numFeatures;
     fc1 = register_module( "fc1", torch::nn::Linear( _inputDim, 64 ) );
     fc2 = register_module( "fc2", torch::nn::Linear( 64, 128 ) );
@@ -77,7 +76,7 @@ void check_weights( const torch::nn::Linear &layer, const std::string &name )
 
     printf( "new weights: \n" );
     printf( "%s - Weight norm: %f\n ", name.c_str(), weights.norm().item<float>() );
-    printf( "%s - Bias norm: %f\n ", name.c_str(), weights.norm().item<float>() );
+    printf( "%s - Bias norm: %f\n ", name.c_str(), bias.norm().item<float>() );
     fflush( stdout );
 }
 

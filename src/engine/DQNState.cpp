@@ -1,7 +1,5 @@
 #include "DQNState.h"
 
-#include <GlobalConfiguration.h>
-
 State::State( const unsigned numConstraints )
     : _stateData( numConstraints )
     , _numConstraints( numConstraints )
@@ -10,7 +8,8 @@ State::State( const unsigned numConstraints )
     // Allocate a contiguous vector with (numConstraints * NUM_FEATURES) elements.
     _stateData.resize( numConstraints * NUM_FEATURES, 0.0 );
 
-    // For each constraint, set the feature at index DQN_RELU_NOT_FIXED to 1.0
+    // For each constraint, set the feature at index DQN_RELU_NOT_FIXED to 1.0,
+    // SoI scores to 0.
     for ( unsigned i = 0; i < numConstraints; ++i )
     {
         _stateData[i * NUM_FEATURES + DQN_RELU_NOT_FIXED] = 1.0;
@@ -52,7 +51,7 @@ void State::updateConstraintPhase( const unsigned constraintIndex, const unsigne
     // Get pointer to the start of the row for this constraint.
     double *rowPtr = &_stateData[constraintIndex * NUM_FEATURES];
     // Reset the first _numPhases entries (phase indicators) to 0.0.
-    std::fill( rowPtr, rowPtr + _numPhases, 0.0 );
+    std::fill_n( rowPtr, _numPhases, 0.0 );
     // Set the new phase.
     rowPtr[newPhase] = 1.0;
 }

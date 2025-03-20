@@ -324,10 +324,6 @@ bool SmtCore::popSplit( unsigned *numInconsistent )
             delete _stack.back()->_engineState;
             delete _stack.back();
             _stack.popBack();
-            // printf( "smt popSplit: delete entry, depth %u\n, inconsistent %u\n",
-            //         _stack.size(),
-            //         inconsistent );
-            // fflush( stdout );
             popContext();
 
             if ( _engine->shouldProduceProofs() && _engine->getUNSATCertificateCurrentPointer() )
@@ -387,13 +383,8 @@ bool SmtCore::popSplit( unsigned *numInconsistent )
         pushContext();
         _engine->applySplit( *split );
         SMT_LOG( "\tApplying new split - DONE" );
-        // printf( "smt popSplit: applying new split from alternative splits at depth: %u\n",
-        //         _stack.size() );
-        // fflush( stdout );
         stackEntry->_activeSplit = *split;
         stackEntry->_alternativeSplits.erase( split );
-        // printf( "smt popSplit: erase alternative from stack entry\n" );
-        // fflush( stdout );
         inconsistent = !_engine->consistentBounds();
 
         if ( _engine->shouldProduceProofs() && inconsistent )
