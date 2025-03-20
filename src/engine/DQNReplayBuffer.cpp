@@ -8,7 +8,7 @@ ReplayBuffer::ReplayBuffer( const unsigned numConstraints,
     : _numConstraints( numConstraints )
     , _bufferSize( bufferSize )
     , _batchSize( batchSize )
-    , _fakeActionIndex(numConstraints + 1)
+    , _fakeActionIndex( numConstraints + 1 )
     , _size( 0 )
     , _writePosition( 0 )
 {
@@ -26,9 +26,11 @@ ReplayBuffer::ReplayBuffer( const unsigned numConstraints,
 void ReplayBuffer::pushFakeActionEntry( const State &stateBeforeAction,
                                         const unsigned numSplitsBeforeAction )
 {
-    const auto fakeAction = Action(DQN_NUM_PHASES, _numConstraints, _fakeActionIndex, DQN_RELU_ACTIVE);
-    auto *actionEntry = new ActionEntry( fakeAction, stateBeforeAction, numSplitsBeforeAction, true, false );
-    _actionsStack.append(actionEntry);
+    const auto fakeAction =
+        Action( DQN_NUM_PHASES, _numConstraints, _fakeActionIndex, DQN_RELU_ACTIVE );
+    auto *actionEntry =
+        new ActionEntry( fakeAction, stateBeforeAction, numSplitsBeforeAction, true, false );
+    _actionsStack.append( actionEntry );
 }
 
 void ReplayBuffer::pushActionEntry( const Action &action,
@@ -36,7 +38,8 @@ void ReplayBuffer::pushActionEntry( const Action &action,
                                     const unsigned numSplitsBeforeAction,
                                     const bool done )
 {
-    auto *actionEntry = new ActionEntry( action, stateBeforeAction, numSplitsBeforeAction, false, done );
+    auto *actionEntry =
+        new ActionEntry( action, stateBeforeAction, numSplitsBeforeAction, false, done );
     _actionsStack.append( actionEntry );
 }
 
@@ -47,7 +50,7 @@ void ReplayBuffer::handleDone( const State &currentState, const unsigned numSpli
     {
         ActionEntry *actionEntry = _actionsStack.back();
         // no need to insert alternative actions.
-        while ( !actionEntry->_activeActions.empty() )
+        while ( !actionEntry->_activeActions.empty() ) // todo handle done iters differently
             moveActionToRevisitBuffer( currentState, numSplits, actionEntry, actionEntry->_done );
 
         delete _actionsStack.back();
