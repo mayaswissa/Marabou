@@ -93,7 +93,6 @@ void ReplayBuffer::moveActionToRevisitBuffer( const State &stateAfterAction,
     reward =   std::copysign(std::tanh(alpha * std::abs(reward)), reward);
     addExperienceToRevisitBuffer(
         activeAction._stateBeforeAction, activeAction._action, reward, stateAfterAction, done );
-    std::cout << "reward : " << reward << std::endl;
     actionEntry->_activeActions.popBack();
 }
 
@@ -124,6 +123,9 @@ void ReplayBuffer::applyNextAction( const State &stateAfterAction,
         }
         // alternative action exists - push it to activeSplits with current numSplits:
         actionEntry = _actionsStack.back();
+        // while ( !actionEntry->_activeActions.empty() ) // todo check ?
+        //     moveActionToRevisitBuffer( stateAfterAction, numSplits, actionEntry );
+
         auto action = actionEntry->_alternativeActions.begin();
         actionEntry->_activeActions.append(
             ActiveAction( *action, actionEntry->_stateBeforeAction, numSplits ) );

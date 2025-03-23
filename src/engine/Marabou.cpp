@@ -260,7 +260,7 @@ std::unique_ptr<Agent> Marabou::solveQueryWithAgent( double epsilon,
     {
         std::string filePath = "trainedAgent"; // todo move
 
-        // struct timespec start = TimeUtils::sampleMicro();
+        struct timespec start = TimeUtils::sampleMicro();
         unsigned timeoutInSeconds = Options::get()->getInt( Options::TRAIN_DQN_TIMEOUT );
         if ( training )
         {
@@ -270,6 +270,27 @@ std::unique_ptr<Agent> Marabou::solveQueryWithAgent( double epsilon,
         }
         else
             _engine->solve( timeoutInSeconds, filePath, numSplits );
+
+        if ( _engine->getExitCode() == Engine::UNKNOWN )
+        {
+            struct timespec end = TimeUtils::sampleMicro();
+            unsigned long long totalElapsed = TimeUtils::timePassed( start, end );
+            if ( timeoutInSeconds == 0 || totalElapsed < timeoutInSeconds * MICROSECONDS_IN_SECOND )
+            {
+                _cegarSolver = new CEGAR::IncrementalLinearization( _inputQuery, _engine.release() );
+                unsigned long long timeoutInMicroSeconds =
+                    ( timeoutInSeconds == 0
+                          ? 0
+                          : timeoutInSeconds * MICROSECONDS_IN_SECOND - totalElapsed );
+                _cegarSolver->setInitialTimeoutInMicroSeconds( timeoutInMicroSeconds );
+                _cegarSolver->solve();
+                _engine = std::unique_ptr<Engine>( _cegarSolver->releaseEngine() );
+            }
+        }
+
+
+        if ( _engine->getExitCode() == Engine::SAT )
+            _engine->extractSolution( _inputQuery );
     }
     return agent;
 }

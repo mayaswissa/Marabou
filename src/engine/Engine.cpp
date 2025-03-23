@@ -736,23 +736,27 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                 {
                     if ( allNonlinearConstraintsHold() )
                     {
+
+                        if ( _action == nullptr )
+                            _agent->stepFakeAction( *_previousState, _numSplits );
+                        else
+                            _agent->stepNewAction( *_previousState, *_action, true, _numSplits );
+                        auto numSplitsForDoneSuccess = _smtCore.getStackDepth();
+                        updateToCurrentDQNState( *_currentDQNState );
+                        _agent->handleDone( *_currentDQNState, numSplitsForDoneSuccess );
+                        printf( "success! sat" );
+                        fflush( stdout );
+
                         mainLoopEnd = TimeUtils::sampleMicro();
                         _statistics.incLongAttribute(
                             Statistics::TIME_MAIN_LOOP_MICRO,
                             TimeUtils::timePassed( mainLoopStart, mainLoopEnd ) );
                         if ( _verbosity > 0 )
+                        {
                             printf( "\nEngine::solve: sat assignment found\n" );
-
+                            _statistics.print();
+                        }
                         _exitCode = Engine::SAT;
-
-                        updateToCurrentDQNState( *_currentDQNState );
-                        if ( _action == nullptr )
-                            _agent->stepFakeAction( *_previousState, _numSplits );
-                        else
-                            _agent->stepNewAction( *_previousState, *_action, true, _numSplits );
-                        _agent->handleDone( *_currentDQNState, _numSplits );
-                        printf( "success!" );
-                        fflush( stdout );
                         return std::move( _agent );
                     }
                     else if ( !hasBranchingCandidate() )
