@@ -134,10 +134,13 @@ int marabouMain( int argc, char **argv )
 #endif
             if ( GlobalConfiguration::USE_DQN )
             {
-                unsigned epochs = 50;
+                srand ( time(0) );
+                // unsigned epochs = 0;
+                unsigned epochs = 5;
                 std::vector<double> learningRates = { 1e-2 };
-                std::vector<unsigned> batchSizes = { 64};
+                std::vector<unsigned> batchSizes = { 32};
                 std::vector<unsigned> bufferSizes = { 100000 };
+                std::vector<std::string> properties = {"resources/properties/acas_property_3.txt", "resources/properties/acas_property_4.txt" ,"resources/properties/acas_property_1_1.txt" };
                 int numRuns = 10;
                 for ( auto bufferSize : bufferSizes )
                 {
@@ -165,36 +168,42 @@ int marabouMain( int argc, char **argv )
 
                             if ( outFile.is_open() )
                             {
+                                double epsilon = GlobalConfiguration::DQN_EPSILON_START;
+                                std::unique_ptr<Agent> agent = nullptr;
                                 for ( int i = 0; i < numRuns; i++ )
                                 {
                                     numSplits = 0;
-                                    double epsilon = GlobalConfiguration::DQN_EPSILON_START;
-                                    // double epsilon = 0.5;
-                                    std::unique_ptr<Agent> agent = nullptr;
-                                    std::cout << "start training agent with its own splits"
-                                              << std::endl;
-                                    for ( unsigned int episode = 0; episode < epochs; ++episode )
+
+                                    for (auto property : properties)
                                     {
-                                        agent = Marabou().runAgentTraining(
-                                            epsilon, true, std::move( agent ) );
-                                        epsilon = std::max(
-                                            GlobalConfiguration::DQN_EPSILON_END,
-                                            epsilon * GlobalConfiguration::DQN_EPSILON_DECAY );
+                                        options->setString( Options::PROPERTY_FILE_PATH, property );
+                                        for ( unsigned int episode = 0; episode < epochs; ++episode )
+                                        {
+                                            agent = Marabou().runAgentTraining(
+                                                epsilon, true, std::move( agent ) );
+                                            epsilon = std::max(
+                                                GlobalConfiguration::DQN_EPSILON_END,
+                                                epsilon * GlobalConfiguration::DQN_EPSILON_DECAY );
+                                            // agent->schedulersStep();
+                                        }
+                                        options->setString( Options::PROPERTY_FILE_PATH, "resources/properties/acas_property_3.txt" );
+
+                                        printf( "start solving with trained agent property_3.\n" );
+                                        fflush( stdout );
+                                        if ( agent != nullptr )
+                                            agent->saveNetworks();
+                                        Marabou().runAgentTraining(
+                                            GlobalConfiguration::DQN_EPSILON_PURE_EXPLOIT,
+                                            false,
+                                            std::move( agent ),
+                                            &numSplits );
+                                        avgNumSplits += numSplits;
+                                        printf( "numsplits marabouMain: %d\n", numSplits );
+                                        fflush( stdout );
+                                        outFile << numSplits << " ";
+                                        outFile << std::flush;
                                     }
-                                    printf( "start solving with trained agent\n" );
-                                    fflush( stdout );
-                                    if ( agent != nullptr )
-                                        agent->saveNetworks();
-                                    Marabou().runAgentTraining(
-                                        GlobalConfiguration::DQN_EPSILON_PURE_EXPLOIT,
-                                        false,
-                                        std::move( agent ),
-                                        &numSplits );
-                                    avgNumSplits += numSplits;
-                                    printf( "numsplits marabouMain: %d\n", numSplits );
-                                    fflush( stdout );
-                                    outFile << numSplits << " ";
-                                    outFile << std::flush;
+
                                 }
                                 avgNumSplits /= numRuns;
                                 outFile << "\n Avg number of splits for BufferSize " << bufferSize
