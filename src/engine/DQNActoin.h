@@ -8,7 +8,7 @@ class Action
 {
 public:
     Action( unsigned numPhases, unsigned numPlConstraints );
-    Action( unsigned numPhases, unsigned numPlConstraints, unsigned plConstraintActionIndex, unsigned assignmentIndex );
+    Action( unsigned numPhases, unsigned numPlConstraints, unsigned plConstraintActionIndex, unsigned phaseIndex );
     Action( const Action &other );
     Action &operator=( Action &&other ) noexcept;
     Action &operator=( const Action &other );

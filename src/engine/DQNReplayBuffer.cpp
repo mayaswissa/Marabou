@@ -27,9 +27,9 @@ void ReplayBuffer::pushFakeActionEntry( const State &stateBeforeAction,
                                         const unsigned numSplitsBeforeAction )
 {
     const auto fakeAction =
-        Action( DQN_NUM_PHASES, _numConstraints, _fakeActionIndex, RELU_PHASE_ACTIVE );
+        std::make_unique<Action>( DQN_NUM_PHASES, _numConstraints, _fakeActionIndex, RELU_PHASE_ACTIVE );
     auto *actionEntry =
-        new ActionEntry( fakeAction, stateBeforeAction, numSplitsBeforeAction, true, false );
+        new ActionEntry( *fakeAction, stateBeforeAction, numSplitsBeforeAction, true, false );
     _actionsStack.append( actionEntry );
 }
 

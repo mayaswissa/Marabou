@@ -302,7 +302,7 @@ bool Engine::solve( double timeoutInSeconds, const std::string &trainedAgentPath
         updateToCurrentDQNState( *_currentDQNState );
         _agent = std::make_unique<Agent>(
             numPlConstraints, DQN_NUM_PHASES, trainedAgentPath, trainedAgentPath );
-        _action = std::make_unique<Action>( DQN_NUM_PHASES, numPlConstraints );
+        _action = nullptr;
         _previousState = std::make_unique<State>( numPlConstraints );
         updateToCurrentDQNState( *_previousState );
     }
@@ -600,7 +600,7 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
     }
     else
         _agent = std::move( agent );
-    _action = std::make_unique<Action>( DQN_NUM_PHASES, numPlConstraints );
+    _action = nullptr;
     _currentDQNState = std::make_unique<State>( numPlConstraints );
     updateToCurrentDQNState( *_currentDQNState );
     _previousState = std::make_unique<State>( numPlConstraints );

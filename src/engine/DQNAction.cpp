@@ -10,11 +10,11 @@ Action::Action( const unsigned numPhases, const unsigned numPlConstraints )
 Action::Action( const unsigned numPhases,
                 const unsigned numPlConstraints,
                 const unsigned plConstraintActionIndex,
-                const unsigned assignmentIndex )
+                const unsigned phaseIndex )
     : _numPhases( numPhases )
     , _numPlConstraints( numPlConstraints )
     , _plConstraintActionIndex( plConstraintActionIndex )
-    , _phaseActionIndex( assignmentIndex )
+    , _phaseActionIndex( phaseIndex )
 {
 }
 Action::Action( const Action &other )
