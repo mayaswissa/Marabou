@@ -379,7 +379,7 @@ bool Engine::solve( double timeoutInSeconds, const std::string &trainedAgentPath
             // Perform any SmtCore-initiated case splits
             if ( _smtCore.needToSplit() )
             {
-                if ( _newSplitByAgent )
+                if ( _newSplitByAgent && _action != nullptr )
                 {
                     auto phaseStatus = static_cast<PhaseStatus>( _action->getActionPhase() );
                     _smtCore.performSplit( &phaseStatus );
@@ -572,6 +572,14 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
     if ( _lpSolverType == LPSolverType::NATIVE )
         storeInitialEngineState();
 
+    mainLoopStatistics();
+    if ( _verbosity > 0 )
+    {
+        printf( "\nEngine::trainDQNAgent: Initial statistics\n" );
+        _statistics.print();
+        printf( "\n---\n" );
+    }
+
     bool splitJustPerformed = true;
     struct timespec mainLoopStart = TimeUtils::sampleMicro();
     unsigned numInconsistent = 0;
@@ -628,7 +636,11 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
         if ( _quitRequested )
         {
             if ( _verbosity > 0 )
+            {
                 printf( "\n\nEngine: quitting due to external request...\n\n" );
+                printf( "Final statistics:\n" );
+                _statistics.print();
+            }
 
             _exitCode = Engine::QUIT_REQUESTED;
             return std::move( _agent );
@@ -637,6 +649,13 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
         try
         {
             DEBUG( _tableau->verifyInvariants() );
+
+            mainLoopStatistics();
+            if ( _verbosity > 1 &&
+                 _statistics.getLongAttribute( Statistics::NUM_MAIN_LOOP_ITERATIONS ) %
+                         _statisticsPrintingFrequency ==
+                     0 )
+                _statistics.print();
 
             if ( _lpSolverType == LPSolverType::NATIVE )
             {
@@ -687,20 +706,8 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
 
                 PhaseStatus phaseStatus;
                 if ( !_newSplitByAgent )
-                {
-                    auto constraintForSplitting = _smtCore.getConstraintForSplitting();
-                    if ( _constraintToIndex.exists( constraintForSplitting ) )
-                    {
-                        unsigned constraintIndex =
-                            _constraintToIndex.get( _smtCore.getConstraintForSplitting() );
-                        ASSERT( constraintIndex < numPlConstraints );
-                        phaseStatus = _smtCore.getConstraintForSplitting()->getDirection();
-                        _action = std::make_unique<Action>(
-                            DQN_NUM_PHASES, numPlConstraints, constraintIndex, phaseStatus );
-                    }
-                    else
-                        _action = nullptr;
-                }
+                    _action = nullptr;
+
                 else
                     phaseStatus = static_cast<PhaseStatus>( _action->getActionPhase() );
                 bool performSplit;
@@ -714,7 +721,6 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                     ++_numSplits;
                     splitJustPerformed = true;
                 }
-
 
                 continue;
             }
@@ -766,7 +772,12 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                             Statistics::TIME_MAIN_LOOP_MICRO,
                             TimeUtils::timePassed( mainLoopStart, mainLoopEnd ) );
                         if ( _verbosity > 0 )
+                        {
                             printf( "\nEngine::solve: at leaf node but solving inconclusive\n" );
+                            _statistics.print();
+                        }
+                        _exitCode = Engine::UNKNOWN;
+
                         updateToCurrentDQNState( *_currentDQNState );
                         if ( _action == nullptr )
                             _agent->stepFakeAction( *_previousState, _numSplits );
@@ -776,7 +787,6 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                         printf( "fail!" );
                         fflush( stdout );
 
-                        _exitCode = Engine::UNKNOWN;
                         return std::move( _agent );
                     }
                     else
@@ -830,7 +840,9 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                 if ( _verbosity > 0 )
                 {
                     printf( "\nEngine::solve: unsat query\n" );
+                    _statistics.print();
                 }
+                _exitCode = Engine::UNSAT;
 
                 std::cout << "done unsat training! num Splits : " << _numSplits << std::endl;
                 fflush( stdout );
@@ -841,7 +853,6 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                     _agent->stepNewAction( *_previousState, *_action, true, _numSplits );
                 _agent->handleDone( *_currentDQNState, _numSplits );
 
-                _exitCode = Engine::UNSAT;
                 return std::move( _agent );
             }
             else

@@ -185,26 +185,29 @@ int marabouMain( int argc, char **argv )
                                                 GlobalConfiguration::DQN_EPSILON_END,
                                                 epsilon * GlobalConfiguration::DQN_EPSILON_DECAY );
                                             // agent->schedulersStep();
+                                            // if ( agent != nullptr )
+                                            //     agent->saveNetworks();
                                         }
-                                        options->setString( Options::PROPERTY_FILE_PATH, "resources/properties/acas_property_3.txt" );
 
-                                        printf( "start solving with trained agent property_3.\n" );
-                                        fflush( stdout );
-                                        if ( agent != nullptr )
-                                            agent->saveNetworks();
-                                        Marabou().runAgentTraining(
-                                            GlobalConfiguration::DQN_EPSILON_PURE_EXPLOIT,
-                                            false,
-                                            std::move( agent ),
-                                            &numSplits );
-                                        avgNumSplits += numSplits;
-                                        printf( "numsplits marabouMain: %d\n", numSplits );
-                                        fflush( stdout );
-                                        outFile << numSplits << " ";
-                                        outFile << std::flush;
                                     }
 
                                 }
+                                options->setString( Options::PROPERTY_FILE_PATH, "resources/properties/acas_property_1.txt" );
+
+                                printf( "start solving with trained agent property_3.\n" );
+                                fflush( stdout );
+
+                                Marabou().runAgentTraining(
+                                    GlobalConfiguration::DQN_EPSILON_PURE_EXPLOIT,
+                                    false,
+                                    std::move( nullptr ),
+                                    &numSplits );
+                                avgNumSplits += numSplits;
+                                printf( "numsplits marabouMain: %d\n", numSplits );
+                                fflush( stdout );
+                                outFile << numSplits << " ";
+                                outFile << std::flush;
+
                                 avgNumSplits /= numRuns;
                                 outFile << "\n Avg number of splits for BufferSize " << bufferSize
                                         << "BatchSize : " << batchSize << " learning rate " << lr

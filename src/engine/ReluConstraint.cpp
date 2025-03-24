@@ -933,17 +933,6 @@ void ReluConstraint::transformToUseAuxVariables( InputQuery &inputQuery )
     // We now care about the auxiliary variable, as well
     _auxVarInUse = true;
 }
-void debug()
-{
-    printf("hi its for debug\n");
-    printf("hi its for debug\n");
-    printf("hi its for debug\n");
-    printf("hi its for debug\n");
-    printf("hi its for debug\n");
-    printf("hi its for debug\n");
-    fflush( stdout );
-
-}
 
 void ReluConstraint::getCostFunctionComponent( LinearExpression &cost, PhaseStatus phase ) const
 {
@@ -953,10 +942,6 @@ void ReluConstraint::getCostFunctionComponent( LinearExpression &cost, PhaseStat
 
     // This should not be called when the linear constraints have
     // not been satisfied
-    if (haveOutOfBoundVariables())
-    {
-            debug();
-    }
     ASSERT( !haveOutOfBoundVariables() );
 
     ASSERT( phase == RELU_PHASE_ACTIVE || phase == RELU_PHASE_INACTIVE );
