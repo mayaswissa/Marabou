@@ -78,8 +78,9 @@ void ReplayBuffer::moveActionToRevisitBuffer( const State &stateAfterAction,
         actionEntry->_activeActions.popBack();
         return;
     }
-
-    const double deltaSplit = static_cast<double>( activeAction._splitsBeforeActiveAction ) -
+    double deltaSplit = 0;
+    if (numSplitsAfterAction != 0) // only zero when done with success -> all splits in stack are good choices.
+        deltaSplit = static_cast<double>( activeAction._splitsBeforeActiveAction ) -
                             static_cast<double>( numSplitsAfterAction );
 
     if ( deltaSplit == 0 && !done )
