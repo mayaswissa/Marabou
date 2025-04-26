@@ -387,8 +387,6 @@ bool Engine::solve( double timeoutInSeconds, const std::string &trainedAgentPath
                 else
                     _smtCore.performSplit();
                 ( *numSplits )++;
-                printf( "solve numSplits: %u\n", *numSplits );
-                fflush( stdout );
                 splitJustPerformed = true;
                 continue;
             }
@@ -552,7 +550,7 @@ void Engine::loadAgentNetworks( Agent &agent )
 
 std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                                               std::unique_ptr<Agent> agent,
-                                              double timeoutInSeconds,
+                                              double timeoutInSeconds, int *numSplits,
                                               const std::string &trainedAgentPath )
 {
     SignalHandler::getInstance()->initialize();
@@ -587,15 +585,12 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
     // DQN CODE:
     unsigned numPlConstraints = _plConstraints.size();
     _eps = epsilon; // exploration
-    printf( "epsilon = %g\n", _eps );
-    fflush( stdout );
     std::deque<unsigned> smtSteps;
     unsigned ALTERNATIVE_ACTION = 1;
     unsigned NEW_ACTION = 2;
     if ( agent == nullptr )
     {
-        printf( "no agent provided! creating new\n" );
-        fflush( stdout );
+        DQN_LOG( "no agent provided! creating new\n" );
         _agent = std::make_unique<Agent>( numPlConstraints, DQN_NUM_PHASES, trainedAgentPath );
     }
     else
@@ -630,6 +625,7 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
 
             _exitCode = Engine::TIMEOUT;
             _statistics.timeout();
+            *numSplits = _numSplits;
             return std::move( _agent );
         }
 
@@ -749,8 +745,6 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                             _agent->stepNewAction( *_previousState, *_action, true, _numSplits );
                         updateToCurrentDQNState( *_currentDQNState );
                         _agent->handleDone( *_currentDQNState, 0 );
-                        printf( "success! sat" );
-                        fflush( stdout );
 
                         mainLoopEnd = TimeUtils::sampleMicro();
                         _statistics.incLongAttribute(
@@ -762,6 +756,7 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                             _statistics.print();
                         }
                         _exitCode = Engine::SAT;
+                        *numSplits = _numSplits;
                         return std::move( _agent );
                     }
                     else if ( !hasBranchingCandidate() )
@@ -783,9 +778,7 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                         else
                             _agent->stepNewAction( *_previousState, *_action, true, _numSplits );
                         _agent->handleDone( *_currentDQNState, _numSplits );
-                        printf( "fail!" );
-                        fflush( stdout );
-
+                        *numSplits = _numSplits;
                         return std::move( _agent );
                     }
                     else
@@ -820,6 +813,7 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                 else
                     _agent->stepNewAction( *_previousState, *_action, true, _numSplits );
                 _agent->handleDone( *_currentDQNState, _numSplits );
+                *numSplits = _numSplits;
                 return std::move( _agent );
             }
         }
@@ -843,15 +837,13 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                 }
                 _exitCode = Engine::UNSAT;
 
-                std::cout << "done unsat training! num Splits : " << _numSplits << std::endl;
-                fflush( stdout );
                 updateToCurrentDQNState( *_currentDQNState );
                 if ( _action == nullptr )
                     _agent->stepFakeAction( *_previousState, _numSplits );
                 else
                     _agent->stepNewAction( *_previousState, *_action, true, _numSplits );
                 _agent->handleDone( *_currentDQNState, _numSplits );
-
+                *numSplits = _numSplits;
                 return std::move( _agent );
             }
             else
@@ -879,6 +871,7 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
             else
                 _agent->stepNewAction( *_previousState, *_action, true, _numSplits );
             _agent->handleDone( *_currentDQNState, _numSplits );
+            *numSplits = _numSplits;
             return std::move( _agent );
         }
         catch ( ... )
@@ -888,6 +881,7 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
             mainLoopEnd = TimeUtils::sampleMicro();
             _statistics.incLongAttribute( Statistics::TIME_MAIN_LOOP_MICRO,
                                           TimeUtils::timePassed( mainLoopStart, mainLoopEnd ) );
+            *numSplits = _numSplits;
             return std::move( _agent );
         }
     }
@@ -897,9 +891,8 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
     else
         _agent->stepNewAction( *_previousState, *_action, true, _numSplits );
     _agent->handleDone( *_currentDQNState, _numSplits );
-    printf( "done iters!\n" );
-    fflush( stdout );
     _exitCode = Engine::MAX_ITERATIONS;
+    *numSplits = _numSplits;
     return std::move( _agent );
 }
 

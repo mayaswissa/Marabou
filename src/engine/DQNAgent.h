@@ -8,6 +8,7 @@
 #include "DQNState.h"
 #undef Warning
 #include <torch/torch.h>
+#define DQN_LOG( x, ... ) MARABOU_LOG( GlobalConfiguration::DQN_LOGGING, "DQN: %s\n", x )
 
 class Agent
 {
@@ -49,6 +50,7 @@ private:
     torch::optim::Adam _optimizer;
     torch::optim::StepLR _scheduler;
     ReplayBuffer _replayedBuffer;
+    unsigned _lossVerbosity;
     bool handleInvalidGradients();
 };
 #endif

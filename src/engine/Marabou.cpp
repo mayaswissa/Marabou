@@ -74,7 +74,7 @@ void Marabou::run()
     std::cout << "end run time: " << TimeUtils::now().ascii() << std::endl;
 }
 
-std::unique_ptr<Agent> Marabou::runAgentTraining( double epsilon,
+std::unique_ptr<Agent> Marabou::runAgentTraining( double epsilon, int exampleID,
                                                   const bool training,
                                                   std::unique_ptr<Agent> agent,
                                                   int *numSplits )
@@ -83,7 +83,7 @@ std::unique_ptr<Agent> Marabou::runAgentTraining( double epsilon,
 
     prepareInputQuery();
 
-    agent = solveQueryWithAgent( epsilon, training, std::move( agent ), numSplits);
+    agent = solveQueryWithAgent( epsilon, exampleID, training, std::move( agent ), numSplits);
 
     struct timespec end = TimeUtils::sampleMicro();
 
@@ -235,19 +235,8 @@ void Marabou::exportAssignment() const
     exportFile->close();
 }
 
-// void Marabou::trainAndSolve()
-// {
-//     unsigned _nEpisodes = 100; // todo make argument
-//     unsigned timeoutInSeconds = Options::get()->getInt( Options::TRAIN_DQN_TIMEOUT );
-//     for ( unsigned int episode = 1; episode <= _nEpisodes; ++episode )
-//     {
-//         printf( "Training and Solving\n" );
-//         _engine->reset();
-//         _engine->trainDQNAgent( timeoutInSeconds );
-//     }
-// }
-
 std::unique_ptr<Agent> Marabou::solveQueryWithAgent( double epsilon,
+                                                     int exampleID,
                                                      bool training,
                                                      std::unique_ptr<Agent> agent,
                                                      int *numSplits )
@@ -261,12 +250,13 @@ std::unique_ptr<Agent> Marabou::solveQueryWithAgent( double epsilon,
         std::string filePath = "trainedAgent"; // todo move
 
         struct timespec start = TimeUtils::sampleMicro();
-        unsigned timeoutInSeconds = Options::get()->getInt( Options::TRAIN_DQN_TIMEOUT );
+        unsigned trainTimeoutInSeconds = Options::get()->getInt( Options::TRAIN_DQN_TIMEOUT );
+        unsigned timeoutInSeconds = Options::get()->getInt( Options::TIMEOUT );
         if ( training )
         {
             agent = _engine->trainDQNAgent(
-                epsilon, std::move( agent ), timeoutInSeconds, filePath );
-                agent->saveNetworks();
+                epsilon, std::move( agent ), trainTimeoutInSeconds, numSplits, filePath );
+            agent->saveNetworks();
         }
         else
             _engine->solve( timeoutInSeconds, filePath, numSplits );

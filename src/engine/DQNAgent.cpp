@@ -23,6 +23,7 @@ Agent::Agent( const unsigned numPlConstraints,
     , _replayedBuffer( ReplayBuffer( _numPlConstraints,
                                      GlobalConfiguration::DQN_BUFFER_SIZE,
                                      GlobalConfiguration::DQN_BATCH_SIZE ) )
+    , _lossVerbosity( 0 )
 {
     _qNetworkLocal.to( device );
     _qNetworkTarget.to( device );
@@ -30,10 +31,8 @@ Agent::Agent( const unsigned numPlConstraints,
     _qNetworkTarget.to( torch::kFloat32 );
     // If a load path is provided, load the networks
     if ( !trainedAgentPath.empty() )
-    {
-        std::cout << "loaded trained agent networks"  << std::endl;
         loadNetworks();
-    }
+
 }
 
 void Agent::saveNetworks() const
@@ -41,16 +40,17 @@ void Agent::saveNetworks() const
     // Save local network
     {
         torch::serialize::OutputArchive local_archive;
-        _qNetworkLocal.save(local_archive);
-        local_archive.save_to(_saveAgentFilePath + "_local.pth");
+        _qNetworkLocal.save( local_archive );
+        local_archive.save_to( _saveAgentFilePath + "_local.pth" );
     }
 
     // Save target network
     {
         torch::serialize::OutputArchive target_archive;
-        _qNetworkTarget.save(target_archive);
-        target_archive.save_to(_saveAgentFilePath + "_target.pth");
+        _qNetworkTarget.save( target_archive );
+        target_archive.save_to( _saveAgentFilePath + "_target.pth" );
     }
+    DQN_LOG( "saved agent's networks" )
 }
 
 
@@ -61,16 +61,17 @@ void Agent::loadNetworks()
         // Load local network
         {
             torch::serialize::InputArchive local_archive;
-            local_archive.load_from(_trainedAgentFilePath + "_local.pth");
-            _qNetworkLocal.load(local_archive);
+            local_archive.load_from( _trainedAgentFilePath + "_local.pth" );
+            _qNetworkLocal.load( local_archive );
         }
 
         // Load target network
         {
             torch::serialize::InputArchive target_archive;
-            target_archive.load_from(_trainedAgentFilePath + "_target.pth");
-            _qNetworkTarget.load(target_archive);
+            target_archive.load_from( _trainedAgentFilePath + "_target.pth" );
+            _qNetworkTarget.load( target_archive );
         }
+        DQN_LOG( "loaded trained agent networks" )
     }
     catch ( const torch::Error &e )
     {
@@ -111,7 +112,7 @@ void Agent::stepAlternativeAction( const State &stateBeforeSplit,
                                    const unsigned numSplits,
                                    unsigned &numInconsistent )
 {
-    _replayedBuffer.applyNextAction( stateBeforeSplit, numSplits, numInconsistent);
+    _replayedBuffer.applyNextAction( stateBeforeSplit, numSplits, numInconsistent );
     _tStep = ( _tStep + 1 ) % GlobalConfiguration::DQN_EXPLORATION_RATE;
     if ( _tStep == 0 )
         learn();
@@ -191,67 +192,6 @@ std::unique_ptr<Action> Agent::act( const State &state, const double eps )
 #include <iostream>
 #include <torch/torch.h>
 
-void detectUnusualData( const std::string &name, torch::Tensor tensor )
-{
-    try
-    {
-        if ( tensor.numel() == 0 )
-        {
-            std::cerr << "🔍 [" << name << "] Tensor is EMPTY!" << std::endl;
-            return;
-        }
-
-        // Convert to CPU, contiguous, and ensure it is float type
-        tensor = tensor.to( torch::kCPU ).contiguous();
-        if ( !tensor.is_floating_point() )
-        {
-            tensor = tensor.to( torch::kFloat32 ); // Convert to float to avoid mean() error
-        }
-
-        // Flatten for easier analysis
-        auto cpuTensor = tensor.flatten();
-
-        // Compute statistics
-        double minVal = cpuTensor.min().item<double>();
-        double maxVal = cpuTensor.max().item<double>();
-        double meanVal = cpuTensor.mean().item<double>();
-        double stdVal = cpuTensor.std().item<double>();
-
-        std::cerr << "[" << name << "] Stats -> Min: " << minVal << " | Max: " << maxVal
-                  << " | Mean: " << meanVal << " | Std: " << stdVal << std::endl;
-
-        // Define outlier threshold (values beyond 3 standard deviations)
-        double lowerBound = meanVal - 3 * stdVal;
-        double upperBound = meanVal + 3 * stdVal;
-
-        std::cerr << "[" << name << "] Unusual values (outliers):" << std::endl;
-
-        // Use data pointer for efficient access
-        auto dataPtr = cpuTensor.data_ptr<float>();
-        bool foundOutlier = false;
-
-        for ( int i = 0; i < cpuTensor.numel(); i++ )
-        {
-            double val = static_cast<double>( dataPtr[i] );
-
-            if ( std::isnan( val ) || std::isinf( val ) || val > upperBound || val < lowerBound )
-            {
-                std::cerr << "  Index " << i << ": " << val << std::endl;
-                foundOutlier = true;
-            }
-        }
-
-        if ( !foundOutlier )
-        {
-            std::cerr << "  No extreme outliers detected in [" << name << "]" << std::endl;
-        }
-    }
-    catch ( const std::exception &e )
-    {
-        std::cerr << "ERROR in detectUnusualData(" << name << "): " << e.what() << std::endl;
-    }
-}
-
 
 void Agent::learn()
 {
@@ -267,13 +207,14 @@ void Agent::learn()
         _replayedBuffer.getActions().index( { idxTensor } ).to( device ).to( torch::kLong );
     const auto rewardsTensor =
         _replayedBuffer.getRewards().index( { idxTensor } ).to( device ).to( torch::kFloat32 );
-    const auto nextStatesTensor = _replayedBuffer.getNextStates().index( { idxTensor } ).to( device );
+    const auto nextStatesTensor =
+        _replayedBuffer.getNextStates().index( { idxTensor } ).to( device );
     const auto doneTensor =
         _replayedBuffer.getDones().index( { idxTensor } ).to( device ).to( torch::kUInt8 );
     const auto QExpected = _qNetworkLocal.forward( statesTensor )
-                         .gather( 1, actionsTensor )
-                         .squeeze( -1 )
-                         .to( torch::kFloat32 );
+                               .gather( 1, actionsTensor )
+                               .squeeze( -1 )
+                               .to( torch::kFloat32 );
     auto QTargets = rewardsTensor;
 
     // Double DQN : Use local network to select the best action for next states
@@ -288,25 +229,10 @@ void Agent::learn()
     QTargets =
         rewardsTensor + GAMMA * targetQValuesNextState * ( 1 - doneTensor.to( torch::kFloat32 ) );
 
-    // Debug
-    if ( torch::isnan( QTargets ).any().item<bool>() )
-    {
-        std::cerr << "Error: QTargets contains NaN values!" << std::endl;
-        throw std::runtime_error( "NaN detected in QTargets." );
-    }
-    if ( torch::isnan( QTargets ).any().item<bool>() )
-    {
-        std::cerr << "Error: QTargets contains NaN values! Dumping sample data:" << std::endl;
-        std::cerr << "States: " << statesTensor << std::endl;
-        std::cerr << "Actions: " << actionsTensor << std::endl;
-        std::cerr << "Rewards: " << rewardsTensor << std::endl;
-        std::cerr << "Next States: " << nextStatesTensor << std::endl;
-        throw std::runtime_error( "NaN detected in QTargets." );
-    }
-
     const auto loss = torch::mse_loss( QExpected, QTargets );
-    printf( "Loss: %f\n", loss.item<double>() );
-    fflush( stdout );
+    _lossVerbosity = ( _lossVerbosity + 1 ) % 200;
+    if ( _lossVerbosity == 0 )
+        DQN_LOG( Stringf( "MSE Loss : %f\n", loss.item<double>() ).ascii() );
 
     // Backpropagation
     _optimizer.zero_grad();
@@ -348,6 +274,4 @@ int Agent::getReplayBufferSize() const
 void Agent::schedulersStep()
 {
     _scheduler.step();
-    const auto lr = _optimizer.param_groups()[0].options().get_lr();
-    std::cout << "Current LR: " << lr << std::endl;
 }

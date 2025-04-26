@@ -267,9 +267,6 @@ public:
     static unsigned DQN_EXPLORATION_RATE;
     static unsigned DQN_BUFFER_SIZE;
     static unsigned DQN_BATCH_SIZE;
-    static unsigned DQN_MIN_SAMPLE_SIZE;
-    static unsigned DQN_CONSTRAINT_INACTIVE;
-    static unsigned DQN_NUM_PHASES;
 
     static const double DQN_EPSILON_START;
     static const double DQN_EPSILON_END;
@@ -309,6 +306,7 @@ public:
     static const bool SOI_LOGGING;
     static const bool SCORE_TRACKER_LOGGING;
     static const bool CEGAR_LOGGING;
+    static const bool DQN_LOGGING;
 };
 
 #endif // __GlobalConfiguration_h__

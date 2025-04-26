@@ -121,7 +121,6 @@ const unsigned GlobalConfiguration::MAX_ROUNDS_OF_BACKWARD_ANALYSIS = 10;
 unsigned GlobalConfiguration::DQN_EXPLORATION_RATE = 2;
 unsigned GlobalConfiguration::DQN_BUFFER_SIZE = 8000;
 unsigned GlobalConfiguration::DQN_BATCH_SIZE = 256;
-unsigned GlobalConfiguration::DQN_MIN_SAMPLE_SIZE = 1;
 
 const double GlobalConfiguration::DQN_EPSILON_START = 1.0;
 const double GlobalConfiguration::DQN_EPSILON_END = 0.05;
@@ -155,6 +154,7 @@ const bool GlobalConfiguration::ONNX_PARSER_LOGGING = false;
 const bool GlobalConfiguration::SOI_LOGGING = false;
 const bool GlobalConfiguration::SCORE_TRACKER_LOGGING = false;
 const bool GlobalConfiguration::CEGAR_LOGGING = false;
+const bool GlobalConfiguration::DQN_LOGGING = true;
 
 const bool GlobalConfiguration::USE_SMART_FIX = false;
 const bool GlobalConfiguration::USE_LEAST_FIX = false;

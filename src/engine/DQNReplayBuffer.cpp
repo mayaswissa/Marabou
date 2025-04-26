@@ -163,7 +163,7 @@ std::vector<unsigned> ReplayBuffer::sample() const
 {
     std::vector<unsigned> sampledIndices;
 
-    if ( _batchSize == 0 || _size < _batchSize * GlobalConfiguration::DQN_MIN_SAMPLE_SIZE )
+    if ( _batchSize == 0 || _size < _batchSize  )
     {
         return sampledIndices;
     }
