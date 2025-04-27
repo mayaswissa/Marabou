@@ -310,6 +310,8 @@ int marabouMain( int argc, char **argv )
                 }
                 for ( const auto seed : seeds )
                 {
+                    struct timespec startTrainingCurrSeeds = TimeUtils::sampleMicro();
+
                     int numSplits = 0;
 
                     outFile << "Example : " << trainedExampleID << "\n";
