@@ -161,7 +161,7 @@ void trainAgentOnExample( Options *options,
             epsilon,  trainedAgentID , true, std::move( agent ), &currentNumSplits );
         epsilon = std::max( GlobalConfiguration::DQN_EPSILON_END,
                             epsilon * GlobalConfiguration::DQN_EPSILON_DECAY );
-        if ( outputTxtFile.is_open()
+        if ( outputTxtFile.is_open() )
             outputTxtFile << currentNumSplits << ", ";
         *numSplits += currentNumSplits;
         if ( agent != nullptr )
