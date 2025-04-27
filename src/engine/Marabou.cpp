@@ -247,8 +247,7 @@ std::unique_ptr<Agent> Marabou::solveQueryWithAgent( double epsilon,
 
     if ( _engine->processInputQuery( _inputQuery ) )
     {
-        std::string filePath = "trainedAgent"; // todo move
-
+        std::string filePath = "/home/maya-swisa/Documents/Lab/researchSOIAgent/results/trainedAgent_" + std::to_string(exampleID);
         struct timespec start = TimeUtils::sampleMicro();
         unsigned trainTimeoutInSeconds = Options::get()->getInt( Options::TRAIN_DQN_TIMEOUT );
         unsigned timeoutInSeconds = Options::get()->getInt( Options::TIMEOUT );

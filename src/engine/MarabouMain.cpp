@@ -119,7 +119,7 @@ void extractExampleID( std::string &examplePath, std::string &exampleID )
     size_t ex_pos = examplePath.find( "ex_" ) + 3;
     size_t label_pos = examplePath.find( "_label_" ) + 7;
     size_t eps_pos = examplePath.find( "eps" ) + 3;
-    std::string ex_id = examplePath.substr( ex_pos, 3 );
+    std::string ex_id = examplePath.substr( ex_pos, 4 );
     std::string label_id = examplePath.substr( label_pos, 1 );
     std::string eps_id = examplePath.substr( eps_pos, 3 );
     exampleID = ex_id + label_id + eps_id;
