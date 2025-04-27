@@ -331,7 +331,7 @@ int marabouMain( int argc, char **argv )
 
                     struct timespec endTrainingCurrSeed = TimeUtils::sampleMicro();
                     unsigned long long totalTrainingCurrSeed =
-                        TimeUtils::timePassed( startTrainingAllSeeds, endTrainingCurrSeed );
+                        TimeUtils::timePassed( startTrainingCurrSeeds, endTrainingCurrSeed );
                     DQN_LOG(
                         Stringf( "Done training one seed. Total time: %llu milli, splits = %d. \n",
                                  totalTrainingCurrSeed / 1000,
