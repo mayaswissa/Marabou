@@ -74,7 +74,9 @@ void Marabou::run()
     std::cout << "end run time: " << TimeUtils::now().ascii() << std::endl;
 }
 
-std::unique_ptr<Agent> Marabou::runAgentTraining( double epsilon, int exampleID,
+std::unique_ptr<Agent> Marabou::runAgentTraining( double epsilon,
+                                                  int exampleID,
+                                                  String &engineRunResult,
                                                   const bool training,
                                                   std::unique_ptr<Agent> agent,
                                                   int *numSplits )
@@ -83,12 +85,29 @@ std::unique_ptr<Agent> Marabou::runAgentTraining( double epsilon, int exampleID,
 
     prepareInputQuery();
 
-    agent = solveQueryWithAgent( epsilon, exampleID, training, std::move( agent ), numSplits);
+    agent = solveQueryWithAgent( epsilon, exampleID, training, std::move( agent ), numSplits );
 
     struct timespec end = TimeUtils::sampleMicro();
 
     unsigned long long totalElapsed = TimeUtils::timePassed( start, end );
     displayResults( totalElapsed );
+    Engine::ExitCode result = _engine->getExitCode();
+
+    if ( result == Engine::UNSAT )
+        engineRunResult = "unsat";
+    else if ( result == Engine::SAT )
+        engineRunResult = "sat";
+    else if ( result == Engine::TIMEOUT )
+        engineRunResult = "TIMEOUT";
+    else if ( result == Engine::ERROR )
+        engineRunResult = "ERROR";
+    else if ( result == Engine::UNKNOWN )
+        engineRunResult = "UNKNOWN";
+    else if ( result == Engine::MAX_ITERATIONS )
+        engineRunResult = "MAX_ITERATIONS";
+    else
+        engineRunResult = "NOT_DONE";
+
 
     if ( Options::get()->getBool( Options::EXPORT_ASSIGNMENT ) )
         exportAssignment();
@@ -247,7 +266,9 @@ std::unique_ptr<Agent> Marabou::solveQueryWithAgent( double epsilon,
 
     if ( _engine->processInputQuery( _inputQuery ) )
     {
-        std::string filePath = "trainedAgent"; // todo move
+        std::string filePath =
+            "/home/maya-swisa/Documents/Lab/researchSOIAgent/results/trainedAgent_" +
+            std::to_string( exampleID );
 
         struct timespec start = TimeUtils::sampleMicro();
         unsigned trainTimeoutInSeconds = Options::get()->getInt( Options::TRAIN_DQN_TIMEOUT );
