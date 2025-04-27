@@ -75,7 +75,7 @@ void Marabou::run()
 }
 
 std::unique_ptr<Agent> Marabou::runAgentTraining( double epsilon,
-                                                  int exampleID,
+                                                  const std::string &exampleID,
                                                   String &engineRunResult,
                                                   const bool training,
                                                   std::unique_ptr<Agent> agent,

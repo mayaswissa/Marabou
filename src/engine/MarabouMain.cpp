@@ -250,7 +250,7 @@ int marabouMain( int argc, char **argv )
 
                 std::ostringstream currentRunFile;
                 auto txtOutputFilePath = Options::get()->getString(Options::DQN_OUTPUT_FILE_PATH);
-                currentRunFile << txtOutputFilePath << trainedExampleID << ".txt";
+                currentRunFile << std::string(txtOutputFilePath.ascii()) << trainedExampleID << ".txt";
                 std::ofstream outFile( currentRunFile.str(), std::ios::out | std::ios::app );
 
                 if ( outFile.is_open() )
@@ -293,7 +293,7 @@ int marabouMain( int argc, char **argv )
                                                 fullCurrentExamplePath );
                             Marabou().runAgentTraining(
                                 GlobalConfiguration::DQN_EPSILON_PURE_EXPLOIT,
-                                std::stoi( trainedExampleID ),
+                                 trainedExampleID ,
                                 runResult,
                                 false,
                                 std::move( agent ),
