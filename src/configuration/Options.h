@@ -158,7 +158,12 @@ public:
         SOI_INITIALIZATION_STRATEGY,
 
         // The procedure/solver for solving the LP
-        LP_SOLVER
+        LP_SOLVER,
+
+        // path to DQN agent's netwoks.
+        DQN_AGENT_NETWORKS_PATH,
+
+        DQN_OUTPUT_FILE_PATH
     };
 
     /*
