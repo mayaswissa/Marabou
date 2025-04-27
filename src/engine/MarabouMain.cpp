@@ -158,19 +158,18 @@ void trainAgentOnExample( Options *options,
     {
         int currentNumSplits = 0;
         agent = Marabou().runAgentTraining(
-            epsilon, std::stoi( trainedAgentID ), true, std::move( agent ), &currentNumSplits );
+            epsilon,  trainedAgentID , true, std::move( agent ), &currentNumSplits );
         epsilon = std::max( GlobalConfiguration::DQN_EPSILON_END,
                             epsilon * GlobalConfiguration::DQN_EPSILON_DECAY );
-        if ( outputTxtFile.is_open() )
-        {
+        if ( outputTxtFile.is_open()
             outputTxtFile << currentNumSplits << ", ";
-        }
         *numSplits += currentNumSplits;
+        if ( agent != nullptr )
+            agent->saveNetworks();
     }
     outputTxtFile << "\n";
 
-    if ( agent != nullptr )
-        agent->saveNetworks();
+
 }
 
 std::string parentDir( const std::string &path )
@@ -301,9 +300,8 @@ int marabouMain( int argc, char **argv )
                 unsigned epochs = 30;
                 std::ostringstream currentRunFile;
 
-                auto txtOutputFilePath =
-                                        "/home/maya-swisa/Documents/Lab/researchSOIAgent/results/"; // todo arg
-                currentRunFile << txtOutputFilePath << trainedExampleID << ".txt";
+                auto txtOutputFilePath = Options::get()->getString(Options::DQN_OUTPUT_FILE_PATH);
+                currentRunFile << std::string(txtOutputFilePath.ascii()) << trainedExampleID << ".txt";
                 std::ofstream outFile( currentRunFile.str(), std::ios::out | std::ios::app );
                 if ( !outFile )
                 {

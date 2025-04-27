@@ -74,7 +74,8 @@ void Marabou::run()
     std::cout << "end run time: " << TimeUtils::now().ascii() << std::endl;
 }
 
-std::unique_ptr<Agent> Marabou::runAgentTraining( double epsilon, int exampleID,
+std::unique_ptr<Agent> Marabou::runAgentTraining( double epsilon,
+                                                  const std::string &exampleID,
                                                   const bool training,
                                                   std::unique_ptr<Agent> agent,
                                                   int *numSplits )
@@ -236,7 +237,7 @@ void Marabou::exportAssignment() const
 }
 
 std::unique_ptr<Agent> Marabou::solveQueryWithAgent( double epsilon,
-                                                     int exampleID,
+                                                     const std::string &exampleID,
                                                      bool training,
                                                      std::unique_ptr<Agent> agent,
                                                      int *numSplits )
@@ -247,16 +248,15 @@ std::unique_ptr<Agent> Marabou::solveQueryWithAgent( double epsilon,
 
     if ( _engine->processInputQuery( _inputQuery ) )
     {
-        std::string filePath = "/home/maya-swisa/Documents/Lab/researchSOIAgent/results/trainedAgent_" + std::to_string(exampleID);
+        const auto path = Options::get()->getString( Options::DQN_AGENT_NETWORKS_PATH );
+        std::string filePath =  std::string(path.ascii())  + "/trainedAgent_" + exampleID;
         struct timespec start = TimeUtils::sampleMicro();
         unsigned trainTimeoutInSeconds = Options::get()->getInt( Options::TRAIN_DQN_TIMEOUT );
         unsigned timeoutInSeconds = Options::get()->getInt( Options::TIMEOUT );
         if ( training )
-        {
             agent = _engine->trainDQNAgent(
                 epsilon, std::move( agent ), trainTimeoutInSeconds, numSplits, filePath );
-            agent->saveNetworks();
-        }
+
         else
             _engine->solve( timeoutInSeconds, filePath, numSplits );
 
