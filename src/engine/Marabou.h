@@ -31,7 +31,7 @@ public:
     /*
       Entry point of this class
     */
-    void run();
+    void run( int *numSplits );
 
 private:
     InputQuery _inputQuery;
@@ -46,7 +46,7 @@ private:
     /*
       Invoke the engine to solve the input query
     */
-    void solveQuery();
+    void solveQuery( int *numSplits );
 
     /*
       Display the results

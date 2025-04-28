@@ -55,12 +55,12 @@ Marabou::~Marabou()
     }
 }
 
-void Marabou::run()
+void Marabou::run( int *numSplits )
 {
     struct timespec start = TimeUtils::sampleMicro();
 
     prepareQuery();
-    solveQuery();
+    solveQuery( numSplits );
 
     struct timespec end = TimeUtils::sampleMicro();
 
@@ -211,7 +211,7 @@ void Marabou::exportAssignment() const
     exportFile->close();
 }
 
-void Marabou::solveQuery()
+void Marabou::solveQuery( int *numSplits )
 {
     enum {
         MICROSECONDS_IN_SECOND = 1000000
@@ -221,7 +221,8 @@ void Marabou::solveQuery()
     unsigned timeoutInSeconds = Options::get()->getInt( Options::TIMEOUT );
     if ( _engine->processInputQuery( _inputQuery ) )
     {
-        _engine->solve( timeoutInSeconds );
+        *numSplits =0;
+        _engine->solve( timeoutInSeconds, numSplits );
         if ( _engine->shouldProduceProofs() && _engine->getExitCode() == Engine::UNSAT )
             _engine->certifyUNSATCertificate();
     }

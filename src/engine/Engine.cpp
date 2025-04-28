@@ -187,7 +187,7 @@ void Engine::exportQueryWithError( String errorMessage )
             ipqFileName.ascii() );
 }
 
-bool Engine::solve( double timeoutInSeconds )
+bool Engine::solve( double timeoutInSeconds, int *numSplits )
 {
     SignalHandler::getInstance()->initialize();
     SignalHandler::getInstance()->registerClient( this );
@@ -301,6 +301,7 @@ bool Engine::solve( double timeoutInSeconds )
             if ( _smtCore.needToSplit() )
             {
                 _smtCore.performSplit();
+                (*numSplits) ++;
                 splitJustPerformed = true;
                 continue;
             }

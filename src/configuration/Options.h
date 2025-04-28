@@ -155,7 +155,9 @@ public:
         SOI_INITIALIZATION_STRATEGY,
 
         // The procedure/solver for solving the LP
-        LP_SOLVER
+        LP_SOLVER,
+
+        DQN_OUTPUT_FILE_PATH
     };
 
     /*

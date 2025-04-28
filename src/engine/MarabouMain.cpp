@@ -20,6 +20,19 @@
 #include "Marabou.h"
 #include "Options.h"
 
+#include <cstdlib>
+#include <dirent.h>
+#include <errno.h>
+#include <fstream>
+#include <iostream>
+#include <string.h>
+#include <string>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <utility>
+#include <vector>
+
+
 #ifdef ENABLE_OPENBLAS
 #include "cblas.h"
 #endif
@@ -58,7 +71,97 @@ void printHelpMessage()
     printVersion();
     Options::get()->printHelpMessage();
 }
+std::vector<std::string> getEpsFiles( const std::string &examplePath )
+{
+    size_t pos = examplePath.find_last_of( '/' );
+    if ( pos == std::string::npos )
+    {
+        std::cerr << "Invalid path format." << std::endl;
+        exit( 1 );
+    }
 
+    std::string parentFolder = examplePath.substr( 0, pos );
+
+    DIR *dir = opendir( parentFolder.c_str() );
+    if ( dir == nullptr )
+    {
+        perror( "opendir failed" );
+        exit( 1 );
+    }
+
+    struct dirent *entry;
+    std::vector<std::string> files;
+
+    while ( ( entry = readdir( dir ) ) != nullptr )
+    {
+        std::string filename( entry->d_name );
+        if ( filename == "." || filename == ".." )
+            continue;
+        if ( filename.find( "eps" ) != std::string::npos &&
+             filename.find( ".txt" ) != std::string::npos )
+        {
+            files.push_back( filename );
+        }
+    }
+    closedir( dir );
+
+    std::sort( files.begin(), files.end() );
+
+    return files;
+}
+
+void extractExampleID( std::string &examplePath, std::string &exampleID )
+{
+    examplePath = Options::get()->getString( Options::PROPERTY_FILE_PATH ).ascii();
+    size_t ex_pos = examplePath.find( "ex_" ) + 3;
+    size_t label_pos = examplePath.find( "_label_" ) + 7;
+    size_t eps_pos = examplePath.find( "eps" ) + 3;
+    std::string ex_id = examplePath.substr( ex_pos, 4 );
+    std::string label_id = examplePath.substr( label_pos, 1 );
+    std::string eps_id = examplePath.substr( eps_pos, 2 );
+    exampleID = ex_id + label_id + eps_id;
+}
+
+
+std::string parentDir( const std::string &path )
+{
+    auto pos = path.find_last_of( '/' );
+    if ( pos == std::string::npos )
+        return "";
+    return path.substr( 0, pos );
+}
+
+bool isDir( const std::string &path )
+{
+    struct stat st;
+    if ( stat( path.c_str(), &st ) != 0 )
+    {
+        return false;
+    }
+    return S_ISDIR( st.st_mode );
+}
+
+std::vector<std::string> listDir( const std::string &dirPath )
+{
+    std::vector<std::string> names;
+    DIR *dir = opendir( dirPath.c_str() );
+    if ( !dir )
+    {
+        std::cerr << "opendir failed on \"" << dirPath << "\": " << strerror( errno ) << "\n";
+        return names;
+    }
+    struct dirent *entry;
+    while ( ( entry = readdir( dir ) ) != nullptr )
+    {
+        std::string name = entry->d_name;
+        if ( name == "." || name == ".." )
+            continue;
+        names.push_back( name );
+    }
+    closedir( dir );
+    std::sort( names.begin(), names.end() );
+    return names;
+}
 int marabouMain( int argc, char **argv )
 {
     try
@@ -131,7 +234,65 @@ int marabouMain( int argc, char **argv )
 #ifdef ENABLE_OPENBLAS
             openblas_set_num_threads( options->getInt( Options::NUM_BLAS_THREADS ) );
 #endif
-            Marabou().run();
+            std::ostringstream currentRunFile;
+            std::string examplePath;
+            std::string exampleID;
+            extractExampleID( examplePath, exampleID );
+            auto txtOutputFilePath = Options::get()->getString(Options::DQN_OUTPUT_FILE_PATH);
+            currentRunFile << std::string(txtOutputFilePath.ascii()) << exampleID << ".txt";
+            std::ofstream outFile( currentRunFile.str(), std::ios::out | std::ios::app );
+
+            if ( outFile.is_open() )
+            {
+                std::string lvl1 = parentDir( examplePath );
+                std::string root = parentDir( lvl1 );
+                if ( root.empty() || !isDir( root ) )
+                {
+                    std::cerr << "Error: cannot determine root from '" << root << "'\n";
+                    return 1;
+                }
+
+                auto files = listDir( lvl1 );
+                for ( auto &currentExample : files )
+                {
+                    if ( currentExample.size() < 4 ||
+                         currentExample.substr( currentExample.size() - 4 ) != ".txt" )
+                        continue;
+                    std::string fullCurrentExamplePath = lvl1 + "/" + currentExample;
+                    size_t ex_pos = fullCurrentExamplePath.find( "ex_" ) + 3;
+                    size_t label_pos = fullCurrentExamplePath.find( "_label_" ) + 7;
+                    size_t eps_pos = fullCurrentExamplePath.find( "eps" ) + 3;
+                    std::string ex_id = fullCurrentExamplePath.substr( ex_pos, 4 );
+                    std::string label_id = fullCurrentExamplePath.substr( label_pos, 1 );
+                    std::string eps_id = fullCurrentExamplePath.substr( eps_pos, 3 );
+                    std::string currentExampleID = ex_id + label_id + eps_id;
+                    int numSplits = 0;
+                    String runResult;
+                    options->setString( Options::PROPERTY_FILE_PATH, fullCurrentExamplePath );
+                    struct timespec startCurrExample = TimeUtils::sampleMicro();
+                    Marabou().run( &numSplits );
+                    struct timespec endCurrExample = TimeUtils::sampleMicro();
+
+                    unsigned long long totalRunCurrExample =
+                        TimeUtils::timePassed( startCurrExample, endCurrExample );
+
+                    auto totalMilli = std::to_string( totalRunCurrExample / 1000 ).c_str();
+                    outFile << "\n";
+                    outFile << ", Example ID: " << currentExampleID << ", epsilon : " << eps_id
+                            << ", numSplits:" << numSplits << ", Time : " << totalMilli << " milli"
+                            << ", Exit code: " << runResult.ascii() << "\n";
+                    outFile << std::flush;
+                }
+
+
+                outFile << "\n";
+                outFile.close();
+            }
+            else
+            {
+                std::cerr << "Failed to open file: " << currentRunFile.str() << std::endl;
+            }
+            return 0;
         }
     }
     catch ( const Error &e )

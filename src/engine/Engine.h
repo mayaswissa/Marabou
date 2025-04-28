@@ -83,7 +83,7 @@ public:
       Attempt to find a feasible solution for the input within a time limit
       (a timeout of 0 means no time limit). Returns true if found, false if infeasible.
     */
-    bool solve( double timeoutInSeconds = 0 );
+    bool solve( double timeoutInSeconds = 0, int *numSplits = nullptr );
 
     /*
       Minimize the cost function with respect to the current set of linear constraints.
