@@ -223,6 +223,21 @@ void Agent::learn()
     QTargets =
         rewardsTensor + GAMMA * targetQValuesNextState * ( 1 - doneTensor.to( torch::kFloat32 ) );
 
+    if ( torch::isnan( QTargets ).any().item<bool>() )
+    {
+        std::cerr << "Error: QTargets contains NaN values!" << std::endl;
+        throw std::runtime_error( "NaN detected in QTargets." );
+    }
+    if ( torch::isnan( QTargets ).any().item<bool>() )
+    {
+        std::cerr << "Error: QTargets contains NaN values! Dumping sample data:" << std::endl;
+        std::cerr << "States: " << statesTensor << std::endl;
+        std::cerr << "Actions: " << actionsTensor << std::endl;
+        std::cerr << "Rewards: " << rewardsTensor << std::endl;
+        std::cerr << "Next States: " << nextStatesTensor << std::endl;
+        throw std::runtime_error( "NaN detected in QTargets." );
+    }
+
     const auto loss = torch::mse_loss( QExpected, QTargets );
     _lossVerbosity = ( _lossVerbosity + 1 ) % 200;
     if ( _lossVerbosity == 0 )
