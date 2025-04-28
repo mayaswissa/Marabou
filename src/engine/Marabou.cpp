@@ -255,7 +255,7 @@ std::unique_ptr<Agent> Marabou::solveQueryWithAgent( double epsilon,
         unsigned timeoutInSeconds = Options::get()->getInt( Options::TIMEOUT );
         if ( training )
             agent = _engine->trainDQNAgent(
-                epsilon, std::move( agent ), trainTimeoutInSeconds, numSplits, filePath );
+                epsilon, std::move( agent ), trainTimeoutInSeconds, numSplits );
 
         else
             _engine->solve( timeoutInSeconds, filePath, numSplits );

@@ -313,12 +313,10 @@ public:
 
     unsigned numPlConstraints() const;
 
-    void loadAgentNetworks( Agent &agent );
-
     std::unique_ptr<Agent> trainDQNAgent( double epsilon,
                                           std::unique_ptr<Agent> agent,
-                                          double timeoutInSeconds, int *numSplits,
-                                          const std::string &trainedAgentPath = "trainedAgent" );
+                                          double timeoutInSeconds,
+                                          int *numSplits );
 
 private:
     enum BasisRestorationRequired {

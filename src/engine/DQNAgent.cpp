@@ -5,7 +5,6 @@
 
 Agent::Agent( const unsigned numPlConstraints,
               const unsigned numPhases,
-              const std::string &saveAgentPath,
               const std::string &trainedAgentPath )
     : _actionSpace( ActionSpace( numPlConstraints, numPhases ) )
     , _numPlConstraints( numPlConstraints )
@@ -13,12 +12,11 @@ Agent::Agent( const unsigned numPlConstraints,
     , _numActions( _actionSpace.getNumActions() )
     , _tStep( 0 )
     , device( torch::cuda::is_available() ? torch::kCUDA : torch::kCPU )
-    , _saveAgentFilePath( saveAgentPath )
     , _trainedAgentFilePath( trainedAgentPath )
     , _qNetworkLocal( QNetwork( _numPlConstraints, NUM_FEATURES, _numActions ) )
     , _qNetworkTarget( QNetwork( _numPlConstraints, NUM_FEATURES, _numActions ) )
     , _optimizer( _qNetworkLocal.parameters(),
-                  torch::optim::AdamOptions( GlobalConfiguration::DQN_LR ).weight_decay( 1e-4 ) )
+                  torch::optim::AdamOptions( GlobalConfiguration::DQN_LR ).weight_decay( 1e-6 ) )
     , _scheduler( _optimizer, 1, 0.9 )
     , _replayedBuffer( ReplayBuffer( _numPlConstraints,
                                      GlobalConfiguration::DQN_BUFFER_SIZE,
@@ -35,20 +33,20 @@ Agent::Agent( const unsigned numPlConstraints,
 
 }
 
-void Agent::saveNetworks() const
+void Agent::saveNetworks( const std::string &path ) const
 {
     // Save local network
     {
         torch::serialize::OutputArchive local_archive;
         _qNetworkLocal.save( local_archive );
-        local_archive.save_to( _saveAgentFilePath + "_local.pth" );
+        local_archive.save_to( path + "_local.pth" );
     }
 
     // Save target network
     {
         torch::serialize::OutputArchive target_archive;
         _qNetworkTarget.save( target_archive );
-        target_archive.save_to( _saveAgentFilePath + "_target.pth" );
+        target_archive.save_to( path + "_target.pth" );
     }
     DQN_LOG( "saved agent's networks" )
 }
@@ -187,10 +185,6 @@ std::unique_ptr<Action> Agent::act( const State &state, const double eps )
     auto [constraint, phase] = _actionSpace.decodeActionIndex( actionIndex );
     return std::make_unique<Action>( _numPhases, _numPlConstraints, constraint, phase );
 }
-
-#include <cmath>
-#include <iostream>
-#include <torch/torch.h>
 
 
 void Agent::learn()

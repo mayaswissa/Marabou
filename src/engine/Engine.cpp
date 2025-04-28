@@ -301,7 +301,7 @@ bool Engine::solve( double timeoutInSeconds, const std::string &trainedAgentPath
         _currentDQNState = std::make_unique<State>( numPlConstraints );
         updateToCurrentDQNState( *_currentDQNState );
         _agent = std::make_unique<Agent>(
-            numPlConstraints, DQN_NUM_PHASES, trainedAgentPath, trainedAgentPath );
+            numPlConstraints, DQN_NUM_PHASES, trainedAgentPath );
         _action = nullptr;
         _previousState = std::make_unique<State>( numPlConstraints );
         updateToCurrentDQNState( *_previousState );
@@ -543,15 +543,11 @@ bool Engine::solve( double timeoutInSeconds, const std::string &trainedAgentPath
     }
 }
 
-void Engine::loadAgentNetworks( Agent &agent )
-{
-    agent.loadNetworks();
-}
 
 std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                                               std::unique_ptr<Agent> agent,
-                                              double timeoutInSeconds, int *numSplits,
-                                              const std::string &trainedAgentPath )
+                                              double timeoutInSeconds,
+                                              int *numSplits )
 {
     SignalHandler::getInstance()->initialize();
     SignalHandler::getInstance()->registerClient( this );
@@ -591,7 +587,7 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
     if ( agent == nullptr )
     {
         DQN_LOG( "no agent provided! creating new\n" );
-        _agent = std::make_unique<Agent>( numPlConstraints, DQN_NUM_PHASES, trainedAgentPath );
+        _agent = std::make_unique<Agent>( numPlConstraints, DQN_NUM_PHASES );
     }
     else
         _agent = std::move( agent );

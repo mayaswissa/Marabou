@@ -15,7 +15,6 @@ class Agent
 public:
     Agent( unsigned numPlConstraints,
            unsigned numPhases,
-           const std::string &saveAgentPath,
            const std::string &trainedAgentPath = "" );
     void stepAlternativeAction( const State &stateBeforeSplit,
                                 unsigned numSplits,
@@ -28,7 +27,7 @@ public:
 
     void handleDone( const State &currentState, unsigned numSplits );
     std::unique_ptr<Action> act( const State &state, double eps = 0.1 );
-    void saveNetworks() const;
+    void saveNetworks( const std::string &path ) const;
     void loadNetworks();
     int getActionStackSize() const;
     int getReplayBufferSize() const;
@@ -44,7 +43,6 @@ private:
     unsigned _tStep;
     static constexpr double GAMMA = 0.9; // future rewards contribution to the current Q-value
     torch::Device device;
-    const std::string _saveAgentFilePath;
     const std::string _trainedAgentFilePath;
     QNetwork _qNetworkLocal, _qNetworkTarget;
     torch::optim::Adam _optimizer;
