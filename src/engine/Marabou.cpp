@@ -55,7 +55,7 @@ Marabou::~Marabou()
     }
 }
 
-void Marabou::run( int *numSplits )
+void Marabou::run( int *numSplits, String &exitCode )
 {
     struct timespec start = TimeUtils::sampleMicro();
 
@@ -65,7 +65,7 @@ void Marabou::run( int *numSplits )
     struct timespec end = TimeUtils::sampleMicro();
 
     unsigned long long totalElapsed = TimeUtils::timePassed( start, end );
-    displayResults( totalElapsed );
+    displayResults( totalElapsed, exitCode );
 
     if ( Options::get()->getBool( Options::EXPORT_ASSIGNMENT ) )
         exportAssignment();
@@ -250,7 +250,7 @@ void Marabou::solveQuery( int *numSplits )
         _engine->extractSolution( _inputQuery );
 }
 
-void Marabou::displayResults( unsigned long long microSecondsElapsed ) const
+void Marabou::displayResults( unsigned long long microSecondsElapsed, String &exitCode ) const
 {
     Engine::ExitCode result = _engine->getExitCode();
     String resultString;
@@ -299,6 +299,7 @@ void Marabou::displayResults( unsigned long long microSecondsElapsed ) const
         resultString = "NOT_DONE";
         printf( "Unexpected exit code! (this should not happen)" );
     }
+    exitCode = resultString;
 
     // Create a summary file, if requested
     String summaryFilePath = Options::get()->getString( Options::SUMMARY_FILE );

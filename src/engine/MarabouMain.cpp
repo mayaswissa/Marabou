@@ -264,13 +264,14 @@ int marabouMain( int argc, char **argv )
                     size_t eps_pos = fullCurrentExamplePath.find( "eps" ) + 3;
                     std::string ex_id = fullCurrentExamplePath.substr( ex_pos, 4 );
                     std::string label_id = fullCurrentExamplePath.substr( label_pos, 1 );
-                    std::string eps_id = fullCurrentExamplePath.substr( eps_pos, 3 );
+                    std::string eps_id = fullCurrentExamplePath.substr( eps_pos, 2 );
                     std::string currentExampleID = ex_id + label_id + eps_id;
                     int numSplits = 0;
                     String runResult;
                     options->setString( Options::PROPERTY_FILE_PATH, fullCurrentExamplePath );
                     struct timespec startCurrExample = TimeUtils::sampleMicro();
-                    Marabou().run( &numSplits );
+                    String exitCode;
+                    Marabou().run( &numSplits, exitCode );
                     struct timespec endCurrExample = TimeUtils::sampleMicro();
 
                     unsigned long long totalRunCurrExample =
@@ -280,7 +281,7 @@ int marabouMain( int argc, char **argv )
                     outFile << "\n";
                     outFile << ", Example ID: " << currentExampleID << ", epsilon : " << eps_id
                             << ", numSplits:" << numSplits << ", Time : " << totalMilli << " milli"
-                            << ", Exit code: " << runResult.ascii() << "\n";
+                            << ", Exit code: " << exitCode.ascii() << "\n";
                     outFile << std::flush;
                 }
 
