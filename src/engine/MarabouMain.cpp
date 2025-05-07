@@ -113,13 +113,10 @@ std::vector<std::string> getEpsFiles( const std::string &examplePath )
 void extractExampleID( std::string &examplePath, std::string &exampleID )
 {
     examplePath = Options::get()->getString( Options::PROPERTY_FILE_PATH ).ascii();
-    size_t ex_pos = examplePath.find( "ex_" ) + 3;
-    size_t label_pos = examplePath.find( "_label_" ) + 7;
-    size_t eps_pos = examplePath.find( "eps" ) + 3;
-    std::string ex_id = examplePath.substr( ex_pos, 4 );
-    std::string label_id = examplePath.substr( label_pos, 1 );
-    std::string eps_id = examplePath.substr( eps_pos, 2 );
-    exampleID = ex_id + label_id + eps_id;
+    size_t imgNum = examplePath.find( "-img" );
+    size_t end = examplePath.find( ".vnnlib" );
+    std::string ex_id = examplePath.substr( imgNum, end - imgNum );
+    exampleID = ex_id;
 }
 
 
@@ -238,54 +235,27 @@ int marabouMain( int argc, char **argv )
             std::string examplePath;
             std::string exampleID;
             extractExampleID( examplePath, exampleID );
-            auto txtOutputFilePath = Options::get()->getString(Options::DQN_OUTPUT_FILE_PATH);
-            currentRunFile << std::string(txtOutputFilePath.ascii()) << exampleID << ".txt";
+            auto txtOutputFilePath = Options::get()->getString( Options::DQN_OUTPUT_FILE_PATH );
+            currentRunFile << std::string( txtOutputFilePath.ascii() ) << exampleID << ".txt";
             std::ofstream outFile( currentRunFile.str(), std::ios::out | std::ios::app );
 
             if ( outFile.is_open() )
             {
-                std::string lvl1 = parentDir( examplePath );
-                std::string root = parentDir( lvl1 );
-                if ( root.empty() || !isDir( root ) )
-                {
-                    std::cerr << "Error: cannot determine root from '" << root << "'\n";
-                    return 1;
-                }
+                int numSplits = 0;
+                String runResult;
+                struct timespec startCurrExample = TimeUtils::sampleMicro();
+                String exitCode;
+                Marabou().run( &numSplits, exitCode );
+                struct timespec endCurrExample = TimeUtils::sampleMicro();
+                unsigned long long totalRunCurrExample =
+                    TimeUtils::timePassed( startCurrExample, endCurrExample );
 
-                auto files = listDir( lvl1 );
-                for ( auto &currentExample : files )
-                {
-                    if ( currentExample.size() < 4 ||
-                         currentExample.substr( currentExample.size() - 4 ) != ".txt" )
-                        continue;
-                    std::string fullCurrentExamplePath = lvl1 + "/" + currentExample;
-                    size_t ex_pos = fullCurrentExamplePath.find( "ex_" ) + 3;
-                    size_t label_pos = fullCurrentExamplePath.find( "_label_" ) + 7;
-                    size_t eps_pos = fullCurrentExamplePath.find( "eps" ) + 3;
-                    std::string ex_id = fullCurrentExamplePath.substr( ex_pos, 4 );
-                    std::string label_id = fullCurrentExamplePath.substr( label_pos, 1 );
-                    std::string eps_id = fullCurrentExamplePath.substr( eps_pos, 2 );
-                    std::string currentExampleID = ex_id + label_id + eps_id;
-                    int numSplits = 0;
-                    String runResult;
-                    options->setString( Options::PROPERTY_FILE_PATH, fullCurrentExamplePath );
-                    struct timespec startCurrExample = TimeUtils::sampleMicro();
-                    String exitCode;
-                    Marabou().run( &numSplits, exitCode );
-                    struct timespec endCurrExample = TimeUtils::sampleMicro();
-
-                    unsigned long long totalRunCurrExample =
-                        TimeUtils::timePassed( startCurrExample, endCurrExample );
-
-                    auto totalMilli = std::to_string( totalRunCurrExample / 1000 ).c_str();
-                    outFile << "\n";
-                    outFile << ", Example ID: " << currentExampleID << ", epsilon : " << eps_id
-                            << ", numSplits:" << numSplits << ", Time : " << totalMilli << " milli"
-                            << ", Exit code: " << exitCode.ascii() << "\n";
-                    outFile << std::flush;
-                }
-
-
+                auto totalMilli = std::to_string( totalRunCurrExample / 1000 ).c_str();
+                outFile << "\n";
+                outFile << ", Example ID: " << exampleID << ", numSplits:" << numSplits
+                        << ", Time : " << totalMilli << " milli"
+                        << ", Exit code: " << exitCode.ascii() << "\n";
+                outFile << std::flush;
                 outFile << "\n";
                 outFile.close();
             }
