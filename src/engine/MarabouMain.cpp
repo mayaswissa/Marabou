@@ -139,15 +139,12 @@ void generateRandomSeeds( int &numSeeds, Vector<int> &seeds )
 void trainAgentOnExample( Options *options,
                           const std::string &examplePath,
                           const std::string &exampleID,
-                          const int seed,
                           const unsigned epochs,
                           std::unique_ptr<Agent> &agent,
                           int *numSplits,
                           std::ofstream &outputTxtFile )
 {
-    const auto trainedAgentID = exampleID + std::to_string( seed );
     options->setString( Options::PROPERTY_FILE_PATH, examplePath );
-    srand( seed );
     double epsilon = GlobalConfiguration::DQN_EPSILON_START;
     agent = nullptr;
     if ( outputTxtFile.is_open() )
@@ -158,7 +155,7 @@ void trainAgentOnExample( Options *options,
         {
             int currentNumSplits = 0;
             agent = Marabou().runAgentTraining(
-                epsilon, trainedAgentID, true, std::move( agent ), &currentNumSplits );
+                epsilon, exampleID, true, std::move( agent ), &currentNumSplits );
             epsilon = std::max( GlobalConfiguration::DQN_EPSILON_END,
                                 epsilon * GlobalConfiguration::DQN_EPSILON_DECAY );
             if ( outputTxtFile.is_open() )
@@ -294,16 +291,9 @@ int marabouMain( int argc, char **argv )
 #endif
             if ( GlobalConfiguration::USE_DQN )
             {
-                struct timespec startTrainingAllSeeds = TimeUtils::sampleMicro();
-
-                // extract exampleID:
                 std::string examplePath;
                 std::string trainedExampleID;
                 extractExampleID( examplePath, trainedExampleID );
-
-                int numSeeds = 20;
-                Vector<int> seeds;
-                generateRandomSeeds( numSeeds, seeds );
 
                 unsigned epochs = 30;
                 std::ostringstream currentRunFile;
@@ -317,48 +307,34 @@ int marabouMain( int argc, char **argv )
                     std::cerr << "Failed to open " << currentRunFile.str() << "\n";
                     return 1;
                 }
-                for ( const auto seed : seeds )
-                {
-                    struct timespec startTrainingCurrSeeds = TimeUtils::sampleMicro();
 
-                    int numSplits = 0;
+                struct timespec startTraining = TimeUtils::sampleMicro();
+                int numSplits = 0;
+                outFile << "Example : " << trainedExampleID << "\n";
+                DQN_LOG( Stringf( "Start training agent on example: %s  ",
+                                  trainedExampleID.c_str())
+                             .ascii() );
+                std::unique_ptr<Agent> agent;
+                trainAgentOnExample( options,
+                                     examplePath,
+                                     trainedExampleID,
+                                     epochs,
+                                     agent,
+                                     &numSplits,
+                                     outFile );
 
-                    outFile << "Example : " << trainedExampleID << "\n";
-                    DQN_LOG( Stringf( "Start training agent on example: %s and seed: %d ",
-                                      trainedExampleID.c_str(),
-                                      seed )
-                                 .ascii() );
-                    std::unique_ptr<Agent> agent;
-                    trainAgentOnExample( options,
-                                         examplePath,
-                                         trainedExampleID,
-                                         seed,
-                                         epochs,
-                                         agent,
-                                         &numSplits,
-                                         outFile );
+                struct timespec endTraining = TimeUtils::sampleMicro();
+                unsigned long long totalTraining =
+                    TimeUtils::timePassed( startTraining, endTraining );
+                outFile << "\t Done training"
+                        << ". Time : " << totalTraining << " Splits : " << numSplits
+                        << "\n";
+                outFile << std::flush;
+                outFile << "\n";
 
-                    struct timespec endTrainingCurrSeed = TimeUtils::sampleMicro();
-                    unsigned long long totalTrainingCurrSeed =
-                        TimeUtils::timePassed( startTrainingCurrSeeds, endTrainingCurrSeed );
-                    DQN_LOG(
-                        Stringf( "Done training one seed. Total time: %llu milli, splits = %d. \n",
-                                 totalTrainingCurrSeed / 1000,
-                                 numSplits )
-                            .ascii() );
-                    outFile << "\t Done training seed : " << seed
-                            << ". Time : " << totalTrainingCurrSeed << " Splits : " << numSplits
-                            << "\n";
-                    outFile << std::flush;
-                    outFile << "\n";
-                }
                 outFile.close();
-                struct timespec endTrainingAllSeeds = TimeUtils::sampleMicro();
-                unsigned long long totalTrainingAllSeeds =
-                    TimeUtils::timePassed( startTrainingAllSeeds, endTrainingAllSeeds );
-                DQN_LOG( Stringf( "Done training all %d seeds. Time : %llu milli. \n",
-                                  numSeeds,
-                                  totalTrainingAllSeeds / 1000 )
+                DQN_LOG( Stringf( "Done training. Time : %llu milli. \n",
+                                  totalTraining / 1000 )
                              .ascii() );
                 return 0;
             }
