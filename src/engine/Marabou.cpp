@@ -66,7 +66,8 @@ void Marabou::run()
     struct timespec end = TimeUtils::sampleMicro();
 
     unsigned long long totalElapsed = TimeUtils::timePassed( start, end );
-    displayResults( totalElapsed );
+    String exitCode = "";
+    displayResults( totalElapsed, exitCode );
 
     if ( Options::get()->getBool( Options::EXPORT_ASSIGNMENT ) )
         exportAssignment();
@@ -74,26 +75,21 @@ void Marabou::run()
     std::cout << "end run time: " << TimeUtils::now().ascii() << std::endl;
 }
 
-std::unique_ptr<Agent> Marabou::runAgentTraining( double epsilon,
-                                                  const std::string &exampleID,
-                                                  const bool training,
-                                                  std::unique_ptr<Agent> agent,
-                                                  int *numSplits )
+void Marabou::runTrainedAgentOnExample( int *numSplits, String &exitCode )
 {
     struct timespec start = TimeUtils::sampleMicro();
 
     prepareInputQuery();
 
-    agent = solveQueryWithAgent( epsilon, exampleID, training, std::move( agent ), numSplits);
+    solveQueryWithAgent( numSplits );
 
     struct timespec end = TimeUtils::sampleMicro();
 
     unsigned long long totalElapsed = TimeUtils::timePassed( start, end );
-    displayResults( totalElapsed );
+    displayResults( totalElapsed, exitCode );
 
     if ( Options::get()->getBool( Options::EXPORT_ASSIGNMENT ) )
         exportAssignment();
-    return agent;
 }
 
 void Marabou::prepareInputQuery()
@@ -236,11 +232,7 @@ void Marabou::exportAssignment() const
     exportFile->close();
 }
 
-std::unique_ptr<Agent> Marabou::solveQueryWithAgent( double epsilon,
-                                                     const std::string &exampleID,
-                                                     bool training,
-                                                     std::unique_ptr<Agent> agent,
-                                                     int *numSplits )
+void Marabou::solveQueryWithAgent( int *numSplits )
 {
     enum {
         MICROSECONDS_IN_SECOND = 1000000
@@ -249,16 +241,10 @@ std::unique_ptr<Agent> Marabou::solveQueryWithAgent( double epsilon,
     if ( _engine->processInputQuery( _inputQuery ) )
     {
         const auto path = Options::get()->getString( Options::DQN_AGENT_NETWORKS_PATH );
-        std::string filePath =  std::string(path.ascii())  + "/trainedAgent_" + exampleID;
+        std::string filePath =  std::string(path.ascii());
         struct timespec start = TimeUtils::sampleMicro();
-        unsigned trainTimeoutInSeconds = Options::get()->getInt( Options::TRAIN_DQN_TIMEOUT );
         unsigned timeoutInSeconds = Options::get()->getInt( Options::TIMEOUT );
-        if ( training )
-            agent = _engine->trainDQNAgent(
-                epsilon, std::move( agent ), trainTimeoutInSeconds, numSplits );
-
-        else
-            _engine->solve( timeoutInSeconds, filePath, numSplits );
+        _engine->solve( timeoutInSeconds, filePath, numSplits );
 
         if ( _engine->getExitCode() == Engine::UNKNOWN )
         {
@@ -281,7 +267,6 @@ std::unique_ptr<Agent> Marabou::solveQueryWithAgent( double epsilon,
         if ( _engine->getExitCode() == Engine::SAT )
             _engine->extractSolution( _inputQuery );
     }
-    return agent;
 }
 
 
@@ -322,7 +307,7 @@ void Marabou::solveQuery()
         _engine->extractSolution( _inputQuery );
 }
 
-void Marabou::displayResults( unsigned long long microSecondsElapsed ) const
+void Marabou::displayResults( unsigned long long microSecondsElapsed, String &exitCode ) const
 {
     Engine::ExitCode result = _engine->getExitCode();
     String resultString;
@@ -399,6 +384,7 @@ void Marabou::displayResults( unsigned long long microSecondsElapsed ) const
         resultString = "NOT_DONE";
         printf( "Unexpected exit code! (this should not happen)" );
     }
+    exitCode = resultString;
 
     // Create a summary file, if requested
     String summaryFilePath = Options::get()->getString( Options::SUMMARY_FILE );

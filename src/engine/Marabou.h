@@ -34,11 +34,7 @@ public:
     void run();
     void prepareInputQuery();
 
-    std::unique_ptr<Agent> runAgentTraining( double epsilon,
-                                             const std::string &exampleID,
-                                             bool training = true,
-                                             std::unique_ptr<Agent> agent = nullptr,
-                                             int *numSplits = nullptr );
+    void runTrainedAgentOnExample( int *numSplits = nullptr, String &exitCode = {} );
 
 private:
     InputQuery _inputQuery;
@@ -54,16 +50,12 @@ private:
     */
     void solveQuery();
 
-    std::unique_ptr<Agent> solveQueryWithAgent( double epsilon,
-                                                const std::string &exampleID,
-                                                bool training = true,
-                                                std::unique_ptr<Agent> agent = nullptr,
-                                                int *numSplits = nullptr );
+    void solveQueryWithAgent( int *numSplits = nullptr );
 
     /*
       Display the results
     */
-    void displayResults( unsigned long long microSecondsElapsed ) const;
+    void displayResults( unsigned long long microSecondsElapsed, String &exitCode ) const;
 
     /*
       Export assignment as per Options
