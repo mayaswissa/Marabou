@@ -115,7 +115,7 @@ void extractExampleID( std::string &examplePath, std::string &exampleID )
     examplePath = Options::get()->getString( Options::PROPERTY_FILE_PATH ).ascii();
     size_t imgNum = examplePath.find( "-img" );
     size_t end = examplePath.find( ".vnnlib" );
-    std::string ex_id = examplePath.substr( imgNum, end - imgNum );
+    std::string ex_id = examplePath.substr( imgNum + 1, end - imgNum - 1 );
     exampleID = ex_id;
 }
 
@@ -158,6 +158,14 @@ std::vector<std::string> listDir( const std::string &dirPath )
     closedir( dir );
     std::sort( names.begin(), names.end() );
     return names;
+}
+void extractNetworkName(std::string & network )
+{
+    String networkFilePath = Options::get()->getString( Options::INPUT_FILE_PATH );
+    std::string networkPath = static_cast<std::string>(networkFilePath.ascii());
+    size_t start = networkPath.find_last_of( '/' );
+    size_t end = networkFilePath.find( ".onnx" );
+    network = networkPath.substr( start + 1, end - start - 1 );
 }
 int marabouMain( int argc, char **argv )
 {
@@ -236,7 +244,9 @@ int marabouMain( int argc, char **argv )
             std::string exampleID;
             extractExampleID( examplePath, exampleID );
             auto txtOutputFilePath = Options::get()->getString( Options::DQN_OUTPUT_FILE_PATH );
-            currentRunFile << std::string( txtOutputFilePath.ascii() ) << ".txt";
+            std::string network;
+            extractNetworkName(network);
+            currentRunFile << std::string( txtOutputFilePath.ascii() ) << network << ".txt";
             std::ofstream outFile( currentRunFile.str(), std::ios::out | std::ios::app );
 
             if ( outFile.is_open() )
