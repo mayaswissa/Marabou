@@ -162,15 +162,15 @@ void trainAgentOnExample( Options *options,
                 outputTxtFile << currentNumSplits << ", ";
             *numSplits += currentNumSplits;
             outputTxtFile.flush();
-            agent->schedulersStep();
         }
 
         if ( agent != nullptr &&
-             *numSplits < static_cast<int>( GlobalConfiguration::DQN_BATCH_SIZE ) )
+             *numSplits > static_cast<int>( GlobalConfiguration::DQN_BATCH_SIZE ) * 4 )
         {
             const auto path = Options::get()->getString( Options::DQN_AGENT_NETWORKS_PATH );
-            std::string filePath = std::string( path.ascii() ) + "/trainedAgent_" + exampleID;
+            std::string filePath = std::string( path.ascii() ) + "/" + exampleID;
             agent->saveNetworks( filePath );
+            outputTxtFile << "agent network has been saved. Path: " << filePath;
         }
 
         outputTxtFile << "\n";
