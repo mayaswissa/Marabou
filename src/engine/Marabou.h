@@ -34,7 +34,7 @@ public:
     void run();
     void prepareInputQuery();
 
-    void runTrainedAgentOnExample( int *numSplits = nullptr, String &exitCode = {} );
+    void runTrainedAgentOnExample( int *numSplits, String &exitCode );
 
 private:
     InputQuery _inputQuery;

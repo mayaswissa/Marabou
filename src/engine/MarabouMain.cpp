@@ -112,27 +112,30 @@ std::vector<std::string> getEpsFiles( const std::string &examplePath )
 
     return files;
 }
-
+void extractTrainedAgentID(std::string &trainedAgentPath, std::string &trainedAgentID)
+{
+    trainedAgentPath = Options::get()->getString( Options::DQN_AGENT_NETWORKS_PATH ).ascii();
+    size_t start = trainedAgentPath.find_last_of( '/' );
+    size_t end = trainedAgentPath.find_last_of( '_' );
+    auto t = trainedAgentPath.substr( start + 1, end - (start + 1) );
+    trainedAgentID = t;
+}
 void extractExampleID( std::string &examplePath, std::string &exampleID )
 {
     examplePath = Options::get()->getString( Options::PROPERTY_FILE_PATH ).ascii();
-    size_t ex_pos = examplePath.find( "ex_" ) + 3;
-    size_t label_pos = examplePath.find( "_label_" ) + 7;
-    std::string ex_id = examplePath.substr( ex_pos, 4 );
-    std::string label_id = examplePath.substr( label_pos, 1 );
-    exampleID = ex_id + label_id;
+    size_t imgNum = examplePath.find( "-img" );
+    size_t end = examplePath.find( ".vnnlib" );
+    std::string ex_id = examplePath.substr( imgNum + 1, end - imgNum - 1 );
+    exampleID = ex_id;
 }
-void generateRandomSeeds( int &numSeeds, Vector<int> &seeds )
-{
-    auto baseSeed = 0;
-    numSeeds = 5;
-    srand( baseSeed );
 
-    for ( int i = 0; i < numSeeds; i++ )
-    {
-        int new_seed = ( rand() % 1000 ) + 1;
-        seeds.append( new_seed );
-    }
+void extractNetworkName(std::string & network )
+{
+    String networkFilePath = Options::get()->getString( Options::INPUT_FILE_PATH );
+    std::string networkPath = static_cast<std::string>(networkFilePath.ascii());
+    size_t start = networkPath.find_last_of( '/' );
+    size_t end = networkFilePath.find( ".onnx" );
+    network = networkPath.substr( start + 1, end - start - 1 );
 }
 
 std::string parentDir( const std::string &path )
@@ -249,61 +252,44 @@ int marabouMain( int argc, char **argv )
 #endif
             if ( GlobalConfiguration::USE_DQN )
             {
+                std::ostringstream currentRunFile;
                 std::string examplePath;
                 std::string exampleID;
                 extractExampleID( examplePath, exampleID );
-                std::ostringstream currentRunFile;
-
                 auto txtOutputFilePath = Options::get()->getString( Options::DQN_OUTPUT_FILE_PATH );
-                currentRunFile << std::string( txtOutputFilePath.ascii() ) << "/" << exampleID
-                               << ".txt";
+                std::string network;
+                std::string trainedAgentPath;
+                std::string trainedAgentID;
+                extractTrainedAgentID(trainedAgentPath, trainedAgentID);
+                extractNetworkName(network);
+                currentRunFile << std::string( txtOutputFilePath.ascii() ) << "network_" << network << "_trainedOn_" << trainedAgentID << ".txt";
                 std::ofstream outFile( currentRunFile.str(), std::ios::out | std::ios::app );
                 if ( !outFile )
                 {
                     std::cerr << "Failed to open " << currentRunFile.str() << "\n";
                     return 1;
                 }
-                std::string root = parentDir( examplePath );
-                if ( root.empty() || !isDir( root ) )
-                {
-                    std::cerr << "Error: cannot determine root from '" << root << "'\n";
-                    return 1;
-                }
-                auto examples = listDir( root );
-                for ( auto &currentExample : examples )
-                {
-                    if ( currentExample.size() < 4 ||
-                         currentExample.substr( currentExample.size() - 4 ) != ".txt" )
-                        continue;
-                    std::string fullCurrentExamplePath = root + "/" + currentExample;
-                    size_t ex_pos = fullCurrentExamplePath.find( "ex_" ) + 3;
-                    size_t label_pos = fullCurrentExamplePath.find( "_label_" ) + 7;
-                    size_t eps_pos = fullCurrentExamplePath.find( "eps" ) + 3;
-                    std::string ex_id = fullCurrentExamplePath.substr( ex_pos, 4 );
-                    std::string label_id = fullCurrentExamplePath.substr( label_pos, 1 );
-                    std::string eps_id = fullCurrentExamplePath.substr( eps_pos, 2 );
-                    std::string currentExampleID = ex_id + label_id + eps_id;
-                    options->setString( Options::PROPERTY_FILE_PATH, fullCurrentExamplePath );
-                    DQN_LOG( Stringf( "run Example ID: %s\n", currentExampleID.c_str() ).ascii() );
-                    struct timespec startRunningCurrentExample = TimeUtils::sampleMicro();
-                    int numSplits = 0;
-                    String exitCode;
-                    outFile << "Example : " << exampleID << "\n";
-                    DQN_LOG( Stringf( "Start runing trained agent with example: %s  ", currentExampleID.c_str() )
-                                 .ascii() );
-                    Marabou().runTrainedAgentOnExample( &numSplits, exitCode );
-                    struct timespec endtRunningCurrentExample = TimeUtils::sampleMicro();
-                    unsigned long long totalTraining = TimeUtils::timePassed(
-                        startRunningCurrentExample, endtRunningCurrentExample );
-                    auto totalMilli = std::to_string( totalTraining / 1000 ).c_str();
-                    outFile <<"Example ID: " << currentExampleID << ", Epsilon: " << eps_id << ", Splits : " << numSplits
-                            << ", Time : " << totalMilli << " ms "
-                            << ", Exit code : " << exitCode.ascii() << "\n";
-                    outFile << std::flush;
 
-                    DQN_LOG( Stringf( "Done solving. Time : %llu milli. \n", totalTraining / 1000 )
-                                 .ascii() );
-                }
+                DQN_LOG( Stringf( "run Example ID: %s\n", exampleID.c_str() ).ascii() );
+                struct timespec startRunningCurrentExample = TimeUtils::sampleMicro();
+                int numSplits = 0;
+                String exitCode;
+                outFile << "Example : " << exampleID << "\n";
+                DQN_LOG( Stringf( "Start runing trained agent with example: %s  ", exampleID.c_str() )
+                             .ascii() );
+                Marabou().runTrainedAgentOnExample( &numSplits, exitCode );
+                struct timespec endtRunningCurrentExample = TimeUtils::sampleMicro();
+                unsigned long long totalTraining = TimeUtils::timePassed(
+                    startRunningCurrentExample, endtRunningCurrentExample );
+                auto totalMilli = std::to_string( totalTraining / 1000 ).c_str();
+                outFile <<"Example ID: " << exampleID << ", Splits : " << numSplits
+                        << ", Time : " << totalMilli << " ms "
+                        << ", Exit code : " << exitCode.ascii() << "\n";
+                outFile << std::flush;
+
+                DQN_LOG( Stringf( "Done solving. Time : %llu milli. \n", totalTraining / 1000 )
+                             .ascii() );
+
                 outFile.close();
                 return 0;
             }

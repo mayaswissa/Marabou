@@ -141,7 +141,7 @@ void OptionParser::initialize()
             boost::program_options::value<std::string>( &( *_stringOptions )[Options::DQN_OUTPUT_FILE_PATH] )
                 ->default_value( ( *_stringOptions )[Options::DQN_OUTPUT_FILE_PATH] ),
                 "DQN results file path." )(
-                "saveAgentPath",
+                "save-agent-path",
                 boost::program_options::value<std::string>( &( *_stringOptions )[Options::DQN_AGENT_NETWORKS_PATH] )
                     ->default_value( ( *_stringOptions )[Options::DQN_AGENT_NETWORKS_PATH] ),
                 "Path to load/ save DQN agent's networks." )
