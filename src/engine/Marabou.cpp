@@ -249,7 +249,7 @@ std::unique_ptr<Agent> Marabou::solveQueryWithAgent( double epsilon,
     if ( _engine->processInputQuery( _inputQuery ) )
     {
         const auto path = Options::get()->getString( Options::DQN_AGENT_NETWORKS_PATH );
-        std::string filePath =  std::string(path.ascii())  + "/trainedAgent_" + exampleID;
+        std::string filePath =  std::string(path.ascii())  + "/" + exampleID;
         struct timespec start = TimeUtils::sampleMicro();
         unsigned trainTimeoutInSeconds = Options::get()->getInt( Options::TRAIN_DQN_TIMEOUT );
         unsigned timeoutInSeconds = Options::get()->getInt( Options::TIMEOUT );
