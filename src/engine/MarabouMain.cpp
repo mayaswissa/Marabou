@@ -113,6 +113,24 @@ std::vector<std::string> getEpsFiles( const std::string &examplePath )
     return files;
 }
 
+void extractNetworkName(std::string & network )
+{
+    String networkFilePath = Options::get()->getString( Options::INPUT_FILE_PATH );
+    std::string networkPath = static_cast<std::string>(networkFilePath.ascii());
+    size_t start = networkPath.find_last_of( '/' );
+    size_t end = networkFilePath.find( ".onnx" );
+    network = networkPath.substr( start + 1, end - start - 1 );
+}
+
+void extractTrainedAgentID(std::string &trainedAgentPath, std::string &trainedAgentID)
+{
+    trainedAgentPath = Options::get()->getString( Options::DQN_AGENT_NETWORKS_PATH ).ascii();
+    size_t start = trainedAgentPath.find_last_of( '/' );
+    size_t end = trainedAgentPath.find_last_of( '_' );
+    auto t = trainedAgentPath.substr( start + 1, end - (start + 1) );
+    trainedAgentID = t;
+}
+
 void extractExampleID( std::string &examplePath, std::string &exampleID )
 {
     examplePath = Options::get()->getString( Options::PROPERTY_FILE_PATH ).ascii();
@@ -122,18 +140,7 @@ void extractExampleID( std::string &examplePath, std::string &exampleID )
     std::string label_id = examplePath.substr( label_pos, 1 );
     exampleID = ex_id + label_id;
 }
-void generateRandomSeeds( int &numSeeds, Vector<int> &seeds )
-{
-    auto baseSeed = 0;
-    numSeeds = 5;
-    srand( baseSeed );
 
-    for ( int i = 0; i < numSeeds; i++ )
-    {
-        int new_seed = ( rand() % 1000 ) + 1;
-        seeds.append( new_seed );
-    }
-}
 
 std::string parentDir( const std::string &path )
 {
@@ -249,14 +256,17 @@ int marabouMain( int argc, char **argv )
 #endif
             if ( GlobalConfiguration::USE_DQN )
             {
+                std::ostringstream currentRunFile;
                 std::string examplePath;
                 std::string exampleID;
                 extractExampleID( examplePath, exampleID );
-                std::ostringstream currentRunFile;
-
                 auto txtOutputFilePath = Options::get()->getString( Options::DQN_OUTPUT_FILE_PATH );
-                currentRunFile << std::string( txtOutputFilePath.ascii() ) << "/" << exampleID
-                               << ".txt";
+                std::string network;
+                std::string trainedAgentPath;
+                std::string trainedAgentID;
+                extractTrainedAgentID(trainedAgentPath, trainedAgentID);
+                extractNetworkName(network);
+                currentRunFile << std::string( txtOutputFilePath.ascii() ) << "network_" << network << "_trainedOn_" << trainedAgentID << ".txt";
                 std::ofstream outFile( currentRunFile.str(), std::ios::out | std::ios::app );
                 if ( !outFile )
                 {
