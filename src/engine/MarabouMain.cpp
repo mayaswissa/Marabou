@@ -261,6 +261,9 @@ int marabouMain( int argc, char **argv )
                 std::string exampleID;
                 extractExampleID( examplePath, exampleID );
                 auto txtOutputFilePath = Options::get()->getString( Options::DQN_OUTPUT_FILE_PATH );
+                std::string path = Options::get()->getString( Options::DQN_AGENT_NETWORKS_PATH ).ascii();
+                auto fullTrainedPath = path + "/" + exampleID + "02";
+                options->setString(Options::DQN_AGENT_NETWORKS_PATH, fullTrainedPath);
                 std::string network;
                 std::string trainedAgentPath;
                 std::string trainedAgentID;
