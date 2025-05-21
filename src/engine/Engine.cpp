@@ -596,7 +596,7 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
     updateToCurrentDQNState( *_currentDQNState );
     _previousState = std::make_unique<State>( numPlConstraints );
     updateToCurrentDQNState( *_previousState );
-    const unsigned maxSplitsByAgent = 1000;
+    const unsigned maxSplitsByAgent = 100;
     while ( _numSplits < maxSplitsByAgent )
     {
         struct timespec mainLoopEnd = TimeUtils::sampleMicro();

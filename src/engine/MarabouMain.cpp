@@ -116,17 +116,37 @@ std::vector<std::string> getEpsFiles( const std::string &examplePath )
 void extractExampleID( std::string &examplePath, std::string &exampleID )
 {
     examplePath = Options::get()->getString( Options::PROPERTY_FILE_PATH ).ascii();
-    size_t imgNum = examplePath.find( "-img" );
-    size_t end = examplePath.find( ".vnnlib" );
-    std::string ex_id = examplePath.substr( imgNum + 1, end - imgNum - 1 );
-    exampleID = ex_id;
+    size_t img_pos = examplePath.find("image");
+    size_t tgt_pos = examplePath.find("_target");
+    size_t eps_pos = examplePath.find("_epsilon");
+    size_t txt_pos = examplePath.find(".txt");
+
+    if (img_pos == std::string::npos || tgt_pos == std::string::npos ||
+        eps_pos == std::string::npos )
+    {
+        exampleID = "";
+        return;
+    }
+
+    size_t img_num_start = img_pos + 5; // after "image"
+    size_t img_num_end = tgt_pos;
+    std::string image = examplePath.substr(img_num_start, img_num_end - img_num_start);
+
+    size_t tgt_num_start = tgt_pos + 7; // after "_target"
+    size_t tgt_num_end = eps_pos;
+    std::string target = examplePath.substr(tgt_num_start, tgt_num_end - tgt_num_start);
+
+    size_t eps_num_start = eps_pos + 10; // after "_epsilon"
+    size_t eps_num_end = txt_pos;
+    std::string epsilon = examplePath.substr(eps_num_start, eps_num_end - eps_num_start);
+    exampleID = image + target + epsilon;
 }
 void extractNetworkName(std::string & network )
 {
     String networkFilePath = Options::get()->getString( Options::INPUT_FILE_PATH );
     std::string networkPath = static_cast<std::string>(networkFilePath.ascii());
     size_t start = networkPath.find_last_of( '/' );
-    size_t end = networkFilePath.find( ".onnx" );
+    size_t end = networkFilePath.find( ".nnet" );
     network = networkPath.substr( start + 1, end - start - 1 );
 }
 
@@ -159,7 +179,7 @@ void trainAgentOnExample( Options *options,
         }
 
         if ( agent != nullptr &&
-             *numSplits > static_cast<int>( GlobalConfiguration::DQN_BATCH_SIZE ) * 4 )
+             *numSplits > static_cast<int>( GlobalConfiguration::DQN_BATCH_SIZE ) * 5 )
         {
             const auto path = Options::get()->getString( Options::DQN_AGENT_NETWORKS_PATH );
             std::string filePath = std::string( path.ascii() ) + "/" + exampleID;
@@ -292,7 +312,7 @@ int marabouMain( int argc, char **argv )
                 auto txtOutputFilePath = Options::get()->getString( Options::DQN_OUTPUT_FILE_PATH );
                 std::string network;
                 extractNetworkName(network);
-                currentRunFile << std::string( txtOutputFilePath.ascii() ) << network << ".txt";
+                currentRunFile << std::string( txtOutputFilePath.ascii() ) << network << "_" << exampleID << ".txt";
                 std::ofstream outFile( currentRunFile.str(), std::ios::out | std::ios::app );
                 if ( !outFile )
                 {
