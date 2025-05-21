@@ -316,7 +316,7 @@ int marabouMain( int argc, char **argv )
                 std::ofstream outFile( currentRunFile.str(), std::ios::out | std::ios::app );
                 if ( !outFile )
                 {
-                    std::cerr << "Failed to open " << currentRunFile.str() << "\n";
+                    std::cerr << "Failed to open" << currentRunFile.str() << "\n";
                     return 1;
                 }
                 unsigned epochs = 30;
