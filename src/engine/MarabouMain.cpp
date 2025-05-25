@@ -264,7 +264,8 @@ int marabouMain( int argc, char **argv )
 
                 std::string agentPath =
                     Options::get()->getString( Options::DQN_AGENT_NETWORKS_PATH ).ascii();
-                if ( !std::ifstream( agentPath ) )
+                auto fullPath = agentPath + "_local.pth";
+                if ( !std::ifstream( fullPath ) )
                 {
                     std::cout << "trained agent path does not exist.\n";
                     return 0;
