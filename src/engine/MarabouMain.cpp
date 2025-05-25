@@ -113,21 +113,21 @@ std::vector<std::string> getEpsFiles( const std::string &examplePath )
     return files;
 }
 
-void extractNetworkName(std::string & network )
+void extractNetworkName( std::string &network )
 {
     String networkFilePath = Options::get()->getString( Options::INPUT_FILE_PATH );
-    std::string networkPath = static_cast<std::string>(networkFilePath.ascii());
+    std::string networkPath = static_cast<std::string>( networkFilePath.ascii() );
     size_t start = networkPath.find_last_of( '/' );
     size_t end = networkFilePath.find( ".onnx" );
     network = networkPath.substr( start + 1, end - start - 1 );
 }
 
-void extractTrainedAgentID(std::string &trainedAgentPath, std::string &trainedAgentID)
+void extractTrainedAgentID( std::string &trainedAgentPath, std::string &trainedAgentID )
 {
     trainedAgentPath = Options::get()->getString( Options::DQN_AGENT_NETWORKS_PATH ).ascii();
     size_t start = trainedAgentPath.find_last_of( '/' );
     size_t end = trainedAgentPath.find_last_of( '_' );
-    auto t = trainedAgentPath.substr( start + 1, end - (start + 1) );
+    auto t = trainedAgentPath.substr( start + 1, end - ( start + 1 ) );
     trainedAgentID = t;
 }
 
@@ -261,15 +261,22 @@ int marabouMain( int argc, char **argv )
                 std::string exampleID;
                 extractExampleID( examplePath, exampleID );
                 auto txtOutputFilePath = Options::get()->getString( Options::DQN_OUTPUT_FILE_PATH );
-                std::string path = Options::get()->getString( Options::DQN_AGENT_NETWORKS_PATH ).ascii();
-                auto fullTrainedPath = path + "/" + exampleID + "02";
-                options->setString(Options::DQN_AGENT_NETWORKS_PATH, fullTrainedPath);
+
+                std::string agentPath =
+                    Options::get()->getString( Options::DQN_AGENT_NETWORKS_PATH ).ascii();
+                if ( !std::ifstream( agentPath ) )
+                {
+                    std::cout << "trained agent path does not exist.\n";
+                    return 0;
+                }
+
                 std::string network;
                 std::string trainedAgentPath;
                 std::string trainedAgentID;
-                extractTrainedAgentID(trainedAgentPath, trainedAgentID);
-                extractNetworkName(network);
-                currentRunFile << std::string( txtOutputFilePath.ascii() ) << "network_" << network << "_trainedOn_" << trainedAgentID << ".txt";
+                extractTrainedAgentID( trainedAgentPath, trainedAgentID );
+                extractNetworkName( network );
+                currentRunFile << std::string( txtOutputFilePath.ascii() ) << "network_" << network
+                               << "_trainedOn_" << trainedAgentID << ".txt";
                 std::ofstream outFile( currentRunFile.str(), std::ios::out | std::ios::app );
                 if ( !outFile )
                 {
@@ -302,15 +309,16 @@ int marabouMain( int argc, char **argv )
                     int numSplits = 0;
                     String exitCode;
                     outFile << "Example : " << exampleID << "\n";
-                    DQN_LOG( Stringf( "Start runing trained agent with example: %s  ", currentExampleID.c_str() )
+                    DQN_LOG( Stringf( "Start runing trained agent with example: %s  ",
+                                      currentExampleID.c_str() )
                                  .ascii() );
                     Marabou().runTrainedAgentOnExample( &numSplits, exitCode );
                     struct timespec endtRunningCurrentExample = TimeUtils::sampleMicro();
                     unsigned long long totalTraining = TimeUtils::timePassed(
                         startRunningCurrentExample, endtRunningCurrentExample );
                     auto totalMilli = std::to_string( totalTraining / 1000 ).c_str();
-                    outFile <<"Example ID: " << currentExampleID << ", Epsilon: " << eps_id << ", Splits : " << numSplits
-                            << ", Time : " << totalMilli << " ms "
+                    outFile << "Example ID: " << currentExampleID << ", Epsilon: " << eps_id
+                            << ", Splits : " << numSplits << ", Time : " << totalMilli << " ms "
                             << ", Exit code : " << exitCode.ascii() << "\n";
                     outFile << std::flush;
 
