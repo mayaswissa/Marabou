@@ -264,8 +264,7 @@ int marabouMain( int argc, char **argv )
 
                 std::string agentPath =
                     Options::get()->getString( Options::DQN_AGENT_NETWORKS_PATH ).ascii();
-                auto fullPath = agentPath + "_local.pth";
-                if ( !std::ifstream( fullPath ) )
+                if ( !std::ifstream( agentPath + "_local.pth" ) )
                 {
                     std::cout << "trained agent path does not exist.\n";
                     return 0;
@@ -276,8 +275,7 @@ int marabouMain( int argc, char **argv )
                 std::string trainedAgentID;
                 extractTrainedAgentID( trainedAgentPath, trainedAgentID );
                 extractNetworkName( network );
-                currentRunFile << std::string( txtOutputFilePath.ascii() ) << "network_" << network
-                               << "_trainedOn_" << trainedAgentID << ".txt";
+                currentRunFile << std::string( txtOutputFilePath.ascii() ) << "Ex_" << exampleID << "_trainedOn_" << trainedAgentID << ".txt";
                 std::ofstream outFile( currentRunFile.str(), std::ios::out | std::ios::app );
                 if ( !outFile )
                 {
