@@ -271,7 +271,7 @@ int marabouMain( int argc, char **argv )
                 std::string trainedAgentID;
                 extractTrainedAgentID( trainedAgentPath, trainedAgentID );
                 extractNetworkName( network );
-                currentRunFile << "Ex_" << exampleID << "_trainedOn_" << trainedAgentID << ".txt";
+                currentRunFile << std::string( txtOutputFilePath.ascii() ) << "Ex_" << exampleID << "_trainedOn_" << trainedAgentID << ".txt";
                 std::ofstream outFile( currentRunFile.str(), std::ios::out | std::ios::app );
                 if ( !outFile )
                 {
