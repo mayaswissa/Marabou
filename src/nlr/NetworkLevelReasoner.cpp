@@ -19,7 +19,6 @@
 #include "Debug.h"
 #include "FloatUtils.h"
 #include "InfeasibleQueryException.h"
-#include "InputQuery.h"
 #include "IterativePropagator.h"
 #include "LPFormulator.h"
 #include "MILPFormulator.h"
@@ -29,6 +28,7 @@
 #include "MaxConstraint.h"
 #include "NLRError.h"
 #include "Options.h"
+#include "Query.h"
 #include "ReluConstraint.h"
 #include "SignConstraint.h"
 
@@ -309,7 +309,7 @@ void NetworkLevelReasoner::updateVariableIndices( const Map<unsigned, unsigned> 
         layer.second->updateVariableIndices( oldIndexToNewIndex, mergedVariables );
 }
 
-void NetworkLevelReasoner::obtainCurrentBounds( const InputQuery &inputQuery )
+void NetworkLevelReasoner::obtainCurrentBounds( const Query &inputQuery )
 {
     for ( const auto &layer : _layerIndexToLayer )
         layer.second->obtainCurrentBounds( inputQuery );
@@ -379,17 +379,15 @@ void NetworkLevelReasoner::removeConstraintFromTopologicalOrder(
         _constraintsInTopologicalOrder.erase( constraint );
 }
 
-void NetworkLevelReasoner::encodeAffineLayers( InputQuery &inputQuery )
+void NetworkLevelReasoner::encodeAffineLayers( Query &inputQuery )
 {
     for ( const auto &pair : _layerIndexToLayer )
         if ( pair.second->getLayerType() == Layer::WEIGHTED_SUM )
-            generateInputQueryForWeightedSumLayer( inputQuery, pair.second );
+            generateQueryForWeightedSumLayer( inputQuery, pair.second );
 }
 
-InputQuery NetworkLevelReasoner::generateInputQuery()
+void NetworkLevelReasoner::generateQuery( Query &result )
 {
-    InputQuery result;
-
     // Number of variables
     unsigned numberOfVariables = 0;
     for ( const auto &it : _layerIndexToLayer )
@@ -403,7 +401,7 @@ InputQuery NetworkLevelReasoner::generateInputQuery()
 
     // Handle the various layers
     for ( const auto &it : _layerIndexToLayer )
-        generateInputQueryForLayer( result, *it.second );
+        generateQueryForLayer( result, *it.second );
 
     // Mark the input variables
     const Layer *inputLayer = _layerIndexToLayer[0];
@@ -426,8 +424,6 @@ InputQuery NetworkLevelReasoner::generateInputQuery()
             result.setUpperBound( variable, layer->getUb( i ) );
         }
     }
-
-    return result;
 }
 
 void NetworkLevelReasoner::reindexNeurons()
@@ -443,7 +439,7 @@ void NetworkLevelReasoner::reindexNeurons()
     }
 }
 
-void NetworkLevelReasoner::generateInputQueryForLayer( InputQuery &inputQuery, const Layer &layer )
+void NetworkLevelReasoner::generateQueryForLayer( Query &inputQuery, const Layer &layer )
 {
     switch ( layer.getLayerType() )
     {
@@ -451,27 +447,27 @@ void NetworkLevelReasoner::generateInputQueryForLayer( InputQuery &inputQuery, c
         break;
 
     case Layer::WEIGHTED_SUM:
-        generateInputQueryForWeightedSumLayer( inputQuery, layer );
+        generateQueryForWeightedSumLayer( inputQuery, layer );
         break;
 
     case Layer::RELU:
-        generateInputQueryForReluLayer( inputQuery, layer );
+        generateQueryForReluLayer( inputQuery, layer );
         break;
 
     case Layer::SIGMOID:
-        generateInputQueryForSigmoidLayer( inputQuery, layer );
+        generateQueryForSigmoidLayer( inputQuery, layer );
         break;
 
     case Layer::SIGN:
-        generateInputQueryForSignLayer( inputQuery, layer );
+        generateQueryForSignLayer( inputQuery, layer );
         break;
 
     case Layer::ABSOLUTE_VALUE:
-        generateInputQueryForAbsoluteValueLayer( inputQuery, layer );
+        generateQueryForAbsoluteValueLayer( inputQuery, layer );
         break;
 
     case Layer::MAX:
-        generateInputQueryForMaxLayer( inputQuery, layer );
+        generateQueryForMaxLayer( inputQuery, layer );
         break;
 
     default:
@@ -481,8 +477,7 @@ void NetworkLevelReasoner::generateInputQueryForLayer( InputQuery &inputQuery, c
     }
 }
 
-void NetworkLevelReasoner::generateInputQueryForReluLayer( InputQuery &inputQuery,
-                                                           const Layer &layer )
+void NetworkLevelReasoner::generateQueryForReluLayer( Query &inputQuery, const Layer &layer )
 {
     for ( unsigned i = 0; i < layer.getSize(); ++i )
     {
@@ -494,8 +489,7 @@ void NetworkLevelReasoner::generateInputQueryForReluLayer( InputQuery &inputQuer
     }
 }
 
-void NetworkLevelReasoner::generateInputQueryForSigmoidLayer( InputQuery &inputQuery,
-                                                              const Layer &layer )
+void NetworkLevelReasoner::generateQueryForSigmoidLayer( Query &inputQuery, const Layer &layer )
 {
     for ( unsigned i = 0; i < layer.getSize(); ++i )
     {
@@ -507,8 +501,7 @@ void NetworkLevelReasoner::generateInputQueryForSigmoidLayer( InputQuery &inputQ
     }
 }
 
-void NetworkLevelReasoner::generateInputQueryForSignLayer( InputQuery &inputQuery,
-                                                           const Layer &layer )
+void NetworkLevelReasoner::generateQueryForSignLayer( Query &inputQuery, const Layer &layer )
 {
     for ( unsigned i = 0; i < layer.getSize(); ++i )
     {
@@ -520,8 +513,8 @@ void NetworkLevelReasoner::generateInputQueryForSignLayer( InputQuery &inputQuer
     }
 }
 
-void NetworkLevelReasoner::generateInputQueryForAbsoluteValueLayer( InputQuery &inputQuery,
-                                                                    const Layer &layer )
+void NetworkLevelReasoner::generateQueryForAbsoluteValueLayer( Query &inputQuery,
+                                                               const Layer &layer )
 {
     for ( unsigned i = 0; i < layer.getSize(); ++i )
     {
@@ -533,8 +526,7 @@ void NetworkLevelReasoner::generateInputQueryForAbsoluteValueLayer( InputQuery &
     }
 }
 
-void NetworkLevelReasoner::generateInputQueryForMaxLayer( InputQuery &inputQuery,
-                                                          const Layer &layer )
+void NetworkLevelReasoner::generateQueryForMaxLayer( Query &inputQuery, const Layer &layer )
 {
     for ( unsigned i = 0; i < layer.getSize(); ++i )
     {
@@ -550,8 +542,7 @@ void NetworkLevelReasoner::generateInputQueryForMaxLayer( InputQuery &inputQuery
     }
 }
 
-void NetworkLevelReasoner::generateInputQueryForWeightedSumLayer( InputQuery &inputQuery,
-                                                                  const Layer &layer )
+void NetworkLevelReasoner::generateQueryForWeightedSumLayer( Query &inputQuery, const Layer &layer )
 {
     for ( unsigned i = 0; i < layer.getSize(); ++i )
     {
@@ -601,6 +592,81 @@ void NetworkLevelReasoner::generateLinearExpressionForWeightedSumLayer(
         }
         variableToExpression[layer.neuronToVariable( i )] = exp;
     }
+}
+
+/*
+    Initialize and fill ReLU Constraint to previous bias map
+    for BaBSR Heuristic
+*/
+void NetworkLevelReasoner::initializePreviousBiasMap()
+{
+    // Clear the previous bias map
+    _previousBiases.clear();
+
+    // Track accumulated ReLU neurons across layers
+    unsigned accumulatedNeurons = 0;
+
+    // Iterate through layers to find ReLU layers and their sources
+    for ( const auto &layerPair : _layerIndexToLayer )
+    {
+        const NLR::Layer *layer = layerPair.second;
+
+        if ( layer->getLayerType() == Layer::RELU )
+        {
+            // Get source layer info
+            const auto &sourceLayers = layer->getSourceLayers();
+            unsigned sourceLayerIndex = sourceLayers.begin()->first;
+            const NLR::Layer *sourceLayer = getLayer( sourceLayerIndex );
+
+            // Match ReLU constraints to their source layer biases
+            unsigned layerSize = layer->getSize();
+
+            // Iterate through constraints
+            auto constraintIterator = _constraintsInTopologicalOrder.begin();
+            for ( unsigned currentIndex = 0;
+                  currentIndex < accumulatedNeurons &&
+                  constraintIterator != _constraintsInTopologicalOrder.end();
+                  ++currentIndex, ++constraintIterator )
+            {
+            }
+
+            // Now at correct starting position
+            for ( unsigned i = 0;
+                  i < layerSize && constraintIterator != _constraintsInTopologicalOrder.end();
+                  ++i, ++constraintIterator )
+            {
+                if ( auto reluConstraint =
+                         dynamic_cast<const ReluConstraint *>( *constraintIterator ) )
+                {
+                    // Store bias in map
+                    _previousBiases[reluConstraint] = sourceLayer->getBias( i );
+                }
+            }
+
+            accumulatedNeurons += layerSize;
+        }
+    }
+}
+
+/*
+    Get previous layer bias of a ReLU neuron
+    for BaBSR Heuristic
+*/
+double NetworkLevelReasoner::getPreviousBias( const ReluConstraint *reluConstraint ) const
+{
+    // Initialize map if empty
+    if ( _previousBiases.empty() )
+    {
+        const_cast<NetworkLevelReasoner *>( this )->initializePreviousBiasMap();
+    }
+
+    // Look up pre-computed bias
+    if ( !_previousBiases.exists( reluConstraint ) )
+    {
+        throw NLRError( NLRError::RELU_NOT_FOUND, "ReluConstraint not found in bias map." );
+    }
+
+    return _previousBiases[reluConstraint];
 }
 
 unsigned
@@ -686,6 +752,7 @@ bool NetworkLevelReasoner::suitableForMerging(
     }
     return true;
 }
+
 
 void NetworkLevelReasoner::mergeWSLayers( unsigned secondLayerIndex,
                                           Map<unsigned, LinearExpression> &eliminatedNeurons )

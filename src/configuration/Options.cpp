@@ -168,6 +168,8 @@ DivideStrategy Options::getDivideStrategy() const
         return DivideStrategy::PseudoImpact;
     else if ( strategyString == "DQN-agent" )
         return DivideStrategy::DQN;
+    else if ( strategyString == "babsr" )
+        return DivideStrategy::BaBSR;
     else
         return DivideStrategy::Auto;
 }

@@ -32,7 +32,6 @@ public:
       Entry point of this class
     */
     void run();
-    void prepareInputQuery();
 
     std::unique_ptr<Agent> runAgentTraining( double epsilon,
                                              const std::string &exampleID,
@@ -47,6 +46,7 @@ private:
       Extract the options and input files (network and property), and
       use them to generate the input query
     */
+    void prepareQuery();
     void extractSplittingThreshold();
 
     /*
