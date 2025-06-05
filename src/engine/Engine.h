@@ -32,7 +32,7 @@
 #include "GlobalConfiguration.h"
 #include "GurobiWrapper.h"
 #include "IEngine.h"
-#include "InputQuery.h"
+#include "IQuery.h"
 #include "JsonWriter.h"
 #include "LPSolverType.h"
 #include "LinearExpression.h"
@@ -41,6 +41,7 @@
 #include "Options.h"
 #include "PrecisionRestorer.h"
 #include "Preprocessor.h"
+#include "Query.h"
 #include "SignalHandler.h"
 #include "SmtCore.h"
 #include "SmtLibWriter.h"
@@ -63,7 +64,7 @@
 #define ENGINE_LOG( x, ... ) MARABOU_LOG( GlobalConfiguration::ENGINE_LOGGING, "Engine: %s\n", x )
 
 class EngineState;
-class InputQuery;
+class Query;
 class PiecewiseLinearConstraint;
 class String;
 
@@ -110,27 +111,27 @@ public:
       underlying tableau. Return false if query is found to be infeasible,
       true otherwise.
      */
-    bool processInputQuery( InputQuery &inputQuery );
-    bool processInputQuery( InputQuery &inputQuery, bool preprocess );
+    bool processInputQuery( const IQuery &inputQuery );
+    bool processInputQuery( const IQuery &inputQuery, bool preprocess );
 
-    InputQuery prepareSnCInputQuery();
-    void exportInputQueryWithError( String errorMessage );
+    Query prepareSnCQuery();
+    void exportQueryWithError( String errorMessage );
 
     /*
       Methods for calculating bounds.
     */
-    bool calculateBounds( InputQuery &inputQuery );
+    bool calculateBounds( const IQuery &inputQuery );
 
     /*
       Method for extracting the bounds.
      */
-    void extractBounds( InputQuery &inputQuery );
+    void extractBounds( IQuery &inputQuery );
 
     /*
       If the query is feasiable and has been successfully solved, this
       method can be used to extract the solution.
      */
-    void extractSolution( InputQuery &inputQuery, Preprocessor *preprocessor = nullptr );
+    void extractSolution( IQuery &inputQuery, Preprocessor *preprocessor = nullptr );
 
     /*
       Methods for storing and restoring the state of the engine.
@@ -152,9 +153,9 @@ public:
 
     const Statistics *getStatistics() const;
 
-    InputQuery *getInputQuery();
+    Query *getQuery();
 
-    InputQuery buildQueryFromCurrentState() const;
+    Query buildQueryFromCurrentState() const;
 
     /*
       Get the exit code
@@ -310,6 +311,11 @@ public:
     */
     void propagateBoundManagerTightenings();
 
+    /*
+      Add lemma to the UNSAT Certificate
+    */
+    void addPLCLemma( std::shared_ptr<PLCLemma> &explanation );
+
 
     unsigned numPlConstraints() const;
 
@@ -384,9 +390,9 @@ private:
     PiecewiseLinearConstraint *_plConstraintToFix;
 
     /*
-      Preprocessed InputQuery
+      Preprocessed Query
     */
-    std::unique_ptr<InputQuery> _preprocessedQuery;
+    std::unique_ptr<Query> _preprocessedQuery;
 
     /*
       Pivot selection strategies.
@@ -703,7 +709,7 @@ private:
       Perform a round of symbolic bound tightening, taking into
       account the current state of the piecewise linear constraints.
     */
-    unsigned performSymbolicBoundTightening( InputQuery *inputQuery = nullptr );
+    unsigned performSymbolicBoundTightening( Query *inputQuery = nullptr );
 
     /*
       Perform a simulation which calculates concrete values of each layer with
@@ -732,9 +738,8 @@ private:
     /*
       Helper functions for input query preprocessing
     */
-    void informConstraintsOfInitialBounds( InputQuery &inputQuery ) const;
-    void invokePreprocessor( const InputQuery &inputQuery, bool preprocess );
-    void printInputBounds( const InputQuery &inputQuery ) const;
+    void invokePreprocessor( const IQuery &inputQuery, bool preprocess );
+    void printInputBounds( const IQuery &inputQuery ) const;
     void storeEquationsInDegradationChecker();
     void removeRedundantEquations( const double *constraintMatrix );
     void selectInitialVariablesForBasis( const double *constraintMatrix,
@@ -747,7 +752,7 @@ private:
     void addAuxiliaryVariables();
     void augmentInitialBasisIfNeeded( List<unsigned> &initialBasis,
                                       const List<unsigned> &basicRows );
-    void performMILPSolverBoundedTightening( InputQuery *inputQuery = nullptr );
+    void performMILPSolverBoundedTightening( Query *inputQuery = nullptr );
 
     void performAdditionalBackwardAnalysisIfNeeded();
 
@@ -766,6 +771,11 @@ private:
       Decide which branch heuristics to use.
     */
     void decideBranchingHeuristics();
+
+    /*
+      Pick the ReLU with the highest BaBSR heuristic score.
+    */
+    PiecewiseLinearConstraint *pickSplitPLConstraintBasedOnBaBsrHeuristic();
 
     /*
       Among the earliest K ReLUs, pick the one with Polarity closest to 0.

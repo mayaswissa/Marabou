@@ -71,8 +71,8 @@ void PrecisionRestorer::restorePrecision( IEngine &engine,
 
     for ( unsigned i = 0; i < targetN; ++i )
     {
-        upperBoundsBackup[i] = tableau.getUpperBound( i );
         lowerBoundsBackup[i] = tableau.getLowerBound( i );
+        upperBoundsBackup[i] = tableau.getUpperBound( i );
     }
 
     // Store the case splits performed so far
@@ -135,15 +135,7 @@ void PrecisionRestorer::restorePrecision( IEngine &engine,
     }
 
     if ( engine.shouldProduceProofs() )
-    {
         engine.setBoundExplainerContent( &boundExplainerBackup );
-
-        for ( unsigned i = 0; i < targetN; ++i )
-        {
-            engine.updateGroundUpperBound( i, groundUpperBoundsBackup[i] );
-            engine.updateGroundLowerBound( i, groundLowerBoundsBackup[i] );
-        }
-    }
 
     for ( unsigned i = 0; i < targetN; ++i )
     {
@@ -152,7 +144,6 @@ void PrecisionRestorer::restorePrecision( IEngine &engine,
     }
 
     engine.propagateBoundManagerTightenings();
-
 
     // Restore constraint status
     for ( const auto &pair : targetEngineState._plConstraintToState )
