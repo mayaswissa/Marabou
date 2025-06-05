@@ -113,38 +113,13 @@ std::vector<std::string> getEpsFiles( const std::string &examplePath )
 void extractExampleID( std::string &examplePath, std::string &exampleID )
 {
     examplePath = Options::get()->getString( Options::PROPERTY_FILE_PATH ).ascii();
-    size_t img_pos = examplePath.find("image");
-    size_t tgt_pos = examplePath.find("_target");
-    size_t eps_pos = examplePath.find("_epsilon");
-    size_t txt_pos = examplePath.find(".txt");
-
-    if (img_pos == std::string::npos || tgt_pos == std::string::npos ||
-        eps_pos == std::string::npos )
-    {
-        exampleID = "";
-        return;
-    }
-
-    size_t img_num_start = img_pos + 5; // after "image"
-    size_t img_num_end = tgt_pos;
-    std::string image = examplePath.substr(img_num_start, img_num_end - img_num_start);
-
-    size_t tgt_num_start = tgt_pos + 7; // after "_target"
-    size_t tgt_num_end = eps_pos;
-    std::string target = examplePath.substr(tgt_num_start, tgt_num_end - tgt_num_start);
-
-    size_t eps_num_start = eps_pos + 10; // after "_epsilon"
-    size_t eps_num_end = txt_pos;
-    std::string epsilon = examplePath.substr(eps_num_start, eps_num_end - eps_num_start);
-    exampleID = image + target + epsilon;
-}
-void extractNetworkName(std::string & network )
-{
-    String networkFilePath = Options::get()->getString( Options::INPUT_FILE_PATH );
-    std::string networkPath = static_cast<std::string>(networkFilePath.ascii());
-    size_t start = networkPath.find_last_of( '/' );
-    size_t end = networkFilePath.find( ".nnet" );
-    network = networkPath.substr( start + 1, end - start - 1 );
+    size_t ex_pos = examplePath.find( "ex_" ) + 3;
+    size_t label_pos = examplePath.find( "_label_" ) + 7;
+    size_t eps_pos = examplePath.find( "eps" ) + 3;
+    std::string ex_id = examplePath.substr( ex_pos, 4 );
+    std::string label_id = examplePath.substr( label_pos, 1 );
+    std::string eps_id = examplePath.substr( eps_pos, 2 );
+    exampleID = ex_id + label_id + eps_id;
 }
 
 
@@ -187,7 +162,6 @@ std::vector<std::string> listDir( const std::string &dirPath )
     std::sort( names.begin(), names.end() );
     return names;
 }
-
 int marabouMain( int argc, char **argv )
 {
     try
@@ -264,29 +238,54 @@ int marabouMain( int argc, char **argv )
             std::string examplePath;
             std::string exampleID;
             extractExampleID( examplePath, exampleID );
-            auto txtOutputFilePath = Options::get()->getString( Options::DQN_OUTPUT_FILE_PATH );
-            std::string network;
-            extractNetworkName(network);
-            currentRunFile << std::string( txtOutputFilePath.ascii() ) << network << "_" << exampleID << ".txt";
+            auto txtOutputFilePath = Options::get()->getString(Options::DQN_OUTPUT_FILE_PATH);
+            currentRunFile << std::string(txtOutputFilePath.ascii()) << exampleID << ".txt";
             std::ofstream outFile( currentRunFile.str(), std::ios::out | std::ios::app );
 
             if ( outFile.is_open() )
             {
-                int numSplits = 0;
-                String runResult;
-                struct timespec startCurrExample = TimeUtils::sampleMicro();
-                String exitCode;
-                Marabou().run( &numSplits, exitCode );
-                struct timespec endCurrExample = TimeUtils::sampleMicro();
-                unsigned long long totalRunCurrExample =
-                    TimeUtils::timePassed( startCurrExample, endCurrExample );
+                std::string lvl1 = parentDir( examplePath );
+                std::string root = parentDir( lvl1 );
+                if ( root.empty() || !isDir( root ) )
+                {
+                    std::cerr << "Error: cannot determine root from '" << root << "'\n";
+                    return 1;
+                }
 
-                auto totalMilli = std::to_string( totalRunCurrExample / 1000 ).c_str();
-                outFile << "\n";
-                outFile << ", Example ID: " << exampleID << ", numSplits:" << numSplits
-                        << ", Time : " << totalMilli << " milli"
-                        << ", Exit code: " << exitCode.ascii() << "\n";
-                outFile << std::flush;
+                auto files = listDir( lvl1 );
+                for ( auto &currentExample : files )
+                {
+                    if ( currentExample.size() < 4 ||
+                         currentExample.substr( currentExample.size() - 4 ) != ".txt" )
+                        continue;
+                    std::string fullCurrentExamplePath = lvl1 + "/" + currentExample;
+                    size_t ex_pos = fullCurrentExamplePath.find( "ex_" ) + 3;
+                    size_t label_pos = fullCurrentExamplePath.find( "_label_" ) + 7;
+                    size_t eps_pos = fullCurrentExamplePath.find( "eps" ) + 3;
+                    std::string ex_id = fullCurrentExamplePath.substr( ex_pos, 4 );
+                    std::string label_id = fullCurrentExamplePath.substr( label_pos, 1 );
+                    std::string eps_id = fullCurrentExamplePath.substr( eps_pos, 2 );
+                    std::string currentExampleID = ex_id + label_id + eps_id;
+                    int numSplits = 0;
+                    String runResult;
+                    options->setString( Options::PROPERTY_FILE_PATH, fullCurrentExamplePath );
+                    struct timespec startCurrExample = TimeUtils::sampleMicro();
+                    String exitCode;
+                    Marabou().run( &numSplits, exitCode );
+                    struct timespec endCurrExample = TimeUtils::sampleMicro();
+
+                    unsigned long long totalRunCurrExample =
+                        TimeUtils::timePassed( startCurrExample, endCurrExample );
+
+                    auto totalMilli = std::to_string( totalRunCurrExample / 1000 ).c_str();
+                    outFile << "\n";
+                    outFile << ", Example ID: " << currentExampleID << ", epsilon : " << eps_id
+                            << ", numSplits:" << numSplits << ", Time : " << totalMilli << " milli"
+                            << ", Exit code: " << exitCode.ascii() << "\n";
+                    outFile << std::flush;
+                }
+
+
                 outFile << "\n";
                 outFile.close();
             }
