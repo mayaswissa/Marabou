@@ -60,18 +60,16 @@ void PrecisionRestorer::restorePrecision( IEngine &engine,
         groundUpperBoundsBackup = Vector<double>( targetN, 0 );
         groundLowerBoundsBackup = Vector<double>( targetN, 0 );
 
-
         boundExplainerBackup = *engine.getBoundExplainer();
 
         for ( unsigned i = 0; i < targetN; ++i )
         {
-
             groundUpperBoundsBackup[i] = engine.getGroundBound( i, Tightening::UB );
             groundLowerBoundsBackup[i] = engine.getGroundBound( i, Tightening::LB );
         }
     }
 
-   for ( unsigned i = 0; i < targetN; ++i )
+    for ( unsigned i = 0; i < targetN; ++i )
     {
         lowerBoundsBackup[i] = tableau.getLowerBound( i );
         upperBoundsBackup[i] = tableau.getUpperBound( i );
@@ -137,7 +135,6 @@ void PrecisionRestorer::restorePrecision( IEngine &engine,
     }
 
     if ( engine.shouldProduceProofs() )
-
         engine.setBoundExplainerContent( &boundExplainerBackup );
 
     for ( unsigned i = 0; i < targetN; ++i )
@@ -147,7 +144,6 @@ void PrecisionRestorer::restorePrecision( IEngine &engine,
     }
 
     engine.propagateBoundManagerTightenings();
-
 
     // Restore constraint status
     for ( const auto &pair : targetEngineState._plConstraintToState )
