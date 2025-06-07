@@ -700,7 +700,7 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                             _agent->stepNewAction( *_previousState, *_action, false, _numSplits );
                     }
                 }
-
+                // agent's state aligns with smt's state
                 ASSERT( _agent->getActionStackSize() ==
                         static_cast<int>( _smtCore.getStackDepth() ) )
 

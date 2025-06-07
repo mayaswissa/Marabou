@@ -34,10 +34,9 @@ public:
     void updateSoIScoreForAgent( unsigned constraintIndex, double SoiActiveScore, double SoiInactiveScore );
     void updateBounds( unsigned constraintIndex, double upperBound, double lowerBound );
     void updatePolarity( unsigned constraintIndex, double polarityScore );
+    void updateBaBsrScore( unsigned constraintIndex, double BaBsrScore );
     const std::vector<std::vector<double>> &getData() const;
     unsigned getNumConstraints() const;
-    // Accessor
-    const std::vector<double>& getRawData() const { return _stateData; }
 private:
     // each inner vector represents a pl-constraint in one-hot encoding:
     // a single 1 indicating the current phase and 0s elsewhere.
