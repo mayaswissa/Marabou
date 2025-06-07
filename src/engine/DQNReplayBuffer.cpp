@@ -50,7 +50,7 @@ void ReplayBuffer::handleDone( const State &currentState, const unsigned numSpli
     {
         ActionEntry *actionEntry = _actionsStack.back();
         // no need to insert alternative actions.
-        while ( !actionEntry->_activeActions.empty() ) // todo handle done iters differently
+        while ( !actionEntry->_activeActions.empty() )
             moveActionToRevisitBuffer( currentState, numSplits, actionEntry, actionEntry->_done );
 
         delete _actionsStack.back();

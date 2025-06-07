@@ -17,6 +17,8 @@ enum DQNFeatures : unsigned {
     SOI_ACTIVE_SCORE = 3,
     SOI_INACTIVE_SCORE = 4,
     POLARITY_SCORE = 5,
+    BaBsr_SCORE = 6,
+
     NUM_FEATURES
 };
 
