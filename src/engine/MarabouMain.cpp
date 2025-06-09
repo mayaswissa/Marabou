@@ -319,7 +319,7 @@ int marabouMain( int argc, char **argv )
                     std::cerr << "Failed to open" << currentRunFile.str() << "\n";
                     return 1;
                 }
-                unsigned epochs = 30;
+                unsigned epochs = Options::get()->getInt( Options::DQN_EPOCHS );;
 
                 struct timespec startTraining = TimeUtils::sampleMicro();
                 int numSplits = 0;

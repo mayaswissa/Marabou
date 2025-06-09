@@ -124,16 +124,13 @@ void Engine::updateSoIScoreForConstraintInState( State &stateToUpdate,
                                                  const Map<unsigned, double> &currentAssignment )
 {
     auto currentPhase = plConstraint->getPhaseStatus();
-    if ( currentPhase == RELU_PHASE_ACTIVE || currentPhase == RELU_PHASE_INACTIVE )
+    if ( currentPhase == RELU_PHASE_ACTIVE || currentPhase == RELU_PHASE_INACTIVE ||
+         plConstraint->haveOutOfBoundVariables() )
     {
         stateToUpdate.updateSoIScoreForAgent( index, 0, 0 );
         return;
     }
-    if ( plConstraint->haveOutOfBoundVariables() )
-    {
-        stateToUpdate.updateSoIScoreForAgent( index, 10, 10 );
-        return;
-    }
+
     LinearExpression costComponent;
     LinearExpression activeCostComponent;
     plConstraint->getCostFunctionComponent( activeCostComponent, RELU_PHASE_ACTIVE );
@@ -159,8 +156,9 @@ void Engine::updateToCurrentDQNState( State &stateToUpdate )
         else
             phase = plConstraint->getPhaseStatus();
         stateToUpdate.updateConstraintPhase( index, phase );
-        if (constraintsToUpdateSoI.exists( plConstraint ))
-            updateSoIScoreForConstraintInState( stateToUpdate, index, plConstraint, currentAssignment );
+        if ( constraintsToUpdateSoI.exists( plConstraint ) )
+            updateSoIScoreForConstraintInState(
+                stateToUpdate, index, plConstraint, currentAssignment );
         stateToUpdate.updatePolarity( index, plConstraint->computePolarity() );
         ReluConstraint *reluConstraint = dynamic_cast<ReluConstraint *>( plConstraint );
         if ( reluConstraint )
@@ -308,8 +306,7 @@ bool Engine::solve( double timeoutInSeconds, const std::string &trainedAgentPath
             throw std::runtime_error( "Agent is not set" );
         _currentDQNState = std::make_unique<State>( numPlConstraints );
         updateToCurrentDQNState( *_currentDQNState );
-        _agent = std::make_unique<Agent>(
-            numPlConstraints, DQN_NUM_PHASES, trainedAgentPath );
+        _agent = std::make_unique<Agent>( numPlConstraints, DQN_NUM_PHASES, trainedAgentPath );
         _action = nullptr;
         _previousState = std::make_unique<State>( numPlConstraints );
         updateToCurrentDQNState( *_previousState );
@@ -604,7 +601,7 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
     updateToCurrentDQNState( *_currentDQNState );
     _previousState = std::make_unique<State>( numPlConstraints );
     updateToCurrentDQNState( *_previousState );
-    const unsigned maxSplitsByAgent = 100;
+    const unsigned maxSplitsByAgent = Options::get()->getInt( Options::DQN_MAX_ITERS );
     while ( _numSplits < maxSplitsByAgent )
     {
         struct timespec mainLoopEnd = TimeUtils::sampleMicro();
@@ -618,10 +615,7 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
             if ( _action == nullptr )
                 _agent->stepFakeAction( *_previousState, _numSplits );
             else
-                _agent->stepNewAction( *_previousState,
-                                       *_action,
-                                       true,
-                                       _numSplits );
+                _agent->stepNewAction( *_previousState, *_action, true, _numSplits );
             _agent->handleDone( *_currentDQNState, _numSplits );
 
             if ( _verbosity > 0 )
@@ -742,7 +736,6 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                 {
                     if ( allNonlinearConstraintsHold() )
                     {
-
                         if ( _action == nullptr )
                             _agent->stepFakeAction( *_previousState, _numSplits );
                         else
@@ -3607,7 +3600,8 @@ bool Engine::performDeepSoILocalSearch()
                 }
             }
 
-            else if ( FloatUtils::isZero( costOfLastAcceptedPhasePattern - costOfProposedPhasePattern ) )
+            else if ( FloatUtils::isZero( costOfLastAcceptedPhasePattern -
+                                          costOfProposedPhasePattern ) )
             {
                 // Corner case: the SoI is minimal but there are still some PL
                 // constraints (those not in the SoI) unsatisfied.

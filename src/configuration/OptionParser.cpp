@@ -138,13 +138,21 @@ void OptionParser::initialize()
             ->default_value( ( *_boolOptions )[Options::PRODUCE_PROOFS] ),
             "Produce proofs of UNSAT and check them" )(
             "DQN-output-file",
-            boost::program_options::value<std::string>( &( *_stringOptions )[Options::DQN_OUTPUT_FILE_PATH] )
-                ->default_value( ( *_stringOptions )[Options::DQN_OUTPUT_FILE_PATH] ),
-                "DQN results file path." )(
-                "saveAgentPath",
-                boost::program_options::value<std::string>( &( *_stringOptions )[Options::DQN_AGENT_NETWORKS_PATH] )
-                    ->default_value( ( *_stringOptions )[Options::DQN_AGENT_NETWORKS_PATH] ),
-                "Path to load/ save DQN agent's networks." )
+        boost::program_options::value<std::string>( &( *_stringOptions )[Options::DQN_OUTPUT_FILE_PATH] )
+            ->default_value( ( *_stringOptions )[Options::DQN_OUTPUT_FILE_PATH] ),
+            "DQN results file path." )(
+            "agent-path",
+        boost::program_options::value<std::string>( &( *_stringOptions )[Options::DQN_AGENT_NETWORKS_PATH] )
+            ->default_value( ( *_stringOptions )[Options::DQN_AGENT_NETWORKS_PATH] ),
+            "Path to load/ save DQN agent's networks." )(
+            "DQN-epochs",
+        boost::program_options::value<int>( &( *_intOptions )[Options::DQN_EPOCHS] )
+            ->default_value( ( *_intOptions )[Options::DQN_EPOCHS] ),
+            "number of epochs in DQN training." )(
+            "DQN-iters",
+        boost::program_options::value<int>( &( *_intOptions )[Options::DQN_MAX_ITERS] )
+            ->default_value( ( *_intOptions )[Options::DQN_MAX_ITERS] ),
+            "number of max iterations per epoch in DQN training." )
 #ifdef ENABLE_GUROBI
 #endif // ENABLE_GUROBI
         ;
@@ -160,7 +168,7 @@ void OptionParser::initialize()
             &( ( *_stringOptions )[Options::SPLITTING_STRATEGY] ) )
             ->default_value( ( *_stringOptions )[Options::SPLITTING_STRATEGY] ),
         "The branching strategy "
-        "(earliest-relu/pseudo-impact/largest-interval/relu-violation/polarity/babsr)."
+        "(earliest-relu/pseudo-impact/largest-interval/relu-violation/polarity)."
         " pseudo-impact is specific to the DeepSoI (default) procedure and relu-violation is "
         "specific to the Reluplex procedure.\n" )(
         "soi-split-threshold",
@@ -275,7 +283,7 @@ void OptionParser::initialize()
                 &( ( *_stringOptions )[Options::MILP_SOLVER_BOUND_TIGHTENING_TYPE] ) )
                 ->default_value( ( *_stringOptions )[Options::MILP_SOLVER_BOUND_TIGHTENING_TYPE] ),
             "The MILP solver bound tightening type: "
-            "lp/backward-once/backward-converge/lp-inc/milp/milp-inc/iter-prop/none." )
+            "lp/fb-once/fb-converge/lp-inc/milp/milp-inc/iter-prop/none." )
 #endif
         ;
 
