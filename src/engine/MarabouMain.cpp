@@ -295,7 +295,7 @@ int marabouMain( int argc, char **argv )
                 std::string trainedExampleID;
                 extractExampleID( examplePath, trainedExampleID );
 
-                unsigned epochs = 30;
+                unsigned epochs = Options::get()->getInt( Options::DQN_EPOCHS );
                 std::ostringstream currentRunFile;
 
                 auto txtOutputFilePath = Options::get()->getString( Options::DQN_OUTPUT_FILE_PATH );

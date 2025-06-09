@@ -118,6 +118,8 @@ public:
 
         // Maximal number of constraints to refine in incremental linearization
         NUM_CONSTRAINTS_TO_REFINE_INC_LIN,
+        DQN_EPOCHS,
+        DQN_MAX_ITERS,
     };
 
     enum FloatOptions {
