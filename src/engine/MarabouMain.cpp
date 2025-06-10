@@ -116,39 +116,23 @@ std::vector<std::string> getEpsFiles( const std::string &examplePath )
 void extractExampleID( std::string &examplePath, std::string &exampleID )
 {
     examplePath = Options::get()->getString( Options::PROPERTY_FILE_PATH ).ascii();
-    size_t img_pos = examplePath.find("image");
-    size_t tgt_pos = examplePath.find("_target");
-    size_t eps_pos = examplePath.find("_epsilon");
-    size_t txt_pos = examplePath.find(".txt");
-
-    if (img_pos == std::string::npos || tgt_pos == std::string::npos ||
-        eps_pos == std::string::npos )
-    {
-        exampleID = "";
-        return;
-    }
-
-    size_t img_num_start = img_pos + 5; // after "image"
-    size_t img_num_end = tgt_pos;
-    std::string image = examplePath.substr(img_num_start, img_num_end - img_num_start);
-
-    size_t tgt_num_start = tgt_pos + 7; // after "_target"
-    size_t tgt_num_end = eps_pos;
-    std::string target = examplePath.substr(tgt_num_start, tgt_num_end - tgt_num_start);
-
-    size_t eps_num_start = eps_pos + 10; // after "_epsilon"
-    size_t eps_num_end = txt_pos;
-    std::string epsilon = examplePath.substr(eps_num_start, eps_num_end - eps_num_start);
-    exampleID = image + target + epsilon;
+    size_t ex_pos = examplePath.find( "ex_" ) + 3;
+    size_t label_pos = examplePath.find( "_label_" ) + 7;
+    size_t eps_pos = examplePath.find( "eps" ) + 3;
+    std::string ex_id = examplePath.substr( ex_pos, 4 );
+    std::string label_id = examplePath.substr( label_pos, 1 );
+    std::string eps_id = examplePath.substr( eps_pos, 2 );
+    exampleID = ex_id + label_id + eps_id;
 }
-void extractNetworkName(std::string & network )
+void extractNetworkName( std::string &network )
 {
     String networkFilePath = Options::get()->getString( Options::INPUT_FILE_PATH );
-    std::string networkPath = static_cast<std::string>(networkFilePath.ascii());
+    std::string networkPath = static_cast<std::string>( networkFilePath.ascii() );
     size_t start = networkPath.find_last_of( '/' );
-    size_t end = networkFilePath.find( ".nnet" );
+    size_t end = networkFilePath.find( ".onnx" );
     network = networkPath.substr( start + 1, end - start - 1 );
 }
+
 
 void trainAgentOnExample( Options *options,
                           const std::string &examplePath,
@@ -163,8 +147,8 @@ void trainAgentOnExample( Options *options,
     agent = nullptr;
     if ( outputTxtFile.is_open() )
     {
-        outputTxtFile << "\n\t splits in each episode : \n\t\t";
-
+        outputTxtFile << "\n\t results of each episode : \n";
+        outputTxtFile << std::flush;
         for ( unsigned int episode = 0; episode < epochs; ++episode )
         {
             int currentNumSplits = 0;
@@ -172,8 +156,7 @@ void trainAgentOnExample( Options *options,
                 epsilon, exampleID, true, std::move( agent ), &currentNumSplits );
             epsilon = std::max( GlobalConfiguration::DQN_EPSILON_END,
                                 epsilon * GlobalConfiguration::DQN_EPSILON_DECAY );
-            if ( outputTxtFile.is_open() )
-                outputTxtFile << currentNumSplits << ", ";
+
             *numSplits += currentNumSplits;
             outputTxtFile.flush();
         }
@@ -185,6 +168,7 @@ void trainAgentOnExample( Options *options,
             std::string filePath = std::string( path.ascii() ) + "/" + exampleID;
             agent->saveNetworks( filePath );
             outputTxtFile << "agent network has been saved. Path: " << filePath;
+            outputTxtFile << std::flush;
         }
 
         outputTxtFile << "\n";
@@ -313,6 +297,7 @@ int marabouMain( int argc, char **argv )
                 std::string network;
                 extractNetworkName(network);
                 currentRunFile << std::string( txtOutputFilePath.ascii() ) << network << "_" << exampleID << ".txt";
+                options->setString( Options::SUMMARY_FILE, currentRunFile.str() );
                 std::ofstream outFile( currentRunFile.str(), std::ios::out | std::ios::app );
                 if ( !outFile )
                 {
@@ -324,6 +309,7 @@ int marabouMain( int argc, char **argv )
                 struct timespec startTraining = TimeUtils::sampleMicro();
                 int numSplits = 0;
                 outFile << "Example : " << exampleID << "\n";
+                outFile << std::flush;
                 DQN_LOG( Stringf( "Start training agent on example: %s  ",
                                   exampleID.c_str())
                              .ascii() );

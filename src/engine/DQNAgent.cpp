@@ -16,7 +16,7 @@ Agent::Agent( const unsigned numPlConstraints,
     , _qNetworkLocal( QNetwork( _numPlConstraints, NUM_FEATURES, _numActions ) )
     , _qNetworkTarget( QNetwork( _numPlConstraints, NUM_FEATURES, _numActions ) )
     , _optimizer( _qNetworkLocal.parameters(),
-                  torch::optim::AdamOptions( GlobalConfiguration::DQN_LR ).weight_decay( 1e-5 ) )
+                  torch::optim::AdamOptions( GlobalConfiguration::DQN_LR ).weight_decay( 1e-4 ) )
     , _scheduler( _optimizer, 1, 0.9 )
     , _replayedBuffer( ReplayBuffer( _numPlConstraints,
                                      GlobalConfiguration::DQN_BUFFER_SIZE,
