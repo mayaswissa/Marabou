@@ -118,10 +118,8 @@ public:
                 int *numSplits = nullptr )
     {
         if (numSplits != nullptr)
-        {
-            *numSplits = 0;
-            trainedAgentPath = "";
-        }
+            if (!trainedAgentPath.empty())
+                *numSplits = 0;
 
         if ( timeoutInSeconds >= _timeToSolve )
             _exitCode = IEngine::TIMEOUT;
