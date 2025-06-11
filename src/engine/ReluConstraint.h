@@ -254,8 +254,6 @@ public:
     */
     double computePolarity() const override;
 
-    double computePolarity() const;
-
     /*
       Update the preferred direction for fixing and handling case split
     */
