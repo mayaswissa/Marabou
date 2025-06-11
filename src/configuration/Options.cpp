@@ -64,7 +64,7 @@ void Options::initializeDefaultValues()
     _intOptions[NUM_ONLINE_DIVIDES] = 2;
     _intOptions[INITIAL_TIMEOUT] = 5;
     _intOptions[VERBOSITY] = 2;
-    _intOptions[TIMEOUT] = 21600;
+    _intOptions[TIMEOUT] = 3600;
     _intOptions[CONSTRAINT_VIOLATION_THRESHOLD] = 20;
     _intOptions[DEEP_SOI_REJECTION_THRESHOLD] = 2;
     _intOptions[NUMBER_OF_SIMULATIONS] = 100;
