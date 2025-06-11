@@ -240,6 +240,7 @@ int marabouMain( int argc, char **argv )
             extractExampleID( examplePath, exampleID );
             auto txtOutputFilePath = Options::get()->getString(Options::DQN_OUTPUT_FILE_PATH);
             currentRunFile << std::string(txtOutputFilePath.ascii()) << exampleID << ".txt";
+            options->setString( Options::SUMMARY_FILE, currentRunFile.str() );
             std::ofstream outFile( currentRunFile.str(), std::ios::out | std::ios::app );
 
             if ( outFile.is_open() )
@@ -269,20 +270,10 @@ int marabouMain( int argc, char **argv )
                     int numSplits = 0;
                     String runResult;
                     options->setString( Options::PROPERTY_FILE_PATH, fullCurrentExamplePath );
-                    struct timespec startCurrExample = TimeUtils::sampleMicro();
-                    String exitCode;
-                    Marabou().run( &numSplits, exitCode );
-                    struct timespec endCurrExample = TimeUtils::sampleMicro();
-
-                    unsigned long long totalRunCurrExample =
-                        TimeUtils::timePassed( startCurrExample, endCurrExample );
-
-                    auto totalMilli = std::to_string( totalRunCurrExample / 1000 ).c_str();
-                    outFile << "\n";
-                    outFile << ", Example ID: " << currentExampleID << ", epsilon : " << eps_id
-                            << ", numSplits:" << numSplits << ", Time : " << totalMilli << " milli"
-                            << ", Exit code: " << exitCode.ascii() << "\n";
+                    outFile << "Example ID: " << exampleID << "\t";
                     outFile << std::flush;
+                    Marabou().run( &numSplits );
+                    outFile << "\n";
                 }
 
 

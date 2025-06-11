@@ -31,7 +31,7 @@ public:
     /*
       Entry point of this class
     */
-    void run( int *numSplits, String &exitCode );
+    void run( int *numSplits );
 
 private:
     InputQuery _inputQuery;
@@ -51,7 +51,7 @@ private:
     /*
       Display the results
     */
-    void displayResults( unsigned long long microSecondsElapsed, String &exitCode ) const;
+    void displayResults( unsigned long long microSecondsElapsed ) const;
 
     /*
       Export assignment as per Options

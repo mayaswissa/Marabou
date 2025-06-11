@@ -115,6 +115,10 @@ public:
     IEngine::ExitCode _exitCode;
     bool solve( double timeoutInSeconds, int *numSplits = nullptr )
     {
+        if (numSplits != nullptr)
+        {
+            *numSplits = 0;
+        }
         if ( timeoutInSeconds >= _timeToSolve )
             _exitCode = IEngine::TIMEOUT;
         return _exitCode == IEngine::SAT;
