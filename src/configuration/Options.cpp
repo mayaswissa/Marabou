@@ -64,7 +64,7 @@ void Options::initializeDefaultValues()
     _intOptions[NUM_ONLINE_DIVIDES] = 2;
     _intOptions[INITIAL_TIMEOUT] = 5;
     _intOptions[VERBOSITY] = 2;
-    _intOptions[TIMEOUT] = 72000;
+    _intOptions[TIMEOUT] = 3600;
     _intOptions[TRAIN_DQN_TIMEOUT] = 0,
     _intOptions[CONSTRAINT_VIOLATION_THRESHOLD] = 20;
     _intOptions[DEEP_SOI_REJECTION_THRESHOLD] = 2;
@@ -168,6 +168,8 @@ DivideStrategy Options::getDivideStrategy() const
         return DivideStrategy::PseudoImpact;
     else if ( strategyString == "DQN-agent" )
         return DivideStrategy::DQN;
+    else if ( strategyString == "babsr" )
+        return DivideStrategy::BaBSR;
     else
         return DivideStrategy::Auto;
 }

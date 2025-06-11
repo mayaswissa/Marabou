@@ -43,6 +43,7 @@ private:
       Extract the options and input files (network and property), and
       use them to generate the input query
     */
+    void prepareQuery();
     void extractSplittingThreshold();
 
     /*
