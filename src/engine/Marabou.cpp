@@ -403,12 +403,12 @@ void Marabou::displayTrainResults( unsigned long long microSecondsElapsed ) cons
 
         // Field #5: Max SMT stack depth
         summaryFile.write(
-            Stringf( ", number of SMT splits : %u ",
+            Stringf( ", max of stack depth : %u ",
                      _engine->getStatistics()->getUnsignedAttribute( Statistics::MAX_DECISION_LEVEL ) ) );
 
         // Field #6: number of visited states
         summaryFile.write(
-           Stringf( ", number of SMT splits : %u",
+           Stringf( ", number of visited states : %u",
                     _engine->getStatistics()->getUnsignedAttribute( Statistics::NUM_VISITED_TREE_STATES ) ) );
 
         summaryFile.write( "\n" );
