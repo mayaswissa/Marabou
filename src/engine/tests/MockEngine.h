@@ -113,8 +113,16 @@ public:
 
     unsigned _timeToSolve;
     IEngine::ExitCode _exitCode;
-    bool solve( double timeoutInSeconds )
+    bool solve( double timeoutInSeconds = 0,
+                const std::string &trainedAgentPath = "",
+                int *numSplits = nullptr )
     {
+        if (numSplits != nullptr)
+        {
+            *numSplits = 0;
+            trainedAgentPath = "";
+        }
+
         if ( timeoutInSeconds >= _timeToSolve )
             _exitCode = IEngine::TIMEOUT;
         return _exitCode == IEngine::SAT;
