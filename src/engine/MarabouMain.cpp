@@ -239,6 +239,7 @@ int marabouMain( int argc, char **argv )
             auto txtOutputFilePath = Options::get()->getString(Options::DQN_OUTPUT_FILE_PATH);
             currentRunFile << std::string(txtOutputFilePath.ascii()) << exampleID << ".txt";
             options->setString( Options::SUMMARY_FILE, currentRunFile.str() );
+
             std::ofstream outFile( currentRunFile.str(), std::ios::out | std::ios::app );
 
             if ( outFile.is_open() )
