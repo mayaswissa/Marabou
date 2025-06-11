@@ -310,7 +310,7 @@ void Marabou::solveQuery()
 
 void Marabou::displayResults( unsigned long long microSecondsElapsed, String &exitCode ) const
 {
-    Engine::ExitCode result = _engine->getExitCode();
+     Engine::ExitCode result = _engine->getExitCode();
     String resultString;
 
     if ( result == Engine::UNSAT )
@@ -362,29 +362,40 @@ void Marabou::displayResults( unsigned long long microSecondsElapsed, String &ex
         resultString = "NOT_DONE";
         printf( "Unexpected exit code! (this should not happen)" );
     }
-    exitCode = resultString;
 
     // Create a summary file, if requested
     String summaryFilePath = Options::get()->getString( Options::SUMMARY_FILE );
     if ( summaryFilePath != "" )
     {
         File summaryFile( summaryFilePath );
-        summaryFile.open( File::MODE_WRITE_TRUNCATE );
+        summaryFile.open( File::MODE_WRITE_APPEND );
 
         // Field #1: result
-        summaryFile.write( resultString );
+        summaryFile.write( Stringf( "\t\tExitCode : %s ", resultString.ascii() ) );
 
         // Field #2: total elapsed time
-        summaryFile.write( Stringf( " %u ", microSecondsElapsed / 1000000 ) ); // In seconds
-
-        // Field #3: number of visited tree states
-        summaryFile.write( Stringf( "%u ",
-                                    _engine->getStatistics()->getUnsignedAttribute(
-                                        Statistics::NUM_VISITED_TREE_STATES ) ) );
-
-        // Field #4: average pivot time in micro seconds
         summaryFile.write(
-            Stringf( "%u", _engine->getStatistics()->getAveragePivotTimeInMicro() ) );
+            Stringf( ", time (millisec) :  %u ", microSecondsElapsed / 1000 ) );
+
+        // Field #3: number of main loop iterations
+        summaryFile.write( Stringf(
+            "%f",
+            _engine->getStatistics()->getLongAttribute( Statistics::NUM_MAIN_LOOP_ITERATIONS ) ) );
+
+        // Field #4: number of splits
+        summaryFile.write(
+            Stringf( ", number of SMT splits : %u ",
+                     _engine->getStatistics()->getUnsignedAttribute( Statistics::NUM_SPLITS ) ) );
+
+        // Field #5: Max SMT stack depth
+        summaryFile.write(
+            Stringf( ", max of stack depth : %u ",
+                     _engine->getStatistics()->getUnsignedAttribute( Statistics::MAX_DECISION_LEVEL ) ) );
+
+        // Field #6: number of visited states
+        summaryFile.write(
+           Stringf( ", number of visited states : %u",
+                    _engine->getStatistics()->getUnsignedAttribute( Statistics::NUM_VISITED_TREE_STATES ) ) );
 
         summaryFile.write( "\n" );
     }

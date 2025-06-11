@@ -124,14 +124,9 @@ void Engine::updateSoIScoreForConstraintInState( State &stateToUpdate,
                                                  const Map<unsigned, double> &currentAssignment )
 {
     auto currentPhase = plConstraint->getPhaseStatus();
-    if ( currentPhase == RELU_PHASE_ACTIVE || currentPhase == RELU_PHASE_INACTIVE )
+    if ( currentPhase == RELU_PHASE_ACTIVE || currentPhase == RELU_PHASE_INACTIVE || plConstraint->haveOutOfBoundVariables() )
     {
         stateToUpdate.updateSoIScoreForAgent( index, 0, 0 );
-        return;
-    }
-    if ( plConstraint->haveOutOfBoundVariables() )
-    {
-        stateToUpdate.updateSoIScoreForAgent( index, 10, 10 );
         return;
     }
     LinearExpression costComponent;
@@ -162,6 +157,14 @@ void Engine::updateToCurrentDQNState( State &stateToUpdate )
         if (constraintsToUpdateSoI.exists( plConstraint ))
             updateSoIScoreForConstraintInState( stateToUpdate, index, plConstraint, currentAssignment );
         stateToUpdate.updatePolarity( index, plConstraint->computePolarity() );
+        ReluConstraint *reluConstraint = dynamic_cast<ReluConstraint *>( plConstraint );
+        if ( reluConstraint )
+        {
+            // Set NLR if not already set
+            reluConstraint->initializeNLRForBaBSR( _networkLevelReasoner );
+            // Collect raw scores
+            stateToUpdate.updateBaBsrScore( index, reluConstraint->computeBaBsr() );
+        }
         index++;
     }
 }

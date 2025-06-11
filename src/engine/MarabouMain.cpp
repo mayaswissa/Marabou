@@ -276,6 +276,7 @@ int marabouMain( int argc, char **argv )
                 extractTrainedAgentID( trainedAgentPath, trainedAgentID );
                 extractNetworkName( network );
                 currentRunFile << std::string( txtOutputFilePath.ascii() ) << "Ex_" << exampleID << "_trainedOn_" << trainedAgentID << ".txt";
+                options->setString( Options::SUMMARY_FILE, currentRunFile.str() );
                 std::ofstream outFile( currentRunFile.str(), std::ios::out | std::ios::app );
                 if ( !outFile )
                 {
@@ -308,6 +309,7 @@ int marabouMain( int argc, char **argv )
                     int numSplits = 0;
                     String exitCode;
                     outFile << "Example : " << exampleID << "\n";
+                    outFile << std::flush;
                     DQN_LOG( Stringf( "Start runing trained agent with example: %s  ",
                                       currentExampleID.c_str() )
                                  .ascii() );
@@ -315,11 +317,6 @@ int marabouMain( int argc, char **argv )
                     struct timespec endtRunningCurrentExample = TimeUtils::sampleMicro();
                     unsigned long long totalTraining = TimeUtils::timePassed(
                         startRunningCurrentExample, endtRunningCurrentExample );
-                    auto totalMilli = std::to_string( totalTraining / 1000 ).c_str();
-                    outFile << "Example ID: " << currentExampleID << ", Epsilon: " << eps_id
-                            << ", Splits : " << numSplits << ", Time : " << totalMilli << " ms "
-                            << ", Exit code : " << exitCode.ascii() << "\n";
-                    outFile << std::flush;
 
                     DQN_LOG( Stringf( "Done solving. Time : %llu milli. \n", totalTraining / 1000 )
                                  .ascii() );
