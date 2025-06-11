@@ -120,15 +120,15 @@ const bool GlobalConfiguration::WRITE_JSON_PROOF = false;
 
 const unsigned GlobalConfiguration::BACKWARD_BOUND_PROPAGATION_DEPTH = 3;
 const unsigned GlobalConfiguration::MAX_ROUNDS_OF_BACKWARD_ANALYSIS = 10;
-unsigned GlobalConfiguration::DQN_EXPLORATION_RATE = 2;
-unsigned GlobalConfiguration::DQN_BUFFER_SIZE = 40000;
+unsigned GlobalConfiguration::DQN_EXPLORATION_RATE = 4;
+unsigned GlobalConfiguration::DQN_BUFFER_SIZE = 8000;
 unsigned GlobalConfiguration::DQN_BATCH_SIZE = 32;
 
 const double GlobalConfiguration::DQN_EPSILON_START = 1.0;
 const double GlobalConfiguration::DQN_EPSILON_END = 0.05;
 const double GlobalConfiguration::DQN_EPSILON_PURE_EXPLOIT = 0.00;
 const double GlobalConfiguration::DQN_EPSILON_DECAY = 0.95;
-double GlobalConfiguration::DQN_LR = 1e-4;
+double GlobalConfiguration::DQN_LR = 1e-3;
 double GlobalConfiguration::DQN_TAU = 5e-3;
 
 #ifdef ENABLE_GUROBI

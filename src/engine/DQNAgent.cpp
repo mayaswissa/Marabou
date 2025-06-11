@@ -239,7 +239,7 @@ void Agent::learn()
     }
 
     const auto loss = torch::mse_loss( QExpected, QTargets );
-    _lossVerbosity = ( _lossVerbosity + 1 ) % 200;
+    _lossVerbosity = ( _lossVerbosity + 1 ) % 100;
     if ( _lossVerbosity == 0 )
         DQN_LOG( Stringf( "MSE Loss : %f\n", loss.item<double>() ).ascii() );
 

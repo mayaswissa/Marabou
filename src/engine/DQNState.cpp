@@ -15,7 +15,7 @@ State::State( const unsigned numConstraints )
         _stateData[i * NUM_FEATURES + DQN_RELU_NOT_FIXED] = 1.0;
         _stateData[i * NUM_FEATURES + SOI_ACTIVE_SCORE] = 0;
         _stateData[i * NUM_FEATURES + SOI_INACTIVE_SCORE] = 0;
-        _stateData[i * NUM_FEATURES + BaBsr_SCORE] = 0.0; // todo check initial default value
+        _stateData[i * NUM_FEATURES + BaBsr_SCORE] = 0;
     }
 }
 
