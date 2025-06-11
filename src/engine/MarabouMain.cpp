@@ -115,11 +115,9 @@ void extractExampleID( std::string &examplePath, std::string &exampleID )
     examplePath = Options::get()->getString( Options::PROPERTY_FILE_PATH ).ascii();
     size_t ex_pos = examplePath.find( "ex_" ) + 3;
     size_t label_pos = examplePath.find( "_label_" ) + 7;
-    size_t eps_pos = examplePath.find( "eps" ) + 3;
     std::string ex_id = examplePath.substr( ex_pos, 4 );
     std::string label_id = examplePath.substr( label_pos, 1 );
-    std::string eps_id = examplePath.substr( eps_pos, 2 );
-    exampleID = ex_id + label_id + eps_id;
+    exampleID = ex_id + label_id;
 }
 
 
@@ -270,7 +268,7 @@ int marabouMain( int argc, char **argv )
                     int numSplits = 0;
                     String runResult;
                     options->setString( Options::PROPERTY_FILE_PATH, fullCurrentExamplePath );
-                    outFile << "Example ID: " << exampleID << "\t";
+                    outFile << "Example ID: " << currentExampleID << "\t";
                     outFile << std::flush;
                     Marabou().run( &numSplits );
                     outFile << "\n";
