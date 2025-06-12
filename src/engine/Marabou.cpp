@@ -67,7 +67,7 @@ void Marabou::run()
 
     unsigned long long totalElapsed = TimeUtils::timePassed( start, end );
     String exitCode = "";
-    displayResults( totalElapsed, exitCode );
+    displayResults( totalElapsed );
 
     if ( Options::get()->getBool( Options::EXPORT_ASSIGNMENT ) )
         exportAssignment();
@@ -75,7 +75,7 @@ void Marabou::run()
     std::cout << "end run time: " << TimeUtils::now().ascii() << std::endl;
 }
 
-void Marabou::runTrainedAgentOnExample( int *numSplits, String &exitCode )
+void Marabou::runTrainedAgentOnExample( int *numSplits )
 {
     struct timespec start = TimeUtils::sampleMicro();
 
@@ -86,7 +86,7 @@ void Marabou::runTrainedAgentOnExample( int *numSplits, String &exitCode )
     struct timespec end = TimeUtils::sampleMicro();
 
     unsigned long long totalElapsed = TimeUtils::timePassed( start, end );
-    displayResults( totalElapsed, exitCode );
+    displayResults( totalElapsed );
 
     if ( Options::get()->getBool( Options::EXPORT_ASSIGNMENT ) )
         exportAssignment();
@@ -308,7 +308,7 @@ void Marabou::solveQuery()
         _engine->extractSolution( _inputQuery );
 }
 
-void Marabou::displayResults( unsigned long long microSecondsElapsed, String &exitCode ) const
+void Marabou::displayResults( unsigned long long microSecondsElapsed ) const
 {
      Engine::ExitCode result = _engine->getExitCode();
     String resultString;
