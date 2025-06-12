@@ -275,9 +275,10 @@ int marabouMain( int argc, char **argv )
                 std::string trainedAgentID;
                 extractTrainedAgentID( trainedAgentPath, trainedAgentID );
                 extractNetworkName( network );
-                currentRunFile << std::string( txtOutputFilePath.ascii() ) << "Ex_" << exampleID << "_trainedOn_" << trainedAgentID << ".txt";
+                currentRunFile << std::string( txtOutputFilePath.ascii() ) << exampleID << ".txt";
                 options->setString( Options::SUMMARY_FILE, currentRunFile.str() );
                 std::ofstream outFile( currentRunFile.str(), std::ios::out | std::ios::app );
+                outFile << "Ex_" << exampleID << "_trainedOn_" << trainedAgentID << "\n";
                 if ( !outFile )
                 {
                     std::cerr << "Failed to open " << currentRunFile.str() << "\n";
