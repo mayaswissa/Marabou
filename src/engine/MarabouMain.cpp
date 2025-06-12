@@ -307,7 +307,7 @@ int marabouMain( int argc, char **argv )
                     DQN_LOG( Stringf( "run Example ID: %s\n", currentExampleID.c_str() ).ascii() );
                     struct timespec startRunningCurrentExample = TimeUtils::sampleMicro();
                     int numSplits = 0;
-                    outFile << "Example : " << exampleID << "\n";
+                    outFile << "epsilon : " << currentExampleID << "\n";
                     outFile << std::flush;
                     DQN_LOG( Stringf( "Start runing trained agent with example: %s  ",
                                       currentExampleID.c_str() )
