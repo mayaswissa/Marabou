@@ -3257,6 +3257,7 @@ PiecewiseLinearConstraint *Engine::pickSplitPLConstraintBasedOnPolarity()
 
 PiecewiseLinearConstraint *Engine::pickSplitPLConstraintByAgent()
 {
+    ENGINE_LOG( Stringf( "Using DQN-based heuristics..." ).ascii() );
     updateToCurrentDQNState( *_previousState );
     _action = std::move( _agent->act( *_previousState, _eps ) );
     if ( _action == nullptr )
