@@ -124,8 +124,7 @@ void Engine::updateSoIScoreForConstraintInState( State &stateToUpdate,
                                                  const Map<unsigned, double> &currentAssignment )
 {
     auto currentPhase = plConstraint->getPhaseStatus();
-    ASSERT( !plConstraint->haveOutOfBoundVariables() );
-    if ( currentPhase == RELU_PHASE_ACTIVE || currentPhase == RELU_PHASE_INACTIVE )
+    if ( currentPhase == RELU_PHASE_ACTIVE || currentPhase == RELU_PHASE_INACTIVE || plConstraint->haveOutOfBoundVariables())
     {
         stateToUpdate.updateSoIScoreForAgent( index, 0, 0 );
         return;
