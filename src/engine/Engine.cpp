@@ -160,14 +160,6 @@ void Engine::updateToCurrentDQNState( State &stateToUpdate )
             updateSoIScoreForConstraintInState(
                 stateToUpdate, index, plConstraint, currentAssignment );
         stateToUpdate.updatePolarity( index, plConstraint->computePolarity() );
-        ReluConstraint *reluConstraint = dynamic_cast<ReluConstraint *>( plConstraint );
-        if ( reluConstraint )
-        {
-            // Set NLR if not already set
-            reluConstraint->initializeNLRForBaBSR( _networkLevelReasoner );
-            // Collect raw scores
-            stateToUpdate.updateBaBsrScore( index, reluConstraint->computeBaBsr() );
-        }
         index++;
     }
 }

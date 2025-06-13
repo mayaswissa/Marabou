@@ -17,7 +17,6 @@ enum DQNFeatures : unsigned {
     SOI_ACTIVE_SCORE = 3,
     SOI_INACTIVE_SCORE = 4,
     POLARITY_SCORE = 5,
-    BaBsr_SCORE = 6,
 
     NUM_FEATURES
 };
@@ -34,7 +33,6 @@ public:
     void updateSoIScoreForAgent( unsigned constraintIndex, double SoiActiveScore, double SoiInactiveScore );
     void updateBounds( unsigned constraintIndex, double upperBound, double lowerBound );
     void updatePolarity( unsigned constraintIndex, double polarityScore );
-    void updateBaBsrScore( unsigned constraintIndex, double BaBsrScore );
     const std::vector<std::vector<double>> &getData() const;
     unsigned getNumConstraints() const;
 private:
