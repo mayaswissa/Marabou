@@ -375,11 +375,11 @@ void Marabou::displayResults( unsigned long long microSecondsElapsed ) const
 
         // Field #2: total elapsed time
         summaryFile.write(
-            Stringf( ", time (millisec) :  %%llu ", microSecondsElapsed / 1000 ) );
+            Stringf( ", time (millisec) :  %u ", microSecondsElapsed / 1000 ) );
 
         // Field #3: number of main loop iterations
         summaryFile.write( Stringf(
-            ", main loop iterations: %u",
+            ", main loop iterations: %llu",
             _engine->getStatistics()->getLongAttribute( Statistics::NUM_MAIN_LOOP_ITERATIONS ) ) );
 
         // Field #4: number of splits
