@@ -3344,7 +3344,10 @@ PiecewiseLinearConstraint *Engine::pickSplitPLConstraint( DivideStrategy strateg
     if ( strategy == DivideStrategy::PseudoImpact )
     {
         if ( _smtCore.getStackDepth() > 3 )
+        {
+            ENGINE_LOG( Stringf( "Using highest score heuristics..." ).ascii() );
             candidatePLConstraint = _smtCore.getConstraintsWithHighestScore();
+        }
         else if ( !_preprocessedQuery->getInputVariables().empty() &&
                   _preprocessedQuery->getInputVariables().size() <
                       GlobalConfiguration::INTERVAL_SPLITTING_THRESHOLD )
