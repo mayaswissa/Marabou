@@ -393,7 +393,7 @@ void Marabou::displayTrainResults( unsigned long long microSecondsElapsed ) cons
 
         // Field #3: number of main loop iterations
         summaryFile.write( Stringf(
-            "%f",
+            ", main loop iterations: %llu",
             _engine->getStatistics()->getLongAttribute( Statistics::NUM_MAIN_LOOP_ITERATIONS ) ) );
 
         // Field #4: number of splits
