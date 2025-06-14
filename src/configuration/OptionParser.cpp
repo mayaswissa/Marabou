@@ -136,15 +136,15 @@ void OptionParser::initialize()
         "prove-unsat",
         boost::program_options::bool_switch( &( ( *_boolOptions )[Options::PRODUCE_PROOFS] ) )
             ->default_value( ( *_boolOptions )[Options::PRODUCE_PROOFS] ),
-            "Produce proofs of UNSAT and check them" )(
-            "DQN-output-file",
-            boost::program_options::value<std::string>( &( *_stringOptions )[Options::DQN_OUTPUT_FILE_PATH] )
-                ->default_value( ( *_stringOptions )[Options::DQN_OUTPUT_FILE_PATH] ),
-                "DQN results file path." )(
-                "save-agent-path",
-                boost::program_options::value<std::string>( &( *_stringOptions )[Options::DQN_AGENT_NETWORKS_PATH] )
-                    ->default_value( ( *_stringOptions )[Options::DQN_AGENT_NETWORKS_PATH] ),
-                "Path to load/ save DQN agent's networks." )
+        "Produce proofs of UNSAT and check them" )(
+        "DQN-output-file",
+        boost::program_options::value<std::string>( &( *_stringOptions )[Options::DQN_OUTPUT_FILE_PATH] )
+            ->default_value( ( *_stringOptions )[Options::DQN_OUTPUT_FILE_PATH] ),
+        "DQN results file path." )(
+        "save-agent-path",
+        boost::program_options::value<std::string>( &( *_stringOptions )[Options::DQN_AGENT_NETWORKS_PATH] )
+            ->default_value( ( *_stringOptions )[Options::DQN_AGENT_NETWORKS_PATH] ),
+        "Path to load/ save DQN agent's networks." )
 #ifdef ENABLE_GUROBI
 #endif // ENABLE_GUROBI
         ;
