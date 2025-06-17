@@ -3326,16 +3326,6 @@ PiecewiseLinearConstraint *Engine::pickSplitPLConstraintBasedOnIntervalWidth()
 
 PiecewiseLinearConstraint *Engine::pickSplitPLConstraint( DivideStrategy strategy )
 {
-    if ( _smtCore.getStackDepth() <= 3 )
-    {
-        strategy = DivideStrategy::PseudoImpact;
-        _newSplitByAgent = false;
-    }
-    else
-    {
-        _newSplitByAgent = true;
-        strategy = DivideStrategy::DQN;
-    }
     ENGINE_LOG( Stringf( "Picking a split PLConstraint..." ).ascii() );
     PiecewiseLinearConstraint *candidatePLConstraint = NULL;
     if ( strategy == DivideStrategy::PseudoImpact )
