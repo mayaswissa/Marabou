@@ -14,10 +14,8 @@ enum DQNFeatures : unsigned {
     DQN_RELU_NOT_FIXED_VALUE = 0,
     DQN_RELU_ACTIVE_VALUE = 1,
     DQN_RELU_INACTIVE_VALUE = 2,
-    SOI_ACTIVE_SCORE = 3,
-    SOI_INACTIVE_SCORE = 4,
-    POLARITY_SCORE = 5,
-    BaBsr_SCORE = 6,
+    POLARITY_SCORE = 3,
+    BaBsr_SCORE = 4,
 
     NUM_FEATURES
 };

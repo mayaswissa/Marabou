@@ -13,8 +13,8 @@ State::State( const unsigned numConstraints )
     for ( unsigned i = 0; i < numConstraints; ++i )
     {
         _stateData[i * NUM_FEATURES + DQN_RELU_NOT_FIXED] = 1.0;
-        _stateData[i * NUM_FEATURES + SOI_ACTIVE_SCORE] = 0;
-        _stateData[i * NUM_FEATURES + SOI_INACTIVE_SCORE] = 0;
+        // _stateData[i * NUM_FEATURES + SOI_ACTIVE_SCORE] = 0;
+        // _stateData[i * NUM_FEATURES + SOI_INACTIVE_SCORE] = 0;
         _stateData[i * NUM_FEATURES + BaBsr_SCORE] = 0.0;
 
     }
@@ -58,15 +58,15 @@ void State::updateConstraintPhase( const unsigned constraintIndex, const unsigne
     rowPtr[newPhase] = 1.0;
 }
 
-void State::updateSoIScoreForAgent( const unsigned constraintIndex,
-                            const double SoiActiveScore,
-                            const double SoiInactiveScore )
-{
-    if ( constraintIndex >= _numConstraints )
-        return;
-    _stateData[constraintIndex * NUM_FEATURES + SOI_ACTIVE_SCORE] = SoiActiveScore;
-    _stateData[constraintIndex * NUM_FEATURES + SOI_INACTIVE_SCORE] = SoiInactiveScore;
-}
+// void State::updateSoIScoreForAgent( const unsigned constraintIndex,
+//                             const double SoiActiveScore,
+//                             const double SoiInactiveScore )
+// {
+//     if ( constraintIndex >= _numConstraints )
+//         return;
+//     _stateData[constraintIndex * NUM_FEATURES + SOI_ACTIVE_SCORE] = SoiActiveScore;
+//     _stateData[constraintIndex * NUM_FEATURES + SOI_INACTIVE_SCORE] = SoiInactiveScore;
+// }
 
 void State::updatePolarity( const unsigned constraintIndex, const double polarityScore )
 {

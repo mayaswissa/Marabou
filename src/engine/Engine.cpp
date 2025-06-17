@@ -118,31 +118,31 @@ Engine::~Engine()
 }
 
 // DQN methods:
-void Engine::updateSoIScoreForConstraintInState( State &stateToUpdate,
-                                                 const int index,
-                                                 PiecewiseLinearConstraint *const &plConstraint,
-                                                 const Map<unsigned, double> &currentAssignment )
-{
-    auto currentPhase = plConstraint->getPhaseStatus();
-    if ( currentPhase == RELU_PHASE_ACTIVE || currentPhase == RELU_PHASE_INACTIVE || plConstraint->haveOutOfBoundVariables() )
-    {
-        stateToUpdate.updateSoIScoreForAgent( index, 0, 0 );
-        return;
-    }
-    LinearExpression costComponent;
-    LinearExpression activeCostComponent;
-    plConstraint->getCostFunctionComponent( activeCostComponent, RELU_PHASE_ACTIVE );
-    const double activeSoiScore = activeCostComponent.evaluate( currentAssignment );
-    LinearExpression inactiveCostComponent;
-    plConstraint->getCostFunctionComponent( inactiveCostComponent, RELU_PHASE_INACTIVE );
-    const double inactiveSoiScore = inactiveCostComponent.evaluate( currentAssignment );
-    stateToUpdate.updateSoIScoreForAgent( index, activeSoiScore, inactiveSoiScore );
-}
+// void Engine::updateSoIScoreForConstraintInState( State &stateToUpdate,
+//                                                  const int index,
+//                                                  PiecewiseLinearConstraint *const &plConstraint,
+//                                                  const Map<unsigned, double> &currentAssignment )
+// {
+//     auto currentPhase = plConstraint->getPhaseStatus();
+//     if ( currentPhase == RELU_PHASE_ACTIVE || currentPhase == RELU_PHASE_INACTIVE || plConstraint->haveOutOfBoundVariables() )
+//     {
+//         stateToUpdate.updateSoIScoreForAgent( index, 0, 0 );
+//         return;
+//     }
+//     LinearExpression costComponent;
+//     LinearExpression activeCostComponent;
+//     plConstraint->getCostFunctionComponent( activeCostComponent, RELU_PHASE_ACTIVE );
+//     const double activeSoiScore = activeCostComponent.evaluate( currentAssignment );
+//     LinearExpression inactiveCostComponent;
+//     plConstraint->getCostFunctionComponent( inactiveCostComponent, RELU_PHASE_INACTIVE );
+//     const double inactiveSoiScore = inactiveCostComponent.evaluate( currentAssignment );
+//     stateToUpdate.updateSoIScoreForAgent( index, activeSoiScore, inactiveSoiScore );
+// }
 
 void Engine::updateToCurrentDQNState( State &stateToUpdate )
 {
     int index = 0;
-    auto constraintsToUpdateSoI = _soiManager->getConstraintsUpdatedInLastProposal();
+    // auto constraintsToUpdateSoI = _soiManager->getConstraintsUpdatedInLastProposal();
     int phase;
     Map<unsigned, double> currentAssignment;
     for ( unsigned i = 0; i < getQuery()->getNumberOfVariables(); ++i )
@@ -154,8 +154,8 @@ void Engine::updateToCurrentDQNState( State &stateToUpdate )
         else
             phase = plConstraint->getPhaseStatus();
         stateToUpdate.updateConstraintPhase( index, phase );
-        if (constraintsToUpdateSoI.exists( plConstraint ))
-            updateSoIScoreForConstraintInState( stateToUpdate, index, plConstraint, currentAssignment );
+        // if (constraintsToUpdateSoI.exists( plConstraint ))
+        //     updateSoIScoreForConstraintInState( stateToUpdate, index, plConstraint, currentAssignment );
         stateToUpdate.updatePolarity( index, plConstraint->computePolarity() );
         ReluConstraint *reluConstraint = dynamic_cast<ReluConstraint *>( plConstraint );
         if ( reluConstraint )
