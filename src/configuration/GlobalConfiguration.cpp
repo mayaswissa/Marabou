@@ -128,7 +128,7 @@ const double GlobalConfiguration::DQN_EPSILON_START = 1.0;
 const double GlobalConfiguration::DQN_EPSILON_END = 0.05;
 const double GlobalConfiguration::DQN_EPSILON_PURE_EXPLOIT = 0.00;
 const double GlobalConfiguration::DQN_EPSILON_DECAY = 0.95;
-double GlobalConfiguration::DQN_LR = 1e-3;
+double GlobalConfiguration::DQN_LR = 1e-2;
 double GlobalConfiguration::DQN_TAU = 5e-3;
 
 #ifdef ENABLE_GUROBI
