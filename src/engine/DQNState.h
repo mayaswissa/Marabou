@@ -31,7 +31,6 @@ public:
 
     torch::Tensor toTensor() const;
     void updateConstraintPhase( unsigned constraintIndex, unsigned newPhase );
-    // void updateSoIScoreForAgent( unsigned constraintIndex, double SoiActiveScore, double SoiInactiveScore );
     void updateBounds( unsigned constraintIndex, double upperBound, double lowerBound );
     void updatePolarity( unsigned constraintIndex, double polarityScore );
     void updateBaBsrScore( unsigned constraintIndex, double BaBsrScore );
