@@ -124,18 +124,16 @@ void extractExampleID( std::string &examplePath, std::string &exampleID )
     std::string eps_id = examplePath.substr( eps_pos, 2 );
     exampleID = ex_id + label_id + eps_id;
 }
-void generateRandomSeeds( int &numSeeds, Vector<int> &seeds )
+void extractNetworkName( std::string &network )
 {
-    auto baseSeed = 0;
-    numSeeds = 5;
-    srand( baseSeed );
-
-    for ( int i = 0; i < numSeeds; i++ )
-    {
-        int new_seed = ( rand() % 1000 ) + 1;
-        seeds.append( new_seed );
-    }
+    String networkFilePath = Options::get()->getString( Options::INPUT_FILE_PATH );
+    std::string networkPath = static_cast<std::string>( networkFilePath.ascii() );
+    size_t start = networkPath.find_last_of( '/' );
+    size_t end = networkFilePath.find( ".onnx" );
+    network = networkPath.substr( start + 1, end - start - 1 );
 }
+
+
 void trainAgentOnExample( Options *options,
                           const std::string &examplePath,
                           const std::string &exampleID,
@@ -149,8 +147,8 @@ void trainAgentOnExample( Options *options,
     agent = nullptr;
     if ( outputTxtFile.is_open() )
     {
-        outputTxtFile << "\n\t splits in each episode : \n\t\t";
-
+        outputTxtFile << "\n\t results of each episode : \n";
+        outputTxtFile << std::flush;
         for ( unsigned int episode = 0; episode < epochs; ++episode )
         {
             int currentNumSplits = 0;
@@ -158,19 +156,19 @@ void trainAgentOnExample( Options *options,
                 epsilon, exampleID, true, std::move( agent ), &currentNumSplits );
             epsilon = std::max( GlobalConfiguration::DQN_EPSILON_END,
                                 epsilon * GlobalConfiguration::DQN_EPSILON_DECAY );
-            if ( outputTxtFile.is_open() )
-                outputTxtFile << currentNumSplits << ", ";
+
             *numSplits += currentNumSplits;
             outputTxtFile.flush();
         }
 
         if ( agent != nullptr &&
-             *numSplits > static_cast<int>( GlobalConfiguration::DQN_BATCH_SIZE ) * 4 )
+             *numSplits > static_cast<int>( GlobalConfiguration::DQN_BATCH_SIZE ) * 20 )
         {
             const auto path = Options::get()->getString( Options::DQN_AGENT_NETWORKS_PATH );
             std::string filePath = std::string( path.ascii() ) + "/" + exampleID;
             agent->saveNetworks( filePath );
             outputTxtFile << "agent network has been saved. Path: " << filePath;
+            outputTxtFile << std::flush;
         }
 
         outputTxtFile << "\n";
@@ -291,33 +289,34 @@ int marabouMain( int argc, char **argv )
 #endif
             if ( GlobalConfiguration::USE_DQN )
             {
-                std::string examplePath;
-                std::string trainedExampleID;
-                extractExampleID( examplePath, trainedExampleID );
-
-                unsigned epochs = Options::get()->getInt( Options::DQN_EPOCHS );
                 std::ostringstream currentRunFile;
-
+                std::string examplePath;
+                std::string exampleID;
+                extractExampleID( examplePath, exampleID );
                 auto txtOutputFilePath = Options::get()->getString( Options::DQN_OUTPUT_FILE_PATH );
-                currentRunFile << std::string( txtOutputFilePath.ascii() ) << "/"
-                               << trainedExampleID << ".txt";
+                std::string network;
+                extractNetworkName(network);
+                currentRunFile << std::string( txtOutputFilePath.ascii() ) << network << "_" << exampleID << ".txt";
+                options->setString( Options::SUMMARY_FILE, currentRunFile.str() );
                 std::ofstream outFile( currentRunFile.str(), std::ios::out | std::ios::app );
                 if ( !outFile )
                 {
-                    std::cerr << "Failed to open " << currentRunFile.str() << "\n";
+                    std::cerr << "Failed to open" << currentRunFile.str() << "\n";
                     return 1;
                 }
+                unsigned epochs = Options::get()->getInt( Options::DQN_EPOCHS );;
 
                 struct timespec startTraining = TimeUtils::sampleMicro();
                 int numSplits = 0;
-                outFile << "Example : " << trainedExampleID << "\n";
+                outFile << "Example : " << exampleID << "\n";
+                outFile << std::flush;
                 DQN_LOG( Stringf( "Start training agent on example: %s  ",
-                                  trainedExampleID.c_str())
+                                  exampleID.c_str())
                              .ascii() );
                 std::unique_ptr<Agent> agent;
                 trainAgentOnExample( options,
                                      examplePath,
-                                     trainedExampleID,
+                                     exampleID,
                                      epochs,
                                      agent,
                                      &numSplits,
