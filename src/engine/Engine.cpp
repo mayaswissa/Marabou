@@ -144,9 +144,9 @@ void Engine::updateToCurrentDQNState( State &stateToUpdate )
     int index = 0;
     // auto constraintsToUpdateSoI = _soiManager->getConstraintsUpdatedInLastProposal();
     int phase;
-    Map<unsigned, double> currentAssignment;
-    for ( unsigned i = 0; i < getQuery()->getNumberOfVariables(); ++i )
-        currentAssignment[i] = _tableau->getValue( i );
+    // Map<unsigned, double> currentAssignment;
+    // for ( unsigned i = 0; i < getQuery()->getNumberOfVariables(); ++i )
+    //     currentAssignment[i] = _tableau->getValue( i );
     for ( const auto &plConstraint : _plConstraints )
     {
         if ( !plConstraint->isActive() && !plConstraint->phaseFixed() )
