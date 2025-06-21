@@ -122,7 +122,6 @@ Engine::~Engine()
 void Engine::updateToCurrentDQNState( State &stateToUpdate )
 {
     int index = 0;
-    // auto constraintsToUpdateSoI = _soiManager->getConstraintsUpdatedInLastProposal();
     int phase;
     Map<unsigned, double> currentAssignment;
     for ( unsigned i = 0; i < getQuery()->getNumberOfVariables(); ++i )
@@ -3301,6 +3300,7 @@ PiecewiseLinearConstraint *Engine::pickSplitPLConstraintBasedOnIntervalWidth()
 
 PiecewiseLinearConstraint *Engine::pickSplitPLConstraint( DivideStrategy strategy )
 {
+
     if ( _smtCore.getStackDepth() <= 3 )
     {
         strategy = DivideStrategy::PseudoImpact;
