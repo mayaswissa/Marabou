@@ -84,15 +84,13 @@ std::unique_ptr<Agent> Marabou::runAgentTraining( double epsilon,
 
     prepareInputQuery();
 
-    agent = solveQueryWithAgent( epsilon, exampleID, training, std::move( agent ), numSplits);
+    agent = solveQueryWithAgent( epsilon, exampleID, training, std::move( agent ), numSplits );
 
     struct timespec end = TimeUtils::sampleMicro();
 
     unsigned long long totalElapsed = TimeUtils::timePassed( start, end );
-    displayResults( totalElapsed );
+    displayTrainResults( totalElapsed );
 
-    if ( Options::get()->getBool( Options::EXPORT_ASSIGNMENT ) )
-        exportAssignment();
     return agent;
 }
 
@@ -249,7 +247,7 @@ std::unique_ptr<Agent> Marabou::solveQueryWithAgent( double epsilon,
     if ( _engine->processInputQuery( _inputQuery ) )
     {
         const auto path = Options::get()->getString( Options::DQN_AGENT_NETWORKS_PATH );
-        std::string filePath =  std::string(path.ascii())  + "/trainedAgent_" + exampleID;
+        std::string filePath = std::string( path.ascii() ) + "/" + exampleID;
         struct timespec start = TimeUtils::sampleMicro();
         unsigned trainTimeoutInSeconds = Options::get()->getInt( Options::TRAIN_DQN_TIMEOUT );
         unsigned timeoutInSeconds = Options::get()->getInt( Options::TIMEOUT );
@@ -266,7 +264,8 @@ std::unique_ptr<Agent> Marabou::solveQueryWithAgent( double epsilon,
             unsigned long long totalElapsed = TimeUtils::timePassed( start, end );
             if ( timeoutInSeconds == 0 || totalElapsed < timeoutInSeconds * MICROSECONDS_IN_SECOND )
             {
-                _cegarSolver = new CEGAR::IncrementalLinearization( _inputQuery, _engine.release() );
+                _cegarSolver =
+                    new CEGAR::IncrementalLinearization( _inputQuery, _engine.release() );
                 unsigned long long timeoutInMicroSeconds =
                     ( timeoutInSeconds == 0
                           ? 0
@@ -317,9 +316,103 @@ void Marabou::solveQuery()
         }
     }
 
-
+    // TODO: update the variable assignment using NLR if possible and double-check that all the
+    // constraints are indeed satisfied.
     if ( _engine->getExitCode() == Engine::SAT )
         _engine->extractSolution( _inputQuery );
+}
+
+void Marabou::displayTrainResults( unsigned long long microSecondsElapsed ) const
+{
+    Engine::ExitCode result = _engine->getExitCode();
+    String resultString;
+
+    if ( result == Engine::UNSAT )
+    {
+        resultString = "unsat";
+        printf( "unsat\n" );
+    }
+    else if ( result == Engine::SAT )
+    {
+        resultString = "sat";
+        printf( "sat\n" );
+
+        printf( "Input assignment:\n" );
+        for ( unsigned i = 0; i < _inputQuery.getNumInputVariables(); ++i )
+            printf( "\tx%u = %lf\n",
+                    i,
+                    _inputQuery.getSolutionValue( _inputQuery.inputVariableByIndex( i ) ) );
+
+        printf( "\n" );
+        printf( "Output:\n" );
+        for ( unsigned i = 0; i < _inputQuery.getNumOutputVariables(); ++i )
+            printf( "\ty%u = %lf\n",
+                    i,
+                    _inputQuery.getSolutionValue( _inputQuery.outputVariableByIndex( i ) ) );
+        printf( "\n" );
+    }
+    else if ( result == Engine::TIMEOUT )
+    {
+        resultString = "TIMEOUT";
+        printf( "Timeout\n" );
+    }
+    else if ( result == Engine::ERROR )
+    {
+        resultString = "ERROR";
+        printf( "Error\n" );
+    }
+    else if ( result == Engine::UNKNOWN )
+    {
+        resultString = "UNKNOWN";
+        printf( "UNKNOWN\n" );
+    }
+    else if ( result == Engine::MAX_ITERATIONS )
+    {
+        resultString = "MAX_ITERATIONS";
+        printf( "MAX_ITERATIONS\n" );
+    }
+    else
+    {
+        resultString = "NOT_DONE";
+        printf( "Unexpected exit code! (this should not happen)" );
+    }
+
+    // Create a summary file, if requested
+    String summaryFilePath = Options::get()->getString( Options::SUMMARY_FILE );
+    if ( summaryFilePath != "" )
+    {
+        File summaryFile( summaryFilePath );
+        summaryFile.open( File::MODE_WRITE_APPEND );
+
+        // Field #1: result
+        summaryFile.write( Stringf( "\t\tExitCode : %s ", resultString.ascii() ) );
+
+        // Field #2: total elapsed time
+        summaryFile.write(
+            Stringf( ", time (millisec) :  %u ", microSecondsElapsed / 1000 ) );
+
+        // Field #3: number of main loop iterations
+        summaryFile.write( Stringf(
+            ", main loop iterations: %llu",
+            _engine->getStatistics()->getLongAttribute( Statistics::NUM_MAIN_LOOP_ITERATIONS ) ) );
+
+        // Field #4: number of splits
+        summaryFile.write(
+            Stringf( ", number of SMT splits : %u ",
+                     _engine->getStatistics()->getUnsignedAttribute( Statistics::NUM_SPLITS ) ) );
+
+        // Field #5: Max SMT stack depth
+        summaryFile.write(
+            Stringf( ", max of stack depth : %u ",
+                     _engine->getStatistics()->getUnsignedAttribute( Statistics::MAX_DECISION_LEVEL ) ) );
+
+        // Field #6: number of visited states
+        summaryFile.write(
+           Stringf( ", number of visited states : %u",
+                    _engine->getStatistics()->getUnsignedAttribute( Statistics::NUM_VISITED_TREE_STATES ) ) );
+
+        summaryFile.write( "\n" );
+    }
 }
 
 void Marabou::displayResults( unsigned long long microSecondsElapsed ) const
@@ -343,36 +436,13 @@ void Marabou::displayResults( unsigned long long microSecondsElapsed ) const
                     i,
                     _inputQuery.getSolutionValue( _inputQuery.inputVariableByIndex( i ) ) );
 
-        if ( _inputQuery._networkLevelReasoner )
-        {
-            double *input = new double[_inputQuery.getNumInputVariables()];
-            for ( unsigned i = 0; i < _inputQuery.getNumInputVariables(); ++i )
-                input[i] = _inputQuery.getSolutionValue( _inputQuery.inputVariableByIndex( i ) );
-
-            NLR::NetworkLevelReasoner *nlr = _inputQuery._networkLevelReasoner;
-            NLR::Layer *lastLayer = nlr->getLayer( nlr->getNumberOfLayers() - 1 );
-            double *output = new double[lastLayer->getSize()];
-
-            nlr->evaluate( input, output );
-
-            printf( "\n" );
-            printf( "Output:\n" );
-            for ( unsigned i = 0; i < lastLayer->getSize(); ++i )
-                printf( "\ty%u = %lf\n", i, output[i] );
-            printf( "\n" );
-            delete[] input;
-            delete[] output;
-        }
-        else
-        {
-            printf( "\n" );
-            printf( "Output:\n" );
-            for ( unsigned i = 0; i < _inputQuery.getNumOutputVariables(); ++i )
-                printf( "\ty%u = %lf\n",
-                        i,
-                        _inputQuery.getSolutionValue( _inputQuery.outputVariableByIndex( i ) ) );
-            printf( "\n" );
-        }
+        printf( "\n" );
+        printf( "Output:\n" );
+        for ( unsigned i = 0; i < _inputQuery.getNumOutputVariables(); ++i )
+            printf( "\ty%u = %lf\n",
+                    i,
+                    _inputQuery.getSolutionValue( _inputQuery.outputVariableByIndex( i ) ) );
+        printf( "\n" );
     }
     else if ( result == Engine::TIMEOUT )
     {

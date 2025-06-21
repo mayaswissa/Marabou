@@ -53,6 +53,7 @@ private:
       Invoke the engine to solve the input query
     */
     void solveQuery();
+    void displayTrainResults( unsigned long long microSecondsElapsed ) const;
 
     std::unique_ptr<Agent> solveQueryWithAgent( double epsilon,
                                                 const std::string &exampleID,
