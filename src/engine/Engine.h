@@ -82,10 +82,6 @@ public:
 
     Engine();
     ~Engine();
-    void updateSoIScoreForConstraintInState( State &stateToUpdate,
-                                             int index,
-                                             PiecewiseLinearConstraint *const &plConstraint,
-                                             const Map<unsigned, double> &currentAssignment );
 
     /*
       Attempt to find a feasible solution for the input within a time limit
