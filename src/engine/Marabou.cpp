@@ -75,6 +75,25 @@ void Marabou::run()
     std::cout << "end run time: " << TimeUtils::now().ascii() << std::endl;
 }
 
+std::unique_ptr<Agent> Marabou::trainDQNAgent( double epsilon,
+                                                  const std::string &exampleID,
+                                                  std::unique_ptr<Agent> agent,
+                                                  int *numSplits )
+{
+    struct timespec start = TimeUtils::sampleMicro();
+
+    prepareQuery();
+
+    agent = trainQuery( epsilon, exampleID, std::move( agent ), numSplits );
+
+    struct timespec end = TimeUtils::sampleMicro();
+
+    unsigned long long totalElapsed = TimeUtils::timePassed( start, end );
+    displayResults( totalElapsed );
+
+    return agent;
+}
+
 void Marabou::runTrainedAgentOnExample( int *numSplits )
 {
     struct timespec start = TimeUtils::sampleMicro();
@@ -232,6 +251,52 @@ void Marabou::exportAssignment() const
     exportFile->close();
 }
 
+std::unique_ptr<Agent> Marabou::trainQuery( double epsilon,
+                                            const std::string &exampleID,
+                                            std::unique_ptr<Agent> agent,
+                                            int *numSplits )
+{
+    enum {
+        MICROSECONDS_IN_SECOND = 1000000
+    };
+
+    if ( _engine->processInputQuery( _inputQuery ) )
+    {
+        const auto path = Options::get()->getString( Options::DQN_AGENT_NETWORKS_PATH );
+        std::string filePath = std::string( path.ascii() ) + "/" + exampleID;
+        struct timespec start = TimeUtils::sampleMicro();
+        unsigned trainTimeoutInSeconds = Options::get()->getInt( Options::TRAIN_DQN_TIMEOUT );
+        unsigned timeoutInSeconds = Options::get()->getInt( Options::TIMEOUT );
+
+        agent =
+            _engine->trainDQNAgent( epsilon, std::move( agent ), trainTimeoutInSeconds, numSplits );
+
+
+        if ( _engine->getExitCode() == Engine::UNKNOWN )
+        {
+            struct timespec end = TimeUtils::sampleMicro();
+            unsigned long long totalElapsed = TimeUtils::timePassed( start, end );
+            if ( timeoutInSeconds == 0 || totalElapsed < timeoutInSeconds * MICROSECONDS_IN_SECOND )
+            {
+                _cegarSolver =
+                    new CEGAR::IncrementalLinearization( _inputQuery, _engine.release() );
+                unsigned long long timeoutInMicroSeconds =
+                    ( timeoutInSeconds == 0
+                          ? 0
+                          : timeoutInSeconds * MICROSECONDS_IN_SECOND - totalElapsed );
+                _cegarSolver->setInitialTimeoutInMicroSeconds( timeoutInMicroSeconds );
+                _cegarSolver->solve();
+                _engine = std::unique_ptr<Engine>( _cegarSolver->releaseEngine() );
+            }
+        }
+
+
+        if ( _engine->getExitCode() == Engine::SAT )
+            _engine->extractSolution( _inputQuery );
+    }
+    return agent;
+}
+
 void Marabou::solveQueryWithAgent( int *numSplits )
 {
     enum {
@@ -241,7 +306,7 @@ void Marabou::solveQueryWithAgent( int *numSplits )
     if ( _engine->processInputQuery( _inputQuery ) )
     {
         const auto path = Options::get()->getString( Options::DQN_AGENT_NETWORKS_PATH );
-        std::string filePath =  std::string(path.ascii());
+        std::string filePath = std::string( path.ascii() );
         struct timespec start = TimeUtils::sampleMicro();
         unsigned timeoutInSeconds = Options::get()->getInt( Options::TIMEOUT );
         _engine->solve( timeoutInSeconds, filePath, numSplits );
@@ -252,7 +317,8 @@ void Marabou::solveQueryWithAgent( int *numSplits )
             unsigned long long totalElapsed = TimeUtils::timePassed( start, end );
             if ( timeoutInSeconds == 0 || totalElapsed < timeoutInSeconds * MICROSECONDS_IN_SECOND )
             {
-                _cegarSolver = new CEGAR::IncrementalLinearization( _inputQuery, _engine.release() );
+                _cegarSolver =
+                    new CEGAR::IncrementalLinearization( _inputQuery, _engine.release() );
                 unsigned long long timeoutInMicroSeconds =
                     ( timeoutInSeconds == 0
                           ? 0
@@ -310,7 +376,7 @@ void Marabou::solveQuery()
 
 void Marabou::displayResults( unsigned long long microSecondsElapsed ) const
 {
-     Engine::ExitCode result = _engine->getExitCode();
+    Engine::ExitCode result = _engine->getExitCode();
     String resultString;
 
     if ( result == Engine::UNSAT )
@@ -374,8 +440,7 @@ void Marabou::displayResults( unsigned long long microSecondsElapsed ) const
         summaryFile.write( Stringf( "\t\tExitCode : %s ", resultString.ascii() ) );
 
         // Field #2: total elapsed time
-        summaryFile.write(
-            Stringf( ", time (millisec) :  %u ", microSecondsElapsed / 1000 ) );
+        summaryFile.write( Stringf( ", time (millisec) :  %u ", microSecondsElapsed / 1000 ) );
 
         // Field #3: number of main loop iterations
         summaryFile.write( Stringf(
@@ -388,14 +453,14 @@ void Marabou::displayResults( unsigned long long microSecondsElapsed ) const
                      _engine->getStatistics()->getUnsignedAttribute( Statistics::NUM_SPLITS ) ) );
 
         // Field #5: Max SMT stack depth
-        summaryFile.write(
-            Stringf( ", max of stack depth : %u ",
-                     _engine->getStatistics()->getUnsignedAttribute( Statistics::MAX_DECISION_LEVEL ) ) );
+        summaryFile.write( Stringf(
+            ", max of stack depth : %u ",
+            _engine->getStatistics()->getUnsignedAttribute( Statistics::MAX_DECISION_LEVEL ) ) );
 
         // Field #6: number of visited states
-        summaryFile.write(
-           Stringf( ", number of visited states : %u",
-                    _engine->getStatistics()->getUnsignedAttribute( Statistics::NUM_VISITED_TREE_STATES ) ) );
+        summaryFile.write( Stringf( ", number of visited states : %u",
+                                    _engine->getStatistics()->getUnsignedAttribute(
+                                        Statistics::NUM_VISITED_TREE_STATES ) ) );
 
         summaryFile.write( "\n" );
     }

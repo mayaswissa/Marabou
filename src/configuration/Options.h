@@ -118,6 +118,13 @@ public:
 
         // Maximal number of constraints to refine in incremental linearization
         NUM_CONSTRAINTS_TO_REFINE_INC_LIN,
+
+        // DQN-agent mode. 0 - off, 1 - train, 2 - run
+        DQN_MODE,
+
+        DQN_EPOCHS,
+
+        DQN_MAX_ITERS,
     };
 
     enum FloatOptions {

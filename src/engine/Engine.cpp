@@ -124,7 +124,8 @@ void Engine::updateSoIScoreForConstraintInState( State &stateToUpdate,
                                                  const Map<unsigned, double> &currentAssignment )
 {
     auto currentPhase = plConstraint->getPhaseStatus();
-    if ( currentPhase == RELU_PHASE_ACTIVE || currentPhase == RELU_PHASE_INACTIVE || plConstraint->haveOutOfBoundVariables() )
+    if ( currentPhase == RELU_PHASE_ACTIVE || currentPhase == RELU_PHASE_INACTIVE ||
+         plConstraint->haveOutOfBoundVariables() )
     {
         stateToUpdate.updateSoIScoreForAgent( index, 0, 0 );
         return;
@@ -154,8 +155,9 @@ void Engine::updateToCurrentDQNState( State &stateToUpdate )
         else
             phase = plConstraint->getPhaseStatus();
         stateToUpdate.updateConstraintPhase( index, phase );
-        if (constraintsToUpdateSoI.exists( plConstraint ))
-            updateSoIScoreForConstraintInState( stateToUpdate, index, plConstraint, currentAssignment );
+        if ( constraintsToUpdateSoI.exists( plConstraint ) )
+            updateSoIScoreForConstraintInState(
+                stateToUpdate, index, plConstraint, currentAssignment );
         stateToUpdate.updatePolarity( index, plConstraint->computePolarity() );
         ReluConstraint *reluConstraint = dynamic_cast<ReluConstraint *>( plConstraint );
         if ( reluConstraint )
@@ -295,7 +297,7 @@ bool Engine::solve( double timeoutInSeconds, const std::string &trainedAgentPath
     }
 
     // for DQN use:
-    if ( GlobalConfiguration::USE_DQN )
+    if ( Options::get()->getInt( Options::DQN_MODE ) == 2 )
     {
         std::cout << "running with agent" << std::endl;
         unsigned numPlConstraints = _plConstraints.size();
@@ -303,8 +305,7 @@ bool Engine::solve( double timeoutInSeconds, const std::string &trainedAgentPath
             throw std::runtime_error( "Agent is not set" );
         _currentDQNState = std::make_unique<State>( numPlConstraints );
         updateToCurrentDQNState( *_currentDQNState );
-        _agent = std::make_unique<Agent>(
-            numPlConstraints, DQN_NUM_PHASES, trainedAgentPath );
+        _agent = std::make_unique<Agent>( numPlConstraints, DQN_NUM_PHASES, trainedAgentPath );
         _action = nullptr;
         _previousState = std::make_unique<State>( numPlConstraints );
         updateToCurrentDQNState( *_previousState );
@@ -389,7 +390,8 @@ bool Engine::solve( double timeoutInSeconds, const std::string &trainedAgentPath
                 }
                 else
                     _smtCore.performSplit();
-                ( *numSplits )++;
+                if (numSplits != nullptr)
+                    ( *numSplits )++;
                 splitJustPerformed = true;
                 continue;
             }
@@ -599,7 +601,7 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
     updateToCurrentDQNState( *_currentDQNState );
     _previousState = std::make_unique<State>( numPlConstraints );
     updateToCurrentDQNState( *_previousState );
-    const unsigned maxSplitsByAgent = 1000;
+    const unsigned maxSplitsByAgent = Options::get()->getInt( Options::DQN_MAX_ITERS );
     while ( _numSplits < maxSplitsByAgent )
     {
         struct timespec mainLoopEnd = TimeUtils::sampleMicro();
@@ -613,10 +615,7 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
             if ( _action == nullptr )
                 _agent->stepFakeAction( *_previousState, _numSplits );
             else
-                _agent->stepNewAction( *_previousState,
-                                       *_action,
-                                       true,
-                                       _numSplits );
+                _agent->stepNewAction( *_previousState, *_action, true, _numSplits );
             _agent->handleDone( *_currentDQNState, _numSplits );
 
             if ( _verbosity > 0 )
@@ -737,7 +736,6 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                 {
                     if ( allNonlinearConstraintsHold() )
                     {
-
                         if ( _action == nullptr )
                             _agent->stepFakeAction( *_previousState, _numSplits );
                         else
@@ -3329,7 +3327,8 @@ PiecewiseLinearConstraint *Engine::pickSplitPLConstraintBasedOnIntervalWidth()
 PiecewiseLinearConstraint *Engine::pickSplitPLConstraint( DivideStrategy strategy )
 {
     ENGINE_LOG( Stringf( "Picking a split PLConstraint..." ).ascii() );
-    if ( Options::get()->getDivideStrategy() == DivideStrategy::PseudoImpact)
+    if ( Options::get()->getInt( Options::DQN_MODE ) > 0 &&
+         Options::get()->getDivideStrategy() == DivideStrategy::PseudoImpact )
     {
         if ( _smtCore.getStackDepth() <= 3 )
         {
@@ -3608,7 +3607,8 @@ bool Engine::performDeepSoILocalSearch()
                 }
             }
 
-            else if ( FloatUtils::isZero( costOfLastAcceptedPhasePattern - costOfProposedPhasePattern ) )
+            else if ( FloatUtils::isZero( costOfLastAcceptedPhasePattern -
+                                          costOfProposedPhasePattern ) )
             {
                 // Corner case: the SoI is minimal but there are still some PL
                 // constraints (those not in the SoI) unsatisfied.

@@ -30,9 +30,6 @@ const double GlobalConfiguration::EXPONENTIAL_MOVING_AVERAGE_ALPHA = 0.5;
 bool GlobalConfiguration::USE_DEEPSOI_LOCAL_SEARCH = true;
 const double GlobalConfiguration::SCORE_BUMP_FOR_PL_CONSTRAINTS_NOT_IN_SOI = 5;
 
-//Use Deep Q-Network to decide which branch to take first in a case split
-bool GlobalConfiguration::USE_DQN = true;
-
 // Use the polarity metrics to decide which branch to take first in a case split
 // and how to repair a ReLU constraint.
 const bool GlobalConfiguration::USE_POLARITY_BASED_DIRECTION_HEURISTICS = true;

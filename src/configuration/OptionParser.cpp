@@ -138,13 +138,27 @@ void OptionParser::initialize()
             ->default_value( ( *_boolOptions )[Options::PRODUCE_PROOFS] ),
         "Produce proofs of UNSAT and check them" )(
         "DQN-output-file",
-        boost::program_options::value<std::string>( &( *_stringOptions )[Options::DQN_OUTPUT_FILE_PATH] )
+        boost::program_options::value<std::string>(
+            &( *_stringOptions )[Options::DQN_OUTPUT_FILE_PATH] )
             ->default_value( ( *_stringOptions )[Options::DQN_OUTPUT_FILE_PATH] ),
         "DQN results file path." )(
         "save-agent-path",
-        boost::program_options::value<std::string>( &( *_stringOptions )[Options::DQN_AGENT_NETWORKS_PATH] )
+        boost::program_options::value<std::string>(
+            &( *_stringOptions )[Options::DQN_AGENT_NETWORKS_PATH] )
             ->default_value( ( *_stringOptions )[Options::DQN_AGENT_NETWORKS_PATH] ),
-        "Path to load/ save DQN agent's networks." )
+        "Path to load/ save DQN agent's networks." )(
+        "DQN-mode",
+        boost::program_options::value<int>( &( ( *_intOptions )[Options::DQN_MODE] ) )
+            ->default_value( ( *_intOptions )[Options::DQN_MODE] ),
+        "DQN-agent mode. off/train/run." )(
+        "DQN-epochs",
+        boost::program_options::value<int>( &( *_intOptions )[Options::DQN_EPOCHS] )
+            ->default_value( ( *_intOptions )[Options::DQN_EPOCHS] ),
+        "number of epochs in DQN training." )(
+        "DQN-iters",
+        boost::program_options::value<int>( &( *_intOptions )[Options::DQN_MAX_ITERS] )
+            ->default_value( ( *_intOptions )[Options::DQN_MAX_ITERS] ),
+        "number of max iterations per epoch in DQN training." )
 #ifdef ENABLE_GUROBI
 #endif // ENABLE_GUROBI
         ;
