@@ -125,6 +125,13 @@ public:
         DQN_EPOCHS,
 
         DQN_MAX_ITERS,
+
+        DQN_BATCH_SIZE,
+
+        DQN_BUFFER_SIZE,
+
+        DQN_EXPLORATION_RATE,
+
     };
 
     enum FloatOptions {
@@ -143,6 +150,12 @@ public:
         // In each iteration of incremental linearization, scale the maximal
         // number of constraints to refine by this number
         REFINEMENT_SCALING_FACTOR_INC_LIN,
+
+        // DQN agent learning rate
+        DQN_LR,
+
+        // DQN agent weight decay
+        DQN_WEIGHT_DECAY,
     };
 
     enum StringOptions {

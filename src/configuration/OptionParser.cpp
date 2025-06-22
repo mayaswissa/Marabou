@@ -158,7 +158,28 @@ void OptionParser::initialize()
         "DQN-iters",
         boost::program_options::value<int>( &( *_intOptions )[Options::DQN_MAX_ITERS] )
             ->default_value( ( *_intOptions )[Options::DQN_MAX_ITERS] ),
-        "number of max iterations per epoch in DQN training." )
+        "number of max iterations per epoch in DQN training." )(
+        "DQN-LR",
+        boost::program_options::value<float>( &( ( *_floatOptions )[Options::DQN_LR] ) )
+            ->default_value( ( *_floatOptions )[Options::DQN_LR] ),
+        "DQN agent's learning rate.\n" )(
+        "DQN-weight-decay",
+        boost::program_options::value<float>( &( ( *_floatOptions )[Options::DQN_WEIGHT_DECAY] ) )
+            ->default_value( ( *_floatOptions )[Options::DQN_WEIGHT_DECAY] ),
+        "DQN agent networks' weight decay.\n" )(
+        "DQN-batch-size",
+        boost::program_options::value<int>( &( ( *_intOptions )[Options::DQN_BATCH_SIZE] ) )
+            ->default_value( ( *_intOptions )[Options::DQN_BATCH_SIZE] ),
+        "DQN agent's batch size.\n" )(
+        "DQN-buffer-size",
+        boost::program_options::value<int>( &( ( *_intOptions )[Options::DQN_BUFFER_SIZE] ) )
+            ->default_value( ( *_intOptions )[Options::DQN_BUFFER_SIZE] ),
+        "DQN agent's buffer size.\n" )(
+        "DQN-exploration-rate",
+        boost::program_options::value<int>( &( ( *_intOptions )[Options::DQN_EXPLORATION_RATE] ) )
+            ->default_value( ( *_intOptions )[Options::DQN_EXPLORATION_RATE] ),
+        "DQN agent's exploration rate.\n" )
+
 #ifdef ENABLE_GUROBI
 #endif // ENABLE_GUROBI
         ;

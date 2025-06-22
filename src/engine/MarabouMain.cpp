@@ -210,7 +210,7 @@ void trainAgentOnExample( Options *options,
         }
 
         if ( agent != nullptr &&
-             *numSplits > static_cast<int>( GlobalConfiguration::DQN_BATCH_SIZE ) * 20 )
+             *numSplits > static_cast<int>( Options::get()->getInt( Options::DQN_BATCH_SIZE ) * 20 ))
         {
             const auto path = options->getString( Options::DQN_AGENT_NETWORKS_PATH );
             std::string filePath = std::string( path.ascii() ) + "/" + exampleID;

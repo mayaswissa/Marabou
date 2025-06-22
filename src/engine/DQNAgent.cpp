@@ -1,4 +1,5 @@
 #include "DQNAgent.h"
+#include "Options.h"
 
 #include <random>
 #include <utility>
@@ -16,11 +17,12 @@ Agent::Agent( const unsigned numPlConstraints,
     , _qNetworkLocal( QNetwork( _numPlConstraints, NUM_FEATURES, _numActions ) )
     , _qNetworkTarget( QNetwork( _numPlConstraints, NUM_FEATURES, _numActions ) )
     , _optimizer( _qNetworkLocal.parameters(),
-                  torch::optim::AdamOptions( GlobalConfiguration::DQN_LR ).weight_decay( 1e-6 ) )
+                  torch::optim::AdamOptions( Options::get()->getFloat( Options::DQN_LR ) )
+                      .weight_decay( Options::get()->getFloat( Options::DQN_WEIGHT_DECAY ) ) )
     , _scheduler( _optimizer, 1, 0.9 )
     , _replayedBuffer( ReplayBuffer( _numPlConstraints,
-                                     GlobalConfiguration::DQN_BUFFER_SIZE,
-                                     GlobalConfiguration::DQN_BATCH_SIZE ) )
+                                     Options::get()->getInt( Options::DQN_BUFFER_SIZE ),
+                                     Options::get()->getInt( Options::DQN_BATCH_SIZE ) ) )
     , _lossVerbosity( 0 )
 {
     _qNetworkLocal.to( device );
@@ -30,7 +32,6 @@ Agent::Agent( const unsigned numPlConstraints,
     // If a load path is provided, load the networks
     if ( !trainedAgentPath.empty() )
         loadNetworks();
-
 }
 
 void Agent::saveNetworks( const std::string &path ) const
@@ -102,7 +103,7 @@ void Agent::handleDone( const State &currentState, const unsigned numSplits )
 {
     // Insert all actions from actions buffer to the replay buffer and learn.
     _replayedBuffer.handleDone( currentState, numSplits );
-    _tStep = ( _tStep + 1 ) % GlobalConfiguration::DQN_EXPLORATION_RATE;
+    _tStep = ( _tStep + 1 ) % Options::get()->getInt( Options::DQN_EXPLORATION_RATE );
     learn();
 }
 
@@ -111,7 +112,7 @@ void Agent::stepAlternativeAction( const State &stateBeforeSplit,
                                    unsigned &numInconsistent )
 {
     _replayedBuffer.applyNextAction( stateBeforeSplit, numSplits, numInconsistent );
-    _tStep = ( _tStep + 1 ) % GlobalConfiguration::DQN_EXPLORATION_RATE;
+    _tStep = ( _tStep + 1 ) % Options::get()->getInt( Options::DQN_EXPLORATION_RATE );
     if ( _tStep == 0 )
         learn();
 }
@@ -127,7 +128,7 @@ void Agent::stepNewAction( const State &previousState,
                            const unsigned numSplits )
 {
     _replayedBuffer.pushActionEntry( action, previousState, numSplits, done );
-    _tStep = ( _tStep + 1 ) % GlobalConfiguration::DQN_EXPLORATION_RATE;
+    _tStep = ( _tStep + 1 ) % Options::get()->getInt( Options::DQN_EXPLORATION_RATE );
     if ( _tStep == 0 )
         learn();
 }
