@@ -34,7 +34,7 @@ public:
     void run();
     void prepareInputQuery();
 
-    void runTrainedAgentOnExample( int *numSplits, String &exitCode );
+    void runTrainedAgentOnExample( int *numSplits );
 
 private:
     InputQuery _inputQuery;
@@ -55,7 +55,7 @@ private:
     /*
       Display the results
     */
-    void displayResults( unsigned long long microSecondsElapsed, String &exitCode ) const;
+    void displayResults( unsigned long long microSecondsElapsed ) const;
 
     /*
       Export assignment as per Options

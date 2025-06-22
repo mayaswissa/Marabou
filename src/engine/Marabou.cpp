@@ -67,7 +67,7 @@ void Marabou::run()
 
     unsigned long long totalElapsed = TimeUtils::timePassed( start, end );
     String exitCode = "";
-    displayResults( totalElapsed, exitCode );
+    displayResults( totalElapsed );
 
     if ( Options::get()->getBool( Options::EXPORT_ASSIGNMENT ) )
         exportAssignment();
@@ -75,7 +75,7 @@ void Marabou::run()
     std::cout << "end run time: " << TimeUtils::now().ascii() << std::endl;
 }
 
-void Marabou::runTrainedAgentOnExample( int *numSplits, String &exitCode )
+void Marabou::runTrainedAgentOnExample( int *numSplits )
 {
     struct timespec start = TimeUtils::sampleMicro();
 
@@ -86,7 +86,7 @@ void Marabou::runTrainedAgentOnExample( int *numSplits, String &exitCode )
     struct timespec end = TimeUtils::sampleMicro();
 
     unsigned long long totalElapsed = TimeUtils::timePassed( start, end );
-    displayResults( totalElapsed, exitCode );
+    displayResults( totalElapsed );
 
     if ( Options::get()->getBool( Options::EXPORT_ASSIGNMENT ) )
         exportAssignment();
@@ -302,14 +302,15 @@ void Marabou::solveQuery()
         }
     }
 
-
+    // TODO: update the variable assignment using NLR if possible and double-check that all the
+    // constraints are indeed satisfied.
     if ( _engine->getExitCode() == Engine::SAT )
         _engine->extractSolution( _inputQuery );
 }
 
-void Marabou::displayResults( unsigned long long microSecondsElapsed, String &exitCode ) const
+void Marabou::displayResults( unsigned long long microSecondsElapsed ) const
 {
-    Engine::ExitCode result = _engine->getExitCode();
+     Engine::ExitCode result = _engine->getExitCode();
     String resultString;
 
     if ( result == Engine::UNSAT )
@@ -328,36 +329,13 @@ void Marabou::displayResults( unsigned long long microSecondsElapsed, String &ex
                     i,
                     _inputQuery.getSolutionValue( _inputQuery.inputVariableByIndex( i ) ) );
 
-        if ( _inputQuery._networkLevelReasoner )
-        {
-            double *input = new double[_inputQuery.getNumInputVariables()];
-            for ( unsigned i = 0; i < _inputQuery.getNumInputVariables(); ++i )
-                input[i] = _inputQuery.getSolutionValue( _inputQuery.inputVariableByIndex( i ) );
-
-            NLR::NetworkLevelReasoner *nlr = _inputQuery._networkLevelReasoner;
-            NLR::Layer *lastLayer = nlr->getLayer( nlr->getNumberOfLayers() - 1 );
-            double *output = new double[lastLayer->getSize()];
-
-            nlr->evaluate( input, output );
-
-            printf( "\n" );
-            printf( "Output:\n" );
-            for ( unsigned i = 0; i < lastLayer->getSize(); ++i )
-                printf( "\ty%u = %lf\n", i, output[i] );
-            printf( "\n" );
-            delete[] input;
-            delete[] output;
-        }
-        else
-        {
-            printf( "\n" );
-            printf( "Output:\n" );
-            for ( unsigned i = 0; i < _inputQuery.getNumOutputVariables(); ++i )
-                printf( "\ty%u = %lf\n",
-                        i,
-                        _inputQuery.getSolutionValue( _inputQuery.outputVariableByIndex( i ) ) );
-            printf( "\n" );
-        }
+        printf( "\n" );
+        printf( "Output:\n" );
+        for ( unsigned i = 0; i < _inputQuery.getNumOutputVariables(); ++i )
+            printf( "\ty%u = %lf\n",
+                    i,
+                    _inputQuery.getSolutionValue( _inputQuery.outputVariableByIndex( i ) ) );
+        printf( "\n" );
     }
     else if ( result == Engine::TIMEOUT )
     {
@@ -384,29 +362,40 @@ void Marabou::displayResults( unsigned long long microSecondsElapsed, String &ex
         resultString = "NOT_DONE";
         printf( "Unexpected exit code! (this should not happen)" );
     }
-    exitCode = resultString;
 
     // Create a summary file, if requested
     String summaryFilePath = Options::get()->getString( Options::SUMMARY_FILE );
     if ( summaryFilePath != "" )
     {
         File summaryFile( summaryFilePath );
-        summaryFile.open( File::MODE_WRITE_TRUNCATE );
+        summaryFile.open( File::MODE_WRITE_APPEND );
 
         // Field #1: result
-        summaryFile.write( resultString );
+        summaryFile.write( Stringf( "\t\tExitCode : %s ", resultString.ascii() ) );
 
         // Field #2: total elapsed time
-        summaryFile.write( Stringf( " %u ", microSecondsElapsed / 1000000 ) ); // In seconds
-
-        // Field #3: number of visited tree states
-        summaryFile.write( Stringf( "%u ",
-                                    _engine->getStatistics()->getUnsignedAttribute(
-                                        Statistics::NUM_VISITED_TREE_STATES ) ) );
-
-        // Field #4: average pivot time in micro seconds
         summaryFile.write(
-            Stringf( "%u", _engine->getStatistics()->getAveragePivotTimeInMicro() ) );
+            Stringf( ", time (millisec) :  %u ", microSecondsElapsed / 1000 ) );
+
+        // Field #3: number of main loop iterations
+        summaryFile.write( Stringf(
+            ", main loop iterations: %llu",
+            _engine->getStatistics()->getLongAttribute( Statistics::NUM_MAIN_LOOP_ITERATIONS ) ) );
+
+        // Field #4: number of splits
+        summaryFile.write(
+            Stringf( ", number of SMT splits : %u ",
+                     _engine->getStatistics()->getUnsignedAttribute( Statistics::NUM_SPLITS ) ) );
+
+        // Field #5: Max SMT stack depth
+        summaryFile.write(
+            Stringf( ", max of stack depth : %u ",
+                     _engine->getStatistics()->getUnsignedAttribute( Statistics::MAX_DECISION_LEVEL ) ) );
+
+        // Field #6: number of visited states
+        summaryFile.write(
+           Stringf( ", number of visited states : %u",
+                    _engine->getStatistics()->getUnsignedAttribute( Statistics::NUM_VISITED_TREE_STATES ) ) );
 
         summaryFile.write( "\n" );
     }

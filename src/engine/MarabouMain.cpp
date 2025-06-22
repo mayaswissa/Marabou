@@ -275,8 +275,10 @@ int marabouMain( int argc, char **argv )
                 std::string trainedAgentID;
                 extractTrainedAgentID( trainedAgentPath, trainedAgentID );
                 extractNetworkName( network );
-                currentRunFile << std::string( txtOutputFilePath.ascii() ) << "Ex_" << exampleID << "_trainedOn_" << trainedAgentID << ".txt";
+                currentRunFile << std::string( txtOutputFilePath.ascii() ) << exampleID << ".txt";
+                options->setString( Options::SUMMARY_FILE, currentRunFile.str() );
                 std::ofstream outFile( currentRunFile.str(), std::ios::out | std::ios::app );
+                outFile << "Ex_" << exampleID << "_trainedOn_" << trainedAgentID << "\n";
                 if ( !outFile )
                 {
                     std::cerr << "Failed to open " << currentRunFile.str() << "\n";
@@ -306,20 +308,15 @@ int marabouMain( int argc, char **argv )
                     DQN_LOG( Stringf( "run Example ID: %s\n", currentExampleID.c_str() ).ascii() );
                     struct timespec startRunningCurrentExample = TimeUtils::sampleMicro();
                     int numSplits = 0;
-                    String exitCode;
-                    outFile << "Example : " << exampleID << "\n";
+                    outFile << "epsilon : " << currentExampleID << "\n";
+                    outFile << std::flush;
                     DQN_LOG( Stringf( "Start runing trained agent with example: %s  ",
                                       currentExampleID.c_str() )
                                  .ascii() );
-                    Marabou().runTrainedAgentOnExample( &numSplits, exitCode );
+                    Marabou().runTrainedAgentOnExample( &numSplits );
                     struct timespec endtRunningCurrentExample = TimeUtils::sampleMicro();
                     unsigned long long totalTraining = TimeUtils::timePassed(
                         startRunningCurrentExample, endtRunningCurrentExample );
-                    auto totalMilli = std::to_string( totalTraining / 1000 ).c_str();
-                    outFile << "Example ID: " << currentExampleID << ", Epsilon: " << eps_id
-                            << ", Splits : " << numSplits << ", Time : " << totalMilli << " ms "
-                            << ", Exit code : " << exitCode.ascii() << "\n";
-                    outFile << std::flush;
 
                     DQN_LOG( Stringf( "Done solving. Time : %llu milli. \n", totalTraining / 1000 )
                                  .ascii() );
