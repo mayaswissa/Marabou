@@ -160,7 +160,7 @@ void OptionParser::initialize()
             &( ( *_stringOptions )[Options::SPLITTING_STRATEGY] ) )
             ->default_value( ( *_stringOptions )[Options::SPLITTING_STRATEGY] ),
         "The branching strategy "
-        "(earliest-relu/pseudo-impact/largest-interval/relu-violation/polarity/babsr)."
+        "(earliest-relu/pseudo-impact/largest-interval/relu-violation/polarity/babsr/DQN-agent)."
         " pseudo-impact is specific to the DeepSoI (default) procedure and relu-violation is "
         "specific to the Reluplex procedure.\n" )(
         "soi-split-threshold",
