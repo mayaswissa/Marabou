@@ -32,12 +32,13 @@ public:
     int getActionStackSize() const;
     int getReplayBufferSize() const;
     void schedulersStep();
+    std::unique_ptr<Action> actBestAction( const State &state );
+    std::unique_ptr<Action> actRandomly( const State &state );
 
 private:
     static void softUpdate( const QNetwork &localModel, const QNetwork &targetModel );
     void learn();
     torch::Device getDevice() const;
-
     ActionSpace _actionSpace;
     unsigned _numPlConstraints, _numPhases, _numActions;
     unsigned _tStep;
@@ -50,5 +51,7 @@ private:
     ReplayBuffer _replayedBuffer;
     unsigned _lossVerbosity;
     bool handleInvalidGradients();
+    void applyActionMask( const torch::Tensor &tensorState, torch::Tensor &QValues ) const;
+
 };
 #endif

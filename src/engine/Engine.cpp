@@ -158,14 +158,14 @@ void Engine::updateToCurrentDQNState( State &stateToUpdate )
         if ( constraintsToUpdateSoI.exists( plConstraint ) )
             updateSoIScoreForConstraintInState(
                 stateToUpdate, index, plConstraint, currentAssignment );
-        stateToUpdate.updatePolarity( index, plConstraint->computePolarity() );
+        stateToUpdate.updatePolarity( index, std::abs( plConstraint->computePolarity() ) );
         ReluConstraint *reluConstraint = dynamic_cast<ReluConstraint *>( plConstraint );
         if ( reluConstraint )
         {
             // Set NLR if not already set
             reluConstraint->initializeNLRForBaBSR( _networkLevelReasoner );
             // Collect raw scores
-            stateToUpdate.updateBaBsrScore( index, reluConstraint->computeBaBsr() );
+            stateToUpdate.updateBaBsrScore( index, std::abs( reluConstraint->computeBaBsr() ) );
         }
         index++;
     }
@@ -390,7 +390,7 @@ bool Engine::solve( double timeoutInSeconds, const std::string &trainedAgentPath
                 }
                 else
                     _smtCore.performSplit();
-                if (numSplits != nullptr)
+                if ( numSplits != nullptr )
                     ( *numSplits )++;
                 splitJustPerformed = true;
                 continue;
@@ -3256,13 +3256,54 @@ PiecewiseLinearConstraint *Engine::pickSplitPLConstraintBasedOnPolarity()
 PiecewiseLinearConstraint *Engine::pickSplitPLConstraintByAgent()
 {
     ENGINE_LOG( Stringf( "Using DQN-based heuristics..." ).ascii() );
-    updateToCurrentDQNState( *_previousState );
-    _action = std::move( _agent->act( *_previousState, _eps ) );
-    if ( _action == nullptr )
-        return nullptr;
-    PiecewiseLinearConstraint *plConstraint =
-        indexToConstraint( _action->getPlConstraintAction(), &_plConstraints );
-    return plConstraint;
+    std::random_device rd;
+    std::mt19937 gen( rd() );
+    std::uniform_real_distribution<> distReal( 0.0, 1.0 );
+    std::uniform_int_distribution<> distChoice( 0, 2 );
+    if ( distReal( rd ) / RAND_MAX > _eps )
+    {
+        ENGINE_LOG( Stringf( "Agent picks its own split..." ).ascii() );
+        updateToCurrentDQNState( *_previousState );
+        _action = std::move( _agent->actBestAction( *_previousState ) );
+        if ( _action == nullptr )
+            return nullptr;
+        PiecewiseLinearConstraint *plConstraint =
+            indexToConstraint( _action->getPlConstraintAction(), &_plConstraints );
+        return plConstraint;
+    }
+    else
+    {
+        int splittingStrategy = distChoice( gen );
+        PiecewiseLinearConstraint *plConstraint = nullptr;
+        PhaseStatus phase = PHASE_NOT_FIXED;
+        switch ( splittingStrategy )
+        {
+        case 0:
+            ENGINE_LOG( Stringf( "Agent picks split randomly..." ).ascii() );
+            std::cout <<"Agent picks split randomly..." << std::endl;
+            _action = std::move( _agent->actRandomly( *_previousState ) );
+            if ( _action == nullptr )
+                return nullptr;
+            plConstraint = indexToConstraint( _action->getPlConstraintAction(), &_plConstraints );
+            return plConstraint;
+        case 1:
+            std::cout <<"Agent picks split polarity..." << std::endl;
+            ENGINE_LOG( Stringf( "Agent picks split by polarity score..." ).ascii() );
+            plConstraint = pickSplitPLConstraintBasedOnPolarity();
+            phase = plConstraint->getDirection();
+            break;
+        case 2:
+            std::cout <<"Agent picks split BaBsr..." << std::endl;
+            ENGINE_LOG( Stringf( "Agent picks split by BaBsr score..." ).ascii() );
+            plConstraint = pickSplitPLConstraintBasedOnBaBsrHeuristic();
+            phase = plConstraint->getDirection();
+            break;
+        }
+        auto constrainIndex = _constraintToIndex[plConstraint];
+        _action =
+            std::make_unique<Action>( DQN_NUM_PHASES, _plConstraints.size(), constrainIndex, phase );
+        return plConstraint;
+    }
 }
 
 PiecewiseLinearConstraint *Engine::pickSplitPLConstraintBasedOnTopology()
