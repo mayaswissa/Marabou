@@ -9,15 +9,8 @@ State::State( const unsigned numConstraints )
     _stateData.resize( numConstraints * NUM_FEATURES, 0.0 );
 
     // For each constraint, set the feature at index DQN_RELU_NOT_FIXED to 1.0,
-    // SoI scores to 0.
     for ( unsigned i = 0; i < numConstraints; ++i )
-    {
         _stateData[i * NUM_FEATURES + DQN_RELU_NOT_FIXED] = 1.0;
-        _stateData[i * NUM_FEATURES + SOI_ACTIVE_SCORE] = 0;
-        _stateData[i * NUM_FEATURES + SOI_INACTIVE_SCORE] = 0;
-        _stateData[i * NUM_FEATURES + BaBsr_SCORE] = 0.0;
-
-    }
 }
 
 State::State( const State &other )
