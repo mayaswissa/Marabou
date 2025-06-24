@@ -360,10 +360,13 @@ int marabouMain( int argc, char **argv )
                          currentExample.substr( currentExample.size() - 4 ) != ".txt" )
                         continue;
                     std::string fullCurrentExamplePath = root + "/" + currentExample;
-                    std::string currentExampleID;
-                    extractExampleID( fullCurrentExamplePath, currentExampleID );
+                    size_t ex_pos = fullCurrentExamplePath.find( "ex_" ) + 3;
+                    size_t label_pos = fullCurrentExamplePath.find( "_label_" ) + 7;
                     size_t eps_pos = fullCurrentExamplePath.find( "eps" ) + 3;
+                    std::string ex_id = fullCurrentExamplePath.substr( ex_pos, 4 );
+                    std::string label_id = fullCurrentExamplePath.substr( label_pos, 1 );
                     std::string eps_id = fullCurrentExamplePath.substr( eps_pos, 2 );
+                    std::string currentExampleID = ex_id + label_id + eps_id;
                     currentExampleID += eps_id;
                     options->setString( Options::PROPERTY_FILE_PATH, fullCurrentExamplePath );
                     struct timespec startTime = TimeUtils::sampleMicro();
@@ -399,10 +402,13 @@ int marabouMain( int argc, char **argv )
                          currentExample.substr( currentExample.size() - 4 ) != ".txt" )
                         continue;
                     std::string fullCurrentExamplePath = root + "/" + currentExample;
-                    std::string currentExampleID;
-                    extractExampleID( fullCurrentExamplePath, currentExampleID );
+                    size_t ex_pos = fullCurrentExamplePath.find( "ex_" ) + 3;
+                    size_t label_pos = fullCurrentExamplePath.find( "_label_" ) + 7;
                     size_t eps_pos = fullCurrentExamplePath.find( "eps" ) + 3;
+                    std::string ex_id = fullCurrentExamplePath.substr( ex_pos, 4 );
+                    std::string label_id = fullCurrentExamplePath.substr( label_pos, 1 );
                     std::string eps_id = fullCurrentExamplePath.substr( eps_pos, 2 );
+                    std::string currentExampleID = ex_id + label_id + eps_id;
                     options->setString( Options::PROPERTY_FILE_PATH, fullCurrentExamplePath );
                     struct timespec startTime = TimeUtils::sampleMicro();
                     outFile << "epsilon : " << eps_id << "\n";
