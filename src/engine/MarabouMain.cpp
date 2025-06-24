@@ -315,7 +315,6 @@ int marabouMain( int argc, char **argv )
                 std::cerr << "Failed to open " << currentRunFile.str() << "\n";
                 return 1;
             }
-            outFile << "Example : " << exampleID << "Network : " << network << ".\n";
             if ( mode == 1 )
             {
                 // train
@@ -385,6 +384,8 @@ int marabouMain( int argc, char **argv )
             }
             else
             {
+                auto spittingHeuristic = options->getString( Options::SPLITTING_STRATEGY);
+                outFile << "Strategy : " << std::string( spittingHeuristic.ascii() ) << "\n";
                 std::string root = parentDir( examplePath );
                 if ( root.empty() || !isDir( root ) )
                 {
