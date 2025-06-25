@@ -3259,7 +3259,6 @@ PiecewiseLinearConstraint *Engine::pickSplitPLConstraintByAgent()
     if ( p > _eps )
     {
         ENGINE_LOG( Stringf( "Agent picks its own split..." ).ascii() );
-        std::cout << "Agent picks split by agent..." << std::endl;
         updateToCurrentDQNState( *_previousState );
         _action = std::move( _agent->actBestAction( *_previousState ) );
         if ( _action == nullptr )
@@ -3268,7 +3267,6 @@ PiecewiseLinearConstraint *Engine::pickSplitPLConstraintByAgent()
             indexToConstraint( _action->getPlConstraintAction(), &_plConstraints );
         return plConstraint;
     }
-    std::cout << "Agent picks split randomly..." << std::endl;
     _action = std::move( _agent->actRandomly( *_previousState ) );
     if ( _action == nullptr )
         return nullptr;
