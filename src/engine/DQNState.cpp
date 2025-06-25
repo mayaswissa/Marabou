@@ -41,11 +41,16 @@ torch::Tensor State::toTensor() const
 
 void State::updateConstraintPhase( const unsigned constraintIndex, const unsigned newPhase )
 {
-    if ( constraintIndex >= _numConstraints || newPhase >= _numPhases )
+    if (constraintIndex >= _numConstraints || newPhase >= _numPhases || _stateData.empty()) {
         return;
+    }
     // Get pointer to the start of the row for this constraint.
-    double *rowPtr = &_stateData[constraintIndex * NUM_FEATURES];
-    // Reset the first _numPhases entries (phase indicators) to 0.0.
+    size_t rowStart = constraintIndex * NUM_FEATURES;
+    if (rowStart + _numPhases > _stateData.size()) {
+        return;
+    }
+    double *rowPtr = &_stateData[rowStart];
+    // Reset the first _numPhases entries (phase indicators).
     std::fill_n( rowPtr, _numPhases, 0.0 );
     // Set the new phase.
     rowPtr[newPhase] = 1.0;
