@@ -351,6 +351,10 @@ private:
      */
     Context _context;
 
+
+    std::uniform_real_distribution<double> _distReal{ 0.0, 1.0 };
+    std::uniform_int_distribution<int> _distStrategy{ 0, 2 };
+
     /*
        BoundManager is the centralized context-dependent object that stores
        derived bounds.

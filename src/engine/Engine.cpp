@@ -28,6 +28,7 @@
 #include "PiecewiseLinearConstraint.h"
 #include "Preprocessor.h"
 #include "Query.h"
+#include "RandomGlobals.h"
 #include "TableauRow.h"
 #include "TimeUtils.h"
 #include "VariableOutOfBoundDuringOptimizationException.h"
@@ -85,8 +86,6 @@ Engine::Engine()
     _activeEntryStrategy = _projectedSteepestEdgeRule;
     _activeEntryStrategy->setStatistics( &_statistics );
     _statistics.stampStartingTime();
-    setRandomSeed( Options::get()->getInt( Options::SEED ) );
-
     _boundManager.registerEngine( this );
     _groundBoundManager.registerEngine( this );
     _statisticsPrintingFrequency = ( _lpSolverType == LPSolverType::NATIVE )
@@ -205,9 +204,9 @@ bool Engine::inSnCMode() const
     return _sncMode;
 }
 
-void Engine::setRandomSeed( unsigned /*seed*/ )
+void Engine::setRandomSeed( unsigned seed )
 {
-    srand( time( NULL ) );
+    srand( seed );
 }
 
 Query Engine::prepareSnCQuery()
@@ -3256,13 +3255,11 @@ PiecewiseLinearConstraint *Engine::pickSplitPLConstraintBasedOnPolarity()
 PiecewiseLinearConstraint *Engine::pickSplitPLConstraintByAgent()
 {
     ENGINE_LOG( Stringf( "Using DQN-based heuristics..." ).ascii() );
-    std::random_device rd;
-    std::mt19937 gen( rd() );
-    std::uniform_real_distribution<> distReal( 0.0, 1.0 );
-    std::uniform_int_distribution<> distChoice( 0, 2 );
-    if ( distReal( rd ) / RAND_MAX > _eps )
+    double const p = RandomGlobals::instance().rand01();
+    if ( p > _eps )
     {
         ENGINE_LOG( Stringf( "Agent picks its own split..." ).ascii() );
+        std::cout << "Agent picks split by agent..." << std::endl;
         updateToCurrentDQNState( *_previousState );
         _action = std::move( _agent->actBestAction( *_previousState ) );
         if ( _action == nullptr )
@@ -3271,39 +3268,47 @@ PiecewiseLinearConstraint *Engine::pickSplitPLConstraintByAgent()
             indexToConstraint( _action->getPlConstraintAction(), &_plConstraints );
         return plConstraint;
     }
-    else
-    {
-        int splittingStrategy = distChoice( gen );
-        PiecewiseLinearConstraint *plConstraint = nullptr;
-        PhaseStatus phase = PHASE_NOT_FIXED;
-        switch ( splittingStrategy )
-        {
-        case 0:
-            ENGINE_LOG( Stringf( "Agent picks split randomly..." ).ascii() );
-            std::cout <<"Agent picks split randomly..." << std::endl;
-            _action = std::move( _agent->actRandomly( *_previousState ) );
-            if ( _action == nullptr )
-                return nullptr;
-            plConstraint = indexToConstraint( _action->getPlConstraintAction(), &_plConstraints );
-            return plConstraint;
-        case 1:
-            std::cout <<"Agent picks split polarity..." << std::endl;
-            ENGINE_LOG( Stringf( "Agent picks split by polarity score..." ).ascii() );
-            plConstraint = pickSplitPLConstraintBasedOnPolarity();
-            phase = plConstraint->getDirection();
-            break;
-        case 2:
-            std::cout <<"Agent picks split BaBsr..." << std::endl;
-            ENGINE_LOG( Stringf( "Agent picks split by BaBsr score..." ).ascii() );
-            plConstraint = pickSplitPLConstraintBasedOnBaBsrHeuristic();
-            phase = plConstraint->getDirection();
-            break;
-        }
-        auto constrainIndex = _constraintToIndex[plConstraint];
-        _action =
-            std::make_unique<Action>( DQN_NUM_PHASES, _plConstraints.size(), constrainIndex, phase );
-        return plConstraint;
-    }
+    std::cout << "Agent picks split randomly..." << std::endl;
+    _action = std::move( _agent->actRandomly( *_previousState ) );
+    if ( _action == nullptr )
+        return nullptr;
+    PiecewiseLinearConstraint *plConstraint =
+        indexToConstraint( _action->getPlConstraintAction(), &_plConstraints );
+    return plConstraint;
+
+    // else
+    // {
+    //     int strat = RandomEngine::instance().randInt(0, 2);
+    //     PiecewiseLinearConstraint *plConstraint = nullptr;
+    //     PhaseStatus phase = PHASE_NOT_FIXED;
+    //     switch ( splittingStrategy )
+    //     {
+    //     case 0:
+    //         ENGINE_LOG( Stringf( "Agent picks split randomly..." ).ascii() );
+    //         std::cout << "Agent picks split randomly..." << std::endl;
+    //         _action = std::move( _agent->actRandomly( *_previousState ) );
+    //         if ( _action == nullptr )
+    //             return nullptr;
+    //         plConstraint = indexToConstraint( _action->getPlConstraintAction(), &_plConstraints
+    //         ); return plConstraint;
+    //     case 1:
+    //         std::cout << "Agent picks split polarity..." << std::endl;
+    //         ENGINE_LOG( Stringf( "Agent picks split by polarity score..." ).ascii() );
+    //         plConstraint = pickSplitPLConstraintBasedOnPolarity();
+    //         phase = plConstraint->getDirection();
+    //         break;
+    //     case 2:
+    //         std::cout << "Agent picks split BaBsr..." << std::endl;
+    //         ENGINE_LOG( Stringf( "Agent picks split by BaBsr score..." ).ascii() );
+    //         plConstraint = pickSplitPLConstraintBasedOnBaBsrHeuristic();
+    //         phase = plConstraint->getDirection();
+    //         break;
+    //     }
+    //     auto constrainIndex = _constraintToIndex[plConstraint];
+    //     _action = std::make_unique<Action>(
+    //         DQN_NUM_PHASES, _plConstraints.size(), constrainIndex, phase );
+    //     return plConstraint;
+    // }
 }
 
 PiecewiseLinearConstraint *Engine::pickSplitPLConstraintBasedOnTopology()

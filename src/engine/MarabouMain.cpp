@@ -19,6 +19,7 @@
 #include "LPSolverType.h"
 #include "Marabou.h"
 #include "Options.h"
+#include "RandomGlobals.h"
 
 #include <cstdlib>
 #include <dirent.h>
@@ -224,6 +225,13 @@ void trainAgentOnExample( Options *options,
     }
 }
 
+void setRandomSeed()
+{
+    // unsigned seedVal = static_cast<unsigned>( std::time( nullptr ) );
+    RandomGlobals::instance().seed( 1 );
+}
+
+
 int marabouMain( int argc, char **argv )
 {
     try
@@ -297,7 +305,7 @@ int marabouMain( int argc, char **argv )
             openblas_set_num_threads( options->getInt( Options::NUM_BLAS_THREADS ) );
 #endif
             auto const mode = options->getInt( Options::DQN_MODE );
-
+            setRandomSeed();
             std::ostringstream currentRunFile;
             std::string examplePath;
             std::string exampleID;

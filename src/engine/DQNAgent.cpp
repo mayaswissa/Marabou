@@ -2,6 +2,7 @@
 #include "Options.h"
 
 #include <random>
+#include "RandomGlobals.h"
 #include <utility>
 
 Agent::Agent( const unsigned numPlConstraints,
@@ -170,24 +171,22 @@ std::unique_ptr<Action> Agent::actRandomly(const State &state)
     const auto tensorState = state.toTensor();
     auto reluNotFixedColumn = tensorState.index(
         {torch::indexing::Slice(), static_cast<int64_t>(DQN_RELU_NOT_FIXED)});
-    auto validRandomMask = (reluNotFixedColumn == 1);
-    torch::Tensor validRandomIndices = validRandomMask.nonzero();
+    auto validRandomMask = ( reluNotFixedColumn == 1 );
+    const torch::Tensor validRandomIndices = validRandomMask.nonzero();
 
-    if (validRandomIndices.size(0) == 0)
+    const auto k = validRandomIndices.size(0);
+    if (k == 0)
         return nullptr;
 
-    std::random_device rd;
-    std::mt19937 gen(rd());
+    int row = RandomGlobals::instance().randInt( 0, static_cast<int>( k ) - 1 );
+    const unsigned actionConstraint =
+        validRandomIndices.index({ row, 0 }).item<int>();
 
-    int k = validRandomIndices.size(0);
-    std::uniform_int_distribution<> pickDist(0, k - 1);
-    int row = pickDist(gen);
-    const unsigned actionConstraint = validRandomIndices.index({row, 0}).item<int>();
+    // pick a random phase
+    const unsigned actionPhase =
+        RandomGlobals::instance().randInt( RELU_PHASE_ACTIVE, RELU_PHASE_INACTIVE );
 
-    std::uniform_int_distribution<> phaseDist(RELU_PHASE_ACTIVE, RELU_PHASE_INACTIVE);
-    const unsigned actionPhase = phaseDist(gen);
-
-    unsigned actionIndex = _actionSpace.getActionIndex(actionConstraint, actionPhase);
+    const unsigned actionIndex = _actionSpace.getActionIndex(actionConstraint, actionPhase);
     auto [constraint, phase] = _actionSpace.decodeActionIndex(actionIndex);
     return std::make_unique<Action>(_numPhases, _numPlConstraints, constraint, phase);
 
