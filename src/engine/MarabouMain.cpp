@@ -326,6 +326,7 @@ int marabouMain( int argc, char **argv )
             if ( mode == 1 )
             {
                 // train
+                options->setString( Options::SPLITTING_STRATEGY, "DQN-agent" );
                 struct timespec startTraining = TimeUtils::sampleMicro();
                 int numSplits = 0;
                 outFile << std::flush;
@@ -343,6 +344,7 @@ int marabouMain( int argc, char **argv )
             else if ( mode == 2 )
             {
                 // run
+                options->setString( Options::SPLITTING_STRATEGY, "DQN-agent" );
                 std::string agentPath =
                     options->getString( Options::DQN_AGENT_NETWORKS_PATH ).ascii();
                 if ( !std::ifstream( agentPath + "_local.pth" ) )
@@ -386,8 +388,7 @@ int marabouMain( int argc, char **argv )
                                  .ascii() );
                     Marabou().runTrainedAgentOnExample( &numSplits );
                     struct timespec endTime = TimeUtils::sampleMicro();
-                    unsigned long long totalTraining = TimeUtils::timePassed(
-                        startTime, endTime );
+                    unsigned long long totalTraining = TimeUtils::timePassed( startTime, endTime );
 
                     DQN_LOG( Stringf( "Done solving. Time : %llu milli. \n", totalTraining / 1000 )
                                  .ascii() );
@@ -395,7 +396,7 @@ int marabouMain( int argc, char **argv )
             }
             else
             {
-                auto spittingHeuristic = options->getString( Options::SPLITTING_STRATEGY);
+                auto spittingHeuristic = options->getString( Options::SPLITTING_STRATEGY );
                 outFile << "Strategy : " << std::string( spittingHeuristic.ascii() ) << "\n";
                 std::string root = parentDir( examplePath );
                 if ( root.empty() || !isDir( root ) )
@@ -423,11 +424,9 @@ int marabouMain( int argc, char **argv )
                     outFile << std::flush;
                     Marabou().run();
                     struct timespec endTime = TimeUtils::sampleMicro();
-                    unsigned long long totalTraining = TimeUtils::timePassed(
-                        startTime, endTime );
+                    unsigned long long totalTraining = TimeUtils::timePassed( startTime, endTime );
                     DQN_LOG( Stringf( "Done solving. Time : %llu milli. \n", totalTraining / 1000 )
                                  .ascii() );
-
                 }
             }
             outFile.close();

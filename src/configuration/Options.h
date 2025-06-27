@@ -79,6 +79,9 @@ public:
         // Produce proofs of unsatisfiability and check them
         PRODUCE_PROOFS,
 
+        // Change splitting strategy to pseudo impact when depth <=3
+        START_PI,
+
         // If the flag is false, the preprocessor will try to merge two
         // logically-consecutive weighted sum layers into a single
         // weighted sum layer, to reduce the number of variables

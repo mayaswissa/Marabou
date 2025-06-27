@@ -137,6 +137,10 @@ void OptionParser::initialize()
         boost::program_options::bool_switch( &( ( *_boolOptions )[Options::PRODUCE_PROOFS] ) )
             ->default_value( ( *_boolOptions )[Options::PRODUCE_PROOFS] ),
         "Produce proofs of UNSAT and check them" )(
+        "pseudo-impact-start",
+        boost::program_options::bool_switch( &( ( *_boolOptions )[Options::START_PI] ) )
+            ->default_value( ( *_boolOptions )[Options::START_PI] ),
+        "Change splitting strategy to pseudo impact when depth <=3" )(
         "DQN-output-file",
         boost::program_options::value<std::string>(
             &( *_stringOptions )[Options::DQN_OUTPUT_FILE_PATH] )
