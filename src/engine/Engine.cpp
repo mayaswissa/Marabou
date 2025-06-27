@@ -739,8 +739,9 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                             _agent->stepFakeAction( *_previousState, _numSplits );
                         else
                             _agent->stepNewAction( *_previousState, *_action, true, _numSplits );
+                        auto numSplitsForDoneSuccess = _smtCore.getStackDepth();
                         updateToCurrentDQNState( *_currentDQNState );
-                        _agent->handleDone( *_currentDQNState, 0 );
+                        _agent->handleDone( *_currentDQNState, numSplitsForDoneSuccess );
 
                         mainLoopEnd = TimeUtils::sampleMicro();
                         _statistics.incLongAttribute(
