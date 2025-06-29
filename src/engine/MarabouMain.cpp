@@ -142,6 +142,16 @@ void extractExampleID( std::string &examplePath, std::string &exampleID )
     exampleID = ex_id + label_id;
 }
 
+void extractMetaroomID(std::string &examplePath, std::string &exampleID) {
+    size_t idx_pos = examplePath.find("spec_idx_") + 9;
+    size_t eps_pos = examplePath.find("_eps_") + 5;
+    size_t dot_pos = examplePath.find(".vnnlib");
+    std::string idx = examplePath.substr(idx_pos, examplePath.find("_eps_") - idx_pos);
+    std::string eps = examplePath.substr(eps_pos, dot_pos - eps_pos);
+    eps.erase(std::remove(eps.begin(), eps.end(), '.'), eps.end());
+    exampleID = idx + eps;
+}
+
 
 std::string parentDir( const std::string &path )
 {
@@ -309,7 +319,11 @@ int marabouMain( int argc, char **argv )
             std::ostringstream currentRunFile;
             std::string examplePath;
             std::string exampleID;
-            extractExampleID( examplePath, exampleID );
+            auto const exampleType = options->getString( Options::BENCHMARK );
+            if (exampleType == "metaroom")
+                extractMetaroomID(examplePath, exampleID);
+            else
+                extractExampleID( examplePath, exampleID );
             auto txtOutputFilePath = options->getString( Options::DQN_OUTPUT_FILE_PATH );
             std::string network;
             extractNetworkName( network );

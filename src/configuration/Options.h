@@ -186,7 +186,9 @@ public:
         // path to DQN agent's netwoks.
         DQN_AGENT_NETWORKS_PATH,
 
-        DQN_OUTPUT_FILE_PATH
+        DQN_OUTPUT_FILE_PATH,
+
+        BENCHMARK
     };
 
     /*

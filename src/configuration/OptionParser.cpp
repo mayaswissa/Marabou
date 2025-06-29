@@ -150,7 +150,12 @@ void OptionParser::initialize()
         boost::program_options::value<std::string>(
             &( *_stringOptions )[Options::DQN_AGENT_NETWORKS_PATH] )
             ->default_value( ( *_stringOptions )[Options::DQN_AGENT_NETWORKS_PATH] ),
-        "Path to load/ save DQN agent's networks." )(
+            "Path to load/ save DQN agent's networks." )(
+            "benchmarks",
+            boost::program_options::value<std::string>(
+                &( *_stringOptions )[Options::BENCHMARK] )
+                ->default_value( ( *_stringOptions )[Options::BENCHMARK] ),
+            "Benchmark of the current exampl." )(
         "DQN-mode",
         boost::program_options::value<int>( &( ( *_intOptions )[Options::DQN_MODE] ) )
             ->default_value( ( *_intOptions )[Options::DQN_MODE] ),
