@@ -142,14 +142,27 @@ void extractExampleID( std::string &examplePath, std::string &exampleID )
     exampleID = ex_id + label_id;
 }
 
-void extractMetaroomID(std::string &examplePath, std::string &exampleID) {
-    size_t idx_pos = examplePath.find("spec_idx_") + 9;
-    size_t eps_pos = examplePath.find("_eps_") + 5;
-    size_t dot_pos = examplePath.find(".vnnlib");
-    std::string idx = examplePath.substr(idx_pos, examplePath.find("_eps_") - idx_pos);
-    std::string eps = examplePath.substr(eps_pos, dot_pos - eps_pos);
-    eps.erase(std::remove(eps.begin(), eps.end(), '.'), eps.end());
+void extractMetaroomID( std::string &examplePath, std::string &exampleID )
+{
+    size_t idx_pos = examplePath.find( "spec_idx_" ) + 9;
+    size_t eps_pos = examplePath.find( "_eps_" ) + 5;
+    size_t dot_pos = examplePath.find( ".vnnlib" );
+    std::string idx = examplePath.substr( idx_pos, examplePath.find( "_eps_" ) - idx_pos );
+    std::string eps = examplePath.substr( eps_pos, dot_pos - eps_pos );
+    eps.erase( std::remove( eps.begin(), eps.end(), '.' ), eps.end() );
     exampleID = idx + eps;
+}
+
+void extractCoraID( std::string &examplePath, std::string &exampleID )
+{
+    examplePath = Options::get()->getString( Options::PROPERTY_FILE_PATH ).ascii();
+    size_t start = examplePath.find( "mnist-img" ) + strlen( "mnist-img" );
+    size_t end = examplePath.find( ".vnnlib", start );
+    std::string num = examplePath.substr( start, end - start );
+    while ( num.size() < 3 )
+        num = "0" + num;
+
+    exampleID = num;
 }
 
 
@@ -320,8 +333,10 @@ int marabouMain( int argc, char **argv )
             std::string examplePath;
             std::string exampleID;
             auto const exampleType = options->getString( Options::BENCHMARK );
-            if (exampleType == "metaroom")
-                extractMetaroomID(examplePath, exampleID);
+            if ( exampleType == "metaroom" )
+                extractMetaroomID( examplePath, exampleID );
+            else if ( exampleType == "cora" )
+                extractCoraID( examplePath, exampleID );
             else
                 extractExampleID( examplePath, exampleID );
             auto txtOutputFilePath = options->getString( Options::DQN_OUTPUT_FILE_PATH );
