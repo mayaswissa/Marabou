@@ -437,6 +437,7 @@ int marabouMain( int argc, char **argv )
             {
                 auto spittingHeuristic = options->getString( Options::SPLITTING_STRATEGY );
                 outFile << "Strategy : " << std::string( spittingHeuristic.ascii() ) << "\n";
+                outFile.flush();
                 if ( exampleType == "property1" )
                 {
                     std::string root = parentDir( examplePath );

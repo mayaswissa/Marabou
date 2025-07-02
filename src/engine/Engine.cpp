@@ -298,7 +298,7 @@ bool Engine::solve( double timeoutInSeconds, const std::string &trainedAgentPath
     // for DQN use:
     if ( Options::get()->getInt( Options::DQN_MODE ) == 2 )
     {
-        std::cout << "running with agent" << std::endl;
+        std::cout << "start solving with agent" << std::endl;
         unsigned numPlConstraints = _plConstraints.size();
         if ( trainedAgentPath.empty() )
             throw std::runtime_error( "Agent is not set" );
@@ -308,6 +308,10 @@ bool Engine::solve( double timeoutInSeconds, const std::string &trainedAgentPath
         _action = nullptr;
         _previousState = std::make_unique<State>( numPlConstraints );
         updateToCurrentDQNState( *_previousState );
+    }
+    else if ( Options::get()->getInt( Options::DQN_MODE ) == 0 )
+    {
+        std::cout << "start solving without an agent" << std::endl;
     }
     _eps = GlobalConfiguration::DQN_EPSILON_PURE_EXPLOIT;
     bool splitJustPerformed = true;
