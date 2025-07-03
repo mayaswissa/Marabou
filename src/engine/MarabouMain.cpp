@@ -144,12 +144,19 @@ void extractExampleID( std::string &examplePath, std::string &exampleID )
 
 void extractMetaroomID( std::string &examplePath, std::string &exampleID )
 {
-    size_t idx_pos = examplePath.find( "spec_idx_" ) + 9;
-    size_t eps_pos = examplePath.find( "_eps_" ) + 5;
-    size_t dot_pos = examplePath.find( ".vnnlib" );
-    std::string idx = examplePath.substr( idx_pos, examplePath.find( "_eps_" ) - idx_pos );
-    std::string eps = examplePath.substr( eps_pos, dot_pos - eps_pos );
-    eps.erase( std::remove( eps.begin(), eps.end(), '.' ), eps.end() );
+    size_t idx_start = examplePath.find("spec_idx_");
+    size_t eps_start = examplePath.find("_eps_");
+    size_t dot_pos   = examplePath.find(".vnnlib");
+    if (idx_start == std::string::npos || eps_start == std::string::npos || dot_pos == std::string::npos) {
+        std::cerr << "Error: Unexpected file name format: " << examplePath << std::endl;
+        exit(1);
+    }
+    idx_start += 9;
+    size_t idx_end = eps_start;
+    std::string idx = examplePath.substr(idx_start, idx_end - idx_start);
+    size_t eps_val_start = eps_start + 5;
+    std::string eps = examplePath.substr(eps_val_start, dot_pos - eps_val_start);
+    eps.erase(std::remove(eps.begin(), eps.end(), '.'), eps.end());
     exampleID = idx + eps;
 }
 
