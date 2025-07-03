@@ -144,6 +144,7 @@ void extractExampleID( std::string &examplePath, std::string &exampleID )
 
 void extractMetaroomID( std::string &examplePath, std::string &exampleID )
 {
+    examplePath = Options::get()->getString( Options::PROPERTY_FILE_PATH ).ascii();
     size_t idx_start = examplePath.find("spec_idx_");
     size_t eps_start = examplePath.find("_eps_");
     size_t dot_pos   = examplePath.find(".vnnlib");
