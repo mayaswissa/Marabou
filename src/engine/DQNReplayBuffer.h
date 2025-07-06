@@ -95,16 +95,17 @@ struct ActionEntry
     List<Action> _alternativeActions;
     State _stateBeforeAction;
     bool _isFake;
+    bool _isDemo;
     bool _done;
-
-
     ActionEntry( const Action &action,
                  const State &stateBeforeAction,
                  const unsigned splitsBeforeAction,
                  const bool isFake,
+                 const bool demo,
                  const bool done = false )
         : _stateBeforeAction( stateBeforeAction )
-        , _isFake(isFake)
+        , _isFake( isFake )
+        , _isDemo( demo )
         , _done( done )
     {
         _activeActions = List<ActiveAction>();
@@ -123,6 +124,13 @@ struct ActionEntry
     }
 };
 
+struct SampledBatch
+{
+    std::vector<unsigned> indices;
+    std::vector<float> weights;
+    std::vector<bool> isDemo;
+};
+
 class ReplayBuffer
 {
 public:
@@ -131,32 +139,36 @@ public:
     std::vector<unsigned> sample() const;
     unsigned getNumRevisitExperiences() const;
     unsigned getBatchSize() const;
-    void addExperienceToRevisitBuffer( const State &state,
-                                       const Action &action,
-                                       double reward,
-                                       const State &nextState,
-                                       const bool done );
-
-    bool compareStateWithAlternative( State &state ) const;
 
     void pushActionEntry( const Action &action,
                           const State &stateBeforeAction,
                           unsigned numSplitsBeforeAction,
+                          bool demo = false,
                           bool done = false );
     void handleDone( const State &currentState, unsigned numSplits );
     double potentialSubtreeSize() const;
-    double computeLogarithmicReward( double splitsDelta ) const;
     void moveActionToRevisitBuffer( const State &stateAfterAction,
                                     unsigned numSplitsAfterAction,
                                     ActionEntry *actionEntry,
                                     bool done = false );
     void applyNextAction( const State &state, unsigned numSplits, unsigned &numInconsistent );
+    void addExperienceToRevisitBuffer( const State &state,
+                                       const Action &action,
+                                       double reward,
+                                       const State &nextState,
+                                       const bool done,
+                                       bool isDemo = false );
+    SampledBatch sample();
+    void updatePriority( unsigned idx, float newP );
     int getActionStackSize() const;
     torch::Tensor getStates();
     torch::Tensor getActions();
     torch::Tensor getRewards();
     torch::Tensor getNextStates();
     torch::Tensor getDones();
+    long getDemoFactor() const;
+    long getEpsilon() const;
+
 
 private:
     unsigned _numConstraints;
@@ -171,6 +183,14 @@ private:
     torch::Tensor _rewards;    // [bufferSize]
     torch::Tensor _nextStates; // [bufferSize, stateDim]
     torch::Tensor _dones;      // [bufferSize]
+    std::vector<float> _priorities;
+    std::vector<float> _sumTree;
+    std::vector<bool> _isDemo;
+    float _maxPriority;
+    // annealing & weights
+    float _demoFactor, _eps;
+    float _beta, _betaInc;
+    void rebuildTree( unsigned ti );
 };
 
 #endif

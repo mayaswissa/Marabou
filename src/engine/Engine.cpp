@@ -76,7 +76,8 @@ Engine::Engine()
     , _eps( GlobalConfiguration::DQN_EPSILON_PURE_EXPLOIT )
     , _currentDQNState( nullptr )
     , _numSplits( 0 )
-    , _newSplitByAgent( false )
+    , _stepType( AGENT )
+    , _guidedSteps( GlobalConfiguration::GUIDED_STEPS )
 {
     _smtCore.setStatistics( &_statistics );
     _tableau->setStatistics( &_statistics );
@@ -386,7 +387,7 @@ bool Engine::solve( double timeoutInSeconds, const std::string &trainedAgentPath
             // Perform any SmtCore-initiated case splits
             if ( _smtCore.needToSplit() )
             {
-                if ( _newSplitByAgent && _action != nullptr )
+                if ( _stepType != FAKE && _action != nullptr )
                 {
                     auto phaseStatus = static_cast<PhaseStatus>( _action->getActionPhase() );
                     _smtCore.performSplit( &phaseStatus );
@@ -618,7 +619,8 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
             if ( _action == nullptr )
                 _agent->stepFakeAction( *_previousState, _numSplits );
             else
-                _agent->stepNewAction( *_previousState, *_action, true, _numSplits );
+                _agent->stepNewAction(
+                    *_previousState, *_action, true, _numSplits, _stepType == DEMO );
             _agent->handleDone( *_currentDQNState, _numSplits );
 
             if ( _verbosity > 0 )
@@ -694,7 +696,8 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                         if ( _action == nullptr )
                             _agent->stepFakeAction( *_previousState, _numSplits );
                         else
-                            _agent->stepNewAction( *_previousState, *_action, false, _numSplits );
+                            _agent->stepNewAction(
+                                *_previousState, *_action, false, _numSplits, _stepType == DEMO );
                     }
                 }
 
@@ -702,7 +705,7 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                         static_cast<int>( _smtCore.getStackDepth() ) )
 
                 PhaseStatus phaseStatus;
-                if ( !_newSplitByAgent )
+                if ( _stepType == FAKE )
                     _action = nullptr;
 
                 else
@@ -742,7 +745,8 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                         if ( _action == nullptr )
                             _agent->stepFakeAction( *_previousState, _numSplits );
                         else
-                            _agent->stepNewAction( *_previousState, *_action, true, _numSplits );
+                            _agent->stepNewAction(
+                                *_previousState, *_action, true, _numSplits, _stepType == DEMO );
                         auto numSplitsForDoneSuccess = _smtCore.getStackDepth();
                         updateToCurrentDQNState( *_currentDQNState );
                         _agent->handleDone( *_currentDQNState, numSplitsForDoneSuccess );
@@ -777,7 +781,8 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                         if ( _action == nullptr )
                             _agent->stepFakeAction( *_previousState, _numSplits );
                         else
-                            _agent->stepNewAction( *_previousState, *_action, true, _numSplits );
+                            _agent->stepNewAction(
+                                *_previousState, *_action, true, _numSplits, _stepType == DEMO );
                         _agent->handleDone( *_currentDQNState, _numSplits );
                         *numSplits = _numSplits;
                         return std::move( _agent );
@@ -812,7 +817,8 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                 if ( _action == nullptr )
                     _agent->stepFakeAction( *_previousState, _numSplits );
                 else
-                    _agent->stepNewAction( *_previousState, *_action, true, _numSplits );
+                    _agent->stepNewAction(
+                        *_previousState, *_action, true, _numSplits, _stepType == DEMO );
                 _agent->handleDone( *_currentDQNState, _numSplits );
                 *numSplits = _numSplits;
                 return std::move( _agent );
@@ -842,7 +848,8 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                 if ( _action == nullptr )
                     _agent->stepFakeAction( *_previousState, _numSplits );
                 else
-                    _agent->stepNewAction( *_previousState, *_action, true, _numSplits );
+                    _agent->stepNewAction(
+                        *_previousState, *_action, true, _numSplits, _stepType == DEMO );
                 _agent->handleDone( *_currentDQNState, _numSplits );
                 *numSplits = _numSplits;
                 return std::move( _agent );
@@ -870,7 +877,8 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
             if ( _action == nullptr )
                 _agent->stepFakeAction( *_previousState, _numSplits );
             else
-                _agent->stepNewAction( *_previousState, *_action, true, _numSplits );
+                _agent->stepNewAction(
+                    *_previousState, *_action, true, _numSplits, _stepType == DEMO );
             _agent->handleDone( *_currentDQNState, _numSplits );
             *numSplits = _numSplits;
             return std::move( _agent );
@@ -890,7 +898,7 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
     if ( _action == nullptr )
         _agent->stepFakeAction( *_previousState, _numSplits );
     else
-        _agent->stepNewAction( *_previousState, *_action, true, _numSplits );
+        _agent->stepNewAction( *_previousState, *_action, true, _numSplits, _stepType == DEMO );
     _agent->handleDone( *_currentDQNState, _numSplits );
     _exitCode = Engine::MAX_ITERATIONS;
     *numSplits = _numSplits;
@@ -3260,58 +3268,62 @@ PiecewiseLinearConstraint *Engine::pickSplitPLConstraintBasedOnPolarity()
 PiecewiseLinearConstraint *Engine::pickSplitPLConstraintByAgent()
 {
     ENGINE_LOG( Stringf( "Using DQN-based heuristics..." ).ascii() );
-    double const p = RandomGlobals::instance().rand01();
-    if ( p > _eps )
+    PiecewiseLinearConstraint *plConstraint = nullptr;
+    PhaseStatus phase = PHASE_NOT_FIXED;
+
+    if ( _guidedSteps )
     {
-        ENGINE_LOG( Stringf( "Agent picks its own split..." ).ascii() );
-        updateToCurrentDQNState( *_previousState );
-        _action = std::move( _agent->actBestAction( *_previousState ) );
-        if ( _action == nullptr )
+        int strat = RandomGlobals::instance().randInt( 0, 1 );
+        _stepType = DEMO;
+        switch ( strat )
+        {
+        case 0:
+            ENGINE_LOG( Stringf( "Guided: polarity heuristic" ).ascii() );
+            plConstraint = pickSplitPLConstraintBasedOnPolarity();
+            phase = plConstraint->getDirection();
+            _action = std::make_unique<Action>(
+                DQN_NUM_PHASES, _plConstraints.size(), _constraintToIndex[plConstraint], phase );
+            break;
+        case 1:
+            ENGINE_LOG( Stringf( "Guided: BaBsr heuristic" ).ascii() );
+            plConstraint = pickSplitPLConstraintBasedOnBaBsrHeuristic();
+            phase = plConstraint->getDirection();
+            _action = std::make_unique<Action>(
+                DQN_NUM_PHASES, _plConstraints.size(), _constraintToIndex[plConstraint], phase );
+            break;
+        }
+
+        if ( !_action )
             return nullptr;
-        PiecewiseLinearConstraint *plConstraint =
-            indexToConstraint( _action->getPlConstraintAction(), &_plConstraints );
+
+        // If plConstraint not set by heuristic, decode it from the Action
+        if ( !plConstraint )
+            plConstraint = indexToConstraint( _action->getPlConstraintAction(), &_plConstraints );
         return plConstraint;
     }
-    _action = std::move( _agent->actRandomly( *_previousState ) );
-    if ( _action == nullptr )
-        return nullptr;
-    PiecewiseLinearConstraint *plConstraint =
-        indexToConstraint( _action->getPlConstraintAction(), &_plConstraints );
-    return plConstraint;
+    else
+    {
+        _stepType = AGENT;
+        // --- After guided phase: fall back to standard ε-greedy DDQN ---
+        double p = RandomGlobals::instance().rand01();
+        if ( p > _eps )
+        {
+            ENGINE_LOG( Stringf( "Agent picks its own split..." ).ascii() );
+            updateToCurrentDQNState( *_previousState );
+            _action = _agent->actBestAction( *_previousState );
+            if ( !_action )
+                return nullptr;
+        }
+        else
+        {
+            _action = _agent->actRandomly( *_previousState );
+            if ( !_action )
+                return nullptr;
+        }
 
-    // else
-    // {
-    //     int strat = RandomEngine::instance().randInt(0, 2);
-    //     PiecewiseLinearConstraint *plConstraint = nullptr;
-    //     PhaseStatus phase = PHASE_NOT_FIXED;
-    //     switch ( splittingStrategy )
-    //     {
-    //     case 0:
-    //         ENGINE_LOG( Stringf( "Agent picks split randomly..." ).ascii() );
-    //         std::cout << "Agent picks split randomly..." << std::endl;
-    //         _action = std::move( _agent->actRandomly( *_previousState ) );
-    //         if ( _action == nullptr )
-    //             return nullptr;
-    //         plConstraint = indexToConstraint( _action->getPlConstraintAction(), &_plConstraints
-    //         ); return plConstraint;
-    //     case 1:
-    //         std::cout << "Agent picks split polarity..." << std::endl;
-    //         ENGINE_LOG( Stringf( "Agent picks split by polarity score..." ).ascii() );
-    //         plConstraint = pickSplitPLConstraintBasedOnPolarity();
-    //         phase = plConstraint->getDirection();
-    //         break;
-    //     case 2:
-    //         std::cout << "Agent picks split BaBsr..." << std::endl;
-    //         ENGINE_LOG( Stringf( "Agent picks split by BaBsr score..." ).ascii() );
-    //         plConstraint = pickSplitPLConstraintBasedOnBaBsrHeuristic();
-    //         phase = plConstraint->getDirection();
-    //         break;
-    //     }
-    //     auto constrainIndex = _constraintToIndex[plConstraint];
-    //     _action = std::make_unique<Action>(
-    //         DQN_NUM_PHASES, _plConstraints.size(), constrainIndex, phase );
-    //     return plConstraint;
-    // }
+        plConstraint = indexToConstraint( _action->getPlConstraintAction(), &_plConstraints );
+        return plConstraint;
+    }
 }
 
 PiecewiseLinearConstraint *Engine::pickSplitPLConstraintBasedOnTopology()
@@ -3381,14 +3393,10 @@ PiecewiseLinearConstraint *Engine::pickSplitPLConstraint( DivideStrategy strateg
     {
         strategy = DivideStrategy::PseudoImpact;
         if ( Options::get()->getDivideStrategy() == DivideStrategy::DQN )
-            _newSplitByAgent = false;
+            _stepType = FAKE;
     }
     else
-    {
         strategy = Options::get()->getDivideStrategy();
-        if ( Options::get()->getDivideStrategy() == DivideStrategy::DQN )
-            _newSplitByAgent = true;
-    }
 
     PiecewiseLinearConstraint *candidatePLConstraint = NULL;
     if ( strategy == DivideStrategy::PseudoImpact )

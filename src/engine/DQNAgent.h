@@ -23,7 +23,8 @@ public:
     void stepNewAction( const State &previousState,
                         const Action &action,
                         bool done,
-                        unsigned numSplits );
+                        unsigned numSplits,
+                        bool isDemo );
 
     void handleDone( const State &currentState, unsigned numSplits );
     std::unique_ptr<Action> act( const State &state, double eps = 0.1 );
@@ -50,6 +51,9 @@ private:
     torch::optim::StepLR _scheduler;
     ReplayBuffer _replayedBuffer;
     unsigned _lossVerbosity;
+    long _lambdaSup   = 1.0f;          // start with full demo influence
+    long _lambdaDecay = 1e-5;
+    long _margin      = 0.8f;          // your chosen margin for the loss
     bool handleInvalidGradients();
     void applyActionMask( const torch::Tensor &tensorState, torch::Tensor &QValues ) const;
 

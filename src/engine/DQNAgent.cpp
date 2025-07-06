@@ -1,8 +1,7 @@
 #include "DQNAgent.h"
 #include "Options.h"
-
-#include <random>
 #include "RandomGlobals.h"
+#include <random>
 #include <utility>
 
 Agent::Agent( const unsigned numPlConstraints,
@@ -126,72 +125,71 @@ void Agent::stepFakeAction( const State &stateBeforeAction, const unsigned numSp
 void Agent::stepNewAction( const State &previousState,
                            const Action &action,
                            const bool done,
-                           const unsigned numSplits )
+                           const unsigned numSplits,
+                           bool isDemo = false )
 {
-    _replayedBuffer.pushActionEntry( action, previousState, numSplits, done );
+    _replayedBuffer.pushActionEntry( action, previousState, numSplits, isDemo, done );
     _tStep = ( _tStep + 1 ) % Options::get()->getInt( Options::DQN_EXPLORATION_RATE );
     if ( _tStep == 0 )
         learn();
 }
 
-void Agent::applyActionMask(const torch::Tensor &tensorState, torch::Tensor &QValues ) const
+void Agent::applyActionMask( const torch::Tensor &tensorState, torch::Tensor &QValues ) const
 {
-    auto mask = torch::zeros({static_cast<long>(_numActions)}, torch::kFloat32);
-    auto mask2D = mask.view({static_cast<long>(_numPlConstraints), static_cast<long>(_numPhases)});
+    auto mask = torch::zeros( { static_cast<long>( _numActions ) }, torch::kFloat32 );
+    auto mask2D =
+        mask.view( { static_cast<long>( _numPlConstraints ), static_cast<long>( _numPhases ) } );
 
-    mask2D.index_put_({torch::indexing::Slice(), static_cast<int64_t>(DQN_RELU_NOT_FIXED)},
-                      -std::numeric_limits<float>::infinity());
+    mask2D.index_put_( { torch::indexing::Slice(), static_cast<int64_t>( DQN_RELU_NOT_FIXED ) },
+                       -std::numeric_limits<float>::infinity() );
 
     auto reluNotFixedColumn = tensorState.index(
-        {torch::indexing::Slice(), static_cast<int64_t>(DQN_RELU_NOT_FIXED)});
-    auto fixedMask = (reluNotFixedColumn == 0);
-    auto expandedMask = fixedMask.unsqueeze(1).expand({-1, static_cast<long>(_numPhases)});
-    mask2D.masked_fill_(expandedMask, -std::numeric_limits<float>::infinity());
+        { torch::indexing::Slice(), static_cast<int64_t>( DQN_RELU_NOT_FIXED ) } );
+    auto fixedMask = ( reluNotFixedColumn == 0 );
+    auto expandedMask = fixedMask.unsqueeze( 1 ).expand( { -1, static_cast<long>( _numPhases ) } );
+    mask2D.masked_fill_( expandedMask, -std::numeric_limits<float>::infinity() );
 
-    QValues += mask2D.view({-1});
+    QValues += mask2D.view( { -1 } );
 }
 
 
-std::unique_ptr<Action> Agent::actBestAction(const State &state)
+std::unique_ptr<Action> Agent::actBestAction( const State &state )
 {
     _qNetworkLocal.eval();
     const auto tensorState = state.toTensor();
     torch::Tensor QValues = _qNetworkLocal.forward( tensorState );
     _qNetworkLocal.train();
 
-    applyActionMask(tensorState, QValues);
+    applyActionMask( tensorState, QValues );
 
     unsigned actionIndex = QValues.argmax().item<int>();
-    auto [constraint, phase] = _actionSpace.decodeActionIndex(actionIndex);
-    return std::make_unique<Action>(_numPhases, _numPlConstraints, constraint, phase);
+    auto [constraint, phase] = _actionSpace.decodeActionIndex( actionIndex );
+    return std::make_unique<Action>( _numPhases, _numPlConstraints, constraint, phase );
 }
 
-std::unique_ptr<Action> Agent::actRandomly(const State &state)
+std::unique_ptr<Action> Agent::actRandomly( const State &state )
 {
     const auto tensorState = state.toTensor();
     auto reluNotFixedColumn = tensorState.index(
-        {torch::indexing::Slice(), static_cast<int64_t>(DQN_RELU_NOT_FIXED)});
+        { torch::indexing::Slice(), static_cast<int64_t>( DQN_RELU_NOT_FIXED ) } );
     auto validRandomMask = ( reluNotFixedColumn == 1 );
     const torch::Tensor validRandomIndices = validRandomMask.nonzero();
 
-    const auto k = validRandomIndices.size(0);
-    if (k == 0)
+    const auto k = validRandomIndices.size( 0 );
+    if ( k == 0 )
         return nullptr;
 
     int row = RandomGlobals::instance().randInt( 0, static_cast<int>( k ) - 1 );
-    const unsigned actionConstraint =
-        validRandomIndices.index({ row, 0 }).item<int>();
+    const unsigned actionConstraint = validRandomIndices.index( { row, 0 } ).item<int>();
 
     // pick a random phase
     const unsigned actionPhase =
         RandomGlobals::instance().randInt( RELU_PHASE_ACTIVE, RELU_PHASE_INACTIVE );
 
-    const unsigned actionIndex = _actionSpace.getActionIndex(actionConstraint, actionPhase);
-    auto [constraint, phase] = _actionSpace.decodeActionIndex(actionIndex);
-    return std::make_unique<Action>(_numPhases, _numPlConstraints, constraint, phase);
-
+    const unsigned actionIndex = _actionSpace.getActionIndex( actionConstraint, actionPhase );
+    auto [constraint, phase] = _actionSpace.decodeActionIndex( actionIndex );
+    return std::make_unique<Action>( _numPhases, _numPlConstraints, constraint, phase );
 }
-
 
 
 //
@@ -216,7 +214,8 @@ std::unique_ptr<Action> Agent::actRandomly(const State &state)
 //     auto reluNotFixedColumn = tensorState.index(
 //         { torch::indexing::Slice(), static_cast<int64_t>( DQN_RELU_NOT_FIXED ) } );
 //     auto fixedMask = ( reluNotFixedColumn == 0 );
-//     auto expandedMask = fixedMask.unsqueeze( 1 ).expand( { -1, static_cast<long>( _numPhases ) } );
+//     auto expandedMask = fixedMask.unsqueeze( 1 ).expand( { -1, static_cast<long>( _numPhases ) }
+//     );
 //
 //     mask2D.masked_fill_( expandedMask, -std::numeric_limits<float>::infinity() );
 //
@@ -253,12 +252,13 @@ std::unique_ptr<Action> Agent::actRandomly(const State &state)
 
 void Agent::learn()
 {
-    std::vector<unsigned> indices = _replayedBuffer.sample();
-    if ( indices.empty() )
+    auto batch = _replayedBuffer.sample();
+    if ( batch.indices.empty() )
         return;
-    const std::vector<long> idxLong( indices.begin(), indices.end() );
 
-    auto idxTensor = torch::tensor( idxLong, torch::kLong ).to( device );
+    auto idxTensor = torch::tensor( std::vector<long>( batch.indices.begin(), batch.indices.end() ),
+                                    torch::kLong )
+                         .to( device );
     auto states = _replayedBuffer.getStates();
     const auto statesTensor = _replayedBuffer.getStates().index( { idxTensor } ).to( device );
     const auto actionsTensor =
@@ -301,8 +301,32 @@ void Agent::learn()
         std::cerr << "Next States: " << nextStatesTensor << std::endl;
         throw std::runtime_error( "NaN detected in QTargets." );
     }
+    // TD loss component
+    const auto tdLoss = torch::mse_loss( QExpected, QTargets.detach() );
+    // Supervised margin loss for demonstration samples
+    torch::Tensor marginLoss = torch::zeros({}, device);
+    if (_lambdaSup > 0) {
+        float running = 0.0f;
+        for (size_t i = 0; i < batch.indices.size(); ++i) {
+            if (batch.isDemo[i]) {
+                // get Q-values for state i
+                auto qvals = _qNetworkLocal.forward(statesTensor[i]);
+                long demoAct = actionsTensor[i].item<long>();
+                // margin = max_a [qvals[a] + _margin] – qvals[demoAct]
+                auto shifted = qvals + _margin;
+                float maxAll = shifted.max().item<float>();
+                float demoQ  = qvals[demoAct].item<float>();
+                running += std::max(0.0f, maxAll - demoQ);
+            }
+        }
+        marginLoss = torch::full({},
+                        running / batch.indices.size(),
+                        torch::TensorOptions()
+                          .dtype(torch::kFloat32)
+                          .device(device));
+    }
 
-    const auto loss = torch::mse_loss( QExpected, QTargets );
+    const auto loss = tdLoss + _lambdaSup * marginLoss;
     _lossVerbosity = ( _lossVerbosity + 1 ) % 200;
     if ( _lossVerbosity == 0 )
         DQN_LOG( Stringf( "MSE Loss : %f\n", loss.item<double>() ).ascii() );
@@ -314,6 +338,20 @@ void Agent::learn()
     if ( !handleInvalidGradients() )
         _optimizer.step();
     softUpdate( _qNetworkLocal, _qNetworkTarget );
+
+    // --- update PER priorities ---
+    for (size_t i = 0; i < batch.indices.size(); ++i) {
+        float err = std::abs(
+            (QTargets[i].item<float>() - QExpected[i].item<float>())
+        );
+        float pNew = err + _replayedBuffer.getEpsilon();
+        if (batch.isDemo[i])
+            pNew *= _replayedBuffer.getDemoFactor();
+        _replayedBuffer.updatePriority(batch.indices[i], pNew);
+    }
+
+    // --- anneal supervised weight ---
+    _lambdaSup = std::fmax(0.0f, _lambdaSup - _lambdaDecay);
 }
 
 

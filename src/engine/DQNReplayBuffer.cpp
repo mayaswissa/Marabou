@@ -1,5 +1,7 @@
 #include "DQNReplayBuffer.h"
 
+#include "RandomGlobals.h"
+
 #include <random>
 
 ReplayBuffer::ReplayBuffer( const unsigned numConstraints,
@@ -11,6 +13,14 @@ ReplayBuffer::ReplayBuffer( const unsigned numConstraints,
     , _fakeActionIndex( numConstraints + 1 )
     , _size( 0 )
     , _writePosition( 0 )
+    , _priorities( bufferSize, 0.0f )
+    , _sumTree( bufferSize * 2, 0.0f )
+    , _isDemo( bufferSize, false )
+    , _maxPriority( 1.0f )
+    , _demoFactor( 2.0f )
+    , _eps( 1e-6f )
+    , _beta( 0.4f )
+    , _betaInc( ( 1.0f - 0.4f ) / 100000.0f )
 {
     _actions = torch::zeros( { static_cast<long>( bufferSize ), 1 }, torch::kFloat32 );
     _states = torch::zeros( { static_cast<long>( bufferSize ), _numConstraints, NUM_FEATURES },
@@ -26,20 +36,21 @@ ReplayBuffer::ReplayBuffer( const unsigned numConstraints,
 void ReplayBuffer::pushFakeActionEntry( const State &stateBeforeAction,
                                         const unsigned numSplitsBeforeAction )
 {
-    const auto fakeAction =
-        std::make_unique<Action>( DQN_NUM_PHASES, _numConstraints, _fakeActionIndex, RELU_PHASE_ACTIVE );
-    auto *actionEntry =
-        new ActionEntry( *fakeAction, stateBeforeAction, numSplitsBeforeAction, true, false );
+    const auto fakeAction = std::make_unique<Action>(
+        DQN_NUM_PHASES, _numConstraints, _fakeActionIndex, RELU_PHASE_ACTIVE );
+    auto *actionEntry = new ActionEntry(
+        *fakeAction, stateBeforeAction, numSplitsBeforeAction, true, false, false );
     _actionsStack.append( actionEntry );
 }
 
 void ReplayBuffer::pushActionEntry( const Action &action,
                                     const State &stateBeforeAction,
                                     const unsigned numSplitsBeforeAction,
+                                    const bool demo,
                                     const bool done )
 {
     auto *actionEntry =
-        new ActionEntry( action, stateBeforeAction, numSplitsBeforeAction, false, done );
+        new ActionEntry( action, stateBeforeAction, numSplitsBeforeAction, false, demo, done );
     _actionsStack.append( actionEntry );
 }
 
@@ -78,8 +89,8 @@ void ReplayBuffer::moveActionToRevisitBuffer( const State &stateAfterAction,
         actionEntry->_activeActions.popBack();
         return;
     }
-     const double deltaSplit = static_cast<double>( activeAction._splitsBeforeActiveAction ) -
-                            static_cast<double>( numSplitsAfterAction );
+    const double deltaSplit = static_cast<double>( activeAction._splitsBeforeActiveAction ) -
+                              static_cast<double>( numSplitsAfterAction );
 
     if ( deltaSplit == 0 && !done )
     {
@@ -89,9 +100,20 @@ void ReplayBuffer::moveActionToRevisitBuffer( const State &stateAfterAction,
 
     auto reward = potentialSubtreeSize() != 0 ? deltaSplit / potentialSubtreeSize() : 0;
     double alpha = 10.0;
-    reward =   std::copysign(std::tanh(alpha * std::abs(reward)), reward);
-    addExperienceToRevisitBuffer(
-        activeAction._stateBeforeAction, activeAction._action, reward, stateAfterAction, done );
+    reward = std::copysign( std::tanh( alpha * std::abs( reward ) ), reward );
+    if ( actionEntry->_isDemo )
+        addExperienceToRevisitBuffer( activeAction._stateBeforeAction,
+                                      activeAction._action,
+                                      reward,
+                                      stateAfterAction,
+                                      done,
+                                      true );
+    addExperienceToRevisitBuffer( activeAction._stateBeforeAction,
+                                      activeAction._action,
+                                      reward,
+                                      stateAfterAction,
+                                      done,
+                                      false );
     actionEntry->_activeActions.popBack();
 }
 
@@ -137,7 +159,8 @@ void ReplayBuffer::addExperienceToRevisitBuffer( const State &state,
                                                  const Action &action,
                                                  double reward,
                                                  const State &nextState,
-                                                 const bool done )
+                                                 const bool done,
+                                                 bool isDemo )
 {
     const auto stateTensor = state.toTensor();
     const auto actionTensor = action.actionToTensor();
@@ -152,36 +175,68 @@ void ReplayBuffer::addExperienceToRevisitBuffer( const State &state,
         nextStateTensor );
     _dones.index_put_( { static_cast<long>( _writePosition ) }, done ? 1 : 0 );
 
+    _isDemo[_writePosition] = isDemo;
+    float p = isDemo ? _demoFactor * _maxPriority : _maxPriority;
+    updatePriority( _writePosition, p );
     _writePosition = ( _writePosition + 1 ) % _bufferSize;
     if ( _size < _bufferSize )
         ++_size;
 }
 
-std::vector<unsigned> ReplayBuffer::sample() const
+SampledBatch ReplayBuffer::sample()
 {
-    std::vector<unsigned> sampledIndices;
+    SampledBatch batch;
+    if ( _size < _batchSize )
+        return batch;
 
-    if ( _batchSize == 0 || _size < _batchSize  )
+    float total = _sumTree[1];
+    float segment = total / _batchSize;
+    for ( unsigned i = 0; i < _batchSize; ++i )
     {
-        return sampledIndices;
+        float a = segment * i;
+        float b = segment * ( i + 1 );
+        float s = RandomGlobals::instance().rand01() * ( b - a ) + a;
+        unsigned ti = 1;
+        while ( ti < _bufferSize )
+        {
+            if ( s <= _sumTree[2 * ti] )
+                ti *= 2;
+            else
+            {
+                s -= _sumTree[2 * ti];
+                ti = 2 * ti + 1;
+            }
+        }
+        unsigned idx = ti - _bufferSize;
+        float Pj = _priorities[idx] / total;
+        float w = std::pow( _size * Pj + _eps, -_beta );
+
+        batch.indices.push_back( idx );
+        batch.weights.push_back( w );
+        batch.isDemo.push_back( _isDemo[idx] );
     }
-    const unsigned startIndex = 0;
-    const unsigned endIndex = _size - 1;
-
-    const unsigned rangeSize = endIndex - startIndex + 1;
-    const unsigned currentBatchSize = std::min( _batchSize, rangeSize );
-
-    Vector<unsigned> indices( rangeSize );
-    std::iota( indices.begin(), indices.end(), startIndex );
-
-    std::random_device rd;
-    std::mt19937 g( rd() );
-    std::shuffle( indices.begin(), indices.end(), g );
-    sampledIndices.insert(
-        sampledIndices.end(), indices.begin(), indices.begin() + currentBatchSize );
-    return sampledIndices;
+    // anneal beta
+    _beta = std::min( 1.0f, _beta + _betaInc );
+    return batch;
 }
 
+void ReplayBuffer::updatePriority( unsigned idx, float newP )
+{
+    _priorities[idx] = newP;
+    unsigned ti = idx + _bufferSize;
+    _sumTree[ti] = newP;
+    rebuildTree( ti );
+    _maxPriority = std::max( _maxPriority, newP );
+}
+
+void ReplayBuffer::rebuildTree( unsigned ti )
+{
+    while ( ti > 1 )
+    {
+        ti /= 2;
+        _sumTree[ti] = _sumTree[2 * ti] + _sumTree[2 * ti + 1];
+    }
+}
 unsigned ReplayBuffer::getNumRevisitExperiences() const
 {
     return _size;
@@ -216,4 +271,14 @@ torch::Tensor ReplayBuffer::getRewards()
 torch::Tensor ReplayBuffer::getDones()
 {
     return _dones;
+}
+
+long ReplayBuffer::getDemoFactor() const
+{
+    return _demoFactor;
+}
+
+long ReplayBuffer::getEpsilon() const
+{
+    return _eps;
 }

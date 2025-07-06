@@ -145,19 +145,21 @@ void extractExampleID( std::string &examplePath, std::string &exampleID )
 void extractMetaroomID( std::string &examplePath, std::string &exampleID )
 {
     examplePath = Options::get()->getString( Options::PROPERTY_FILE_PATH ).ascii();
-    size_t idx_start = examplePath.find("spec_idx_");
-    size_t eps_start = examplePath.find("_eps_");
-    size_t dot_pos   = examplePath.find(".vnnlib");
-    if (idx_start == std::string::npos || eps_start == std::string::npos || dot_pos == std::string::npos) {
+    size_t idx_start = examplePath.find( "spec_idx_" );
+    size_t eps_start = examplePath.find( "_eps_" );
+    size_t dot_pos = examplePath.find( ".vnnlib" );
+    if ( idx_start == std::string::npos || eps_start == std::string::npos ||
+         dot_pos == std::string::npos )
+    {
         std::cerr << "Error: Unexpected file name format: " << examplePath << std::endl;
-        exit(1);
+        exit( 1 );
     }
     idx_start += 9;
     size_t idx_end = eps_start;
-    std::string idx = examplePath.substr(idx_start, idx_end - idx_start);
+    std::string idx = examplePath.substr( idx_start, idx_end - idx_start );
     size_t eps_val_start = eps_start + 5;
-    std::string eps = examplePath.substr(eps_val_start, dot_pos - eps_val_start);
-    eps.erase(std::remove(eps.begin(), eps.end(), '.'), eps.end());
+    std::string eps = examplePath.substr( eps_val_start, dot_pos - eps_val_start );
+    eps.erase( std::remove( eps.begin(), eps.end(), '.' ), eps.end() );
     exampleID = idx + eps;
 }
 
@@ -222,6 +224,7 @@ void trainAgentOnExample( Options *options,
                           std::ofstream &outputTxtFile )
 {
     unsigned epochs = options->getInt( Options::DQN_EPOCHS );
+    unsigned guided = Options::get()->getInt( Options::DQN_EPOCHS ) / 10;
     options->setString( Options::PROPERTY_FILE_PATH, examplePath );
     double epsilon = GlobalConfiguration::DQN_EPSILON_START;
     agent = nullptr;
@@ -231,11 +234,16 @@ void trainAgentOnExample( Options *options,
         outputTxtFile << std::flush;
         for ( unsigned int episode = 0; episode < epochs; ++episode )
         {
+            if ( episode < guided )
+                GlobalConfiguration::GUIDED_STEPS = true;
+            else
+                GlobalConfiguration::GUIDED_STEPS = false;
             int currentNumSplits = 0;
             agent = Marabou().trainDQNAgent(
                 epsilon, exampleID, std::move( agent ), &currentNumSplits );
-            epsilon = std::max( GlobalConfiguration::DQN_EPSILON_END,
-                                epsilon * GlobalConfiguration::DQN_EPSILON_DECAY );
+            if ( episode > guided )
+                epsilon = std::max( GlobalConfiguration::DQN_EPSILON_END,
+                                    epsilon * GlobalConfiguration::DQN_EPSILON_DECAY );
 
             *numSplits += currentNumSplits;
             outputTxtFile.flush();

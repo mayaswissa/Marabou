@@ -337,6 +337,13 @@ private:
         PERFORMED_WEAK_RESTORATION = 2,
     };
 
+    enum DQNStepType
+    {
+        DEMO = 0,
+        FAKE = 1,
+        AGENT = 2
+    };
+
 
     /*
       Perform bound tightening operations that require
@@ -877,7 +884,8 @@ private:
     std::unique_ptr<State> _currentDQNState;
     std::unique_ptr<State> _previousState;
     unsigned _numSplits;
-    bool _newSplitByAgent;
+     DQNStepType _stepType;
+    bool _guidedSteps = false;
 
     /*
       Returns true iff there is a variable with bounds that can explain infeasibility of the tableau

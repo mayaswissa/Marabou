@@ -121,6 +121,7 @@ const unsigned GlobalConfiguration::MAX_ROUNDS_OF_BACKWARD_ANALYSIS = 10;
 const double GlobalConfiguration::DQN_EPSILON_START = 1.0;
 const double GlobalConfiguration::DQN_EPSILON_END = 0.05;
 const double GlobalConfiguration::DQN_EPSILON_PURE_EXPLOIT = 0.00;
+bool GlobalConfiguration::GUIDED_STEPS = true;
 const double GlobalConfiguration::DQN_EPSILON_DECAY = 0.95;
 double GlobalConfiguration::DQN_TAU = 5e-3;
 
