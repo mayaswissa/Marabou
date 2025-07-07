@@ -167,6 +167,8 @@ public:
     torch::Tensor getNextStates();
     torch::Tensor getDones();
     long getDemoFactor() const;
+    long getEpsilonDemo() const;
+    long getEpsilonAgent() const;
     long getEpsilon() const;
 
 
@@ -190,6 +192,8 @@ private:
     // annealing & weights
     float _demoFactor, _eps;
     float _beta, _betaInc;
+    float _epsAgent = 1e-6f;
+    float _epsDemo = 1.0f;
     void rebuildTree( unsigned ti );
 };
 

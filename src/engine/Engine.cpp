@@ -77,7 +77,6 @@ Engine::Engine()
     , _currentDQNState( nullptr )
     , _numSplits( 0 )
     , _stepType( AGENT )
-    , _guidedSteps( GlobalConfiguration::GUIDED_STEPS )
 {
     _smtCore.setStatistics( &_statistics );
     _tableau->setStatistics( &_statistics );
@@ -619,8 +618,11 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
             if ( _action == nullptr )
                 _agent->stepFakeAction( *_previousState, _numSplits );
             else
-                _agent->stepNewAction(
-                    *_previousState, *_action, true, _numSplits, _stepType == DEMO );
+                _agent->stepNewAction( *_previousState,
+                                       *_action,
+                                       true,
+                                       _numSplits,
+                                       GlobalConfiguration::DON_TRAINING_PHASE == 0 );
             _agent->handleDone( *_currentDQNState, _numSplits );
 
             if ( _verbosity > 0 )
@@ -696,8 +698,11 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                         if ( _action == nullptr )
                             _agent->stepFakeAction( *_previousState, _numSplits );
                         else
-                            _agent->stepNewAction(
-                                *_previousState, *_action, false, _numSplits, _stepType == DEMO );
+                            _agent->stepNewAction( *_previousState,
+                                                   *_action,
+                                                   false,
+                                                   _numSplits,
+                                                   GlobalConfiguration::DON_TRAINING_PHASE == 0 );
                     }
                 }
 
@@ -745,8 +750,11 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                         if ( _action == nullptr )
                             _agent->stepFakeAction( *_previousState, _numSplits );
                         else
-                            _agent->stepNewAction(
-                                *_previousState, *_action, true, _numSplits, _stepType == DEMO );
+                            _agent->stepNewAction( *_previousState,
+                                                   *_action,
+                                                   true,
+                                                   _numSplits,
+                                                   GlobalConfiguration::DON_TRAINING_PHASE == 0 );
                         auto numSplitsForDoneSuccess = _smtCore.getStackDepth();
                         updateToCurrentDQNState( *_currentDQNState );
                         _agent->handleDone( *_currentDQNState, numSplitsForDoneSuccess );
@@ -781,8 +789,11 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                         if ( _action == nullptr )
                             _agent->stepFakeAction( *_previousState, _numSplits );
                         else
-                            _agent->stepNewAction(
-                                *_previousState, *_action, true, _numSplits, _stepType == DEMO );
+                            _agent->stepNewAction( *_previousState,
+                                                   *_action,
+                                                   true,
+                                                   _numSplits,
+                                                   GlobalConfiguration::DON_TRAINING_PHASE == 0 );
                         _agent->handleDone( *_currentDQNState, _numSplits );
                         *numSplits = _numSplits;
                         return std::move( _agent );
@@ -817,8 +828,11 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                 if ( _action == nullptr )
                     _agent->stepFakeAction( *_previousState, _numSplits );
                 else
-                    _agent->stepNewAction(
-                        *_previousState, *_action, true, _numSplits, _stepType == DEMO );
+                    _agent->stepNewAction( *_previousState,
+                                           *_action,
+                                           true,
+                                           _numSplits,
+                                           GlobalConfiguration::DON_TRAINING_PHASE == 0 );
                 _agent->handleDone( *_currentDQNState, _numSplits );
                 *numSplits = _numSplits;
                 return std::move( _agent );
@@ -848,8 +862,11 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                 if ( _action == nullptr )
                     _agent->stepFakeAction( *_previousState, _numSplits );
                 else
-                    _agent->stepNewAction(
-                        *_previousState, *_action, true, _numSplits, _stepType == DEMO );
+                    _agent->stepNewAction( *_previousState,
+                                           *_action,
+                                           true,
+                                           _numSplits,
+                                           GlobalConfiguration::DON_TRAINING_PHASE == 0 );
                 _agent->handleDone( *_currentDQNState, _numSplits );
                 *numSplits = _numSplits;
                 return std::move( _agent );
@@ -877,8 +894,11 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
             if ( _action == nullptr )
                 _agent->stepFakeAction( *_previousState, _numSplits );
             else
-                _agent->stepNewAction(
-                    *_previousState, *_action, true, _numSplits, _stepType == DEMO );
+                _agent->stepNewAction( *_previousState,
+                                       *_action,
+                                       true,
+                                       _numSplits,
+                                       GlobalConfiguration::DON_TRAINING_PHASE == 0 );
             _agent->handleDone( *_currentDQNState, _numSplits );
             *numSplits = _numSplits;
             return std::move( _agent );
@@ -898,7 +918,11 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
     if ( _action == nullptr )
         _agent->stepFakeAction( *_previousState, _numSplits );
     else
-        _agent->stepNewAction( *_previousState, *_action, true, _numSplits, _stepType == DEMO );
+        _agent->stepNewAction( *_previousState,
+                               *_action,
+                               true,
+                               _numSplits,
+                               GlobalConfiguration::DON_TRAINING_PHASE == 0 );
     _agent->handleDone( *_currentDQNState, _numSplits );
     _exitCode = Engine::MAX_ITERATIONS;
     *numSplits = _numSplits;
@@ -3271,10 +3295,9 @@ PiecewiseLinearConstraint *Engine::pickSplitPLConstraintByAgent()
     PiecewiseLinearConstraint *plConstraint = nullptr;
     PhaseStatus phase = PHASE_NOT_FIXED;
 
-    if ( _guidedSteps )
+    if ( GlobalConfiguration::DON_TRAINING_PHASE == 0 )
     {
         int strat = RandomGlobals::instance().randInt( 0, 1 );
-        _stepType = DEMO;
         switch ( strat )
         {
         case 0:

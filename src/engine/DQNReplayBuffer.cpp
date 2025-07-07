@@ -101,19 +101,12 @@ void ReplayBuffer::moveActionToRevisitBuffer( const State &stateAfterAction,
     auto reward = potentialSubtreeSize() != 0 ? deltaSplit / potentialSubtreeSize() : 0;
     double alpha = 10.0;
     reward = std::copysign( std::tanh( alpha * std::abs( reward ) ), reward );
-    if ( actionEntry->_isDemo )
-        addExperienceToRevisitBuffer( activeAction._stateBeforeAction,
-                                      activeAction._action,
-                                      reward,
-                                      stateAfterAction,
-                                      done,
-                                      true );
     addExperienceToRevisitBuffer( activeAction._stateBeforeAction,
                                       activeAction._action,
                                       reward,
                                       stateAfterAction,
                                       done,
-                                      false );
+                                      actionEntry->_isDemo );
     actionEntry->_activeActions.popBack();
 }
 
@@ -176,8 +169,10 @@ void ReplayBuffer::addExperienceToRevisitBuffer( const State &state,
     _dones.index_put_( { static_cast<long>( _writePosition ) }, done ? 1 : 0 );
 
     _isDemo[_writePosition] = isDemo;
-    float p = isDemo ? _demoFactor * _maxPriority : _maxPriority;
-    updatePriority( _writePosition, p );
+    float p = isDemo ? _epsDemo : _epsAgent;
+
+    updatePriority(_writePosition, p);
+    _maxPriority = std::max(_maxPriority, p);
     _writePosition = ( _writePosition + 1 ) % _bufferSize;
     if ( _size < _bufferSize )
         ++_size;
@@ -278,7 +273,12 @@ long ReplayBuffer::getDemoFactor() const
     return _demoFactor;
 }
 
-long ReplayBuffer::getEpsilon() const
+long ReplayBuffer::getEpsilonDemo() const
 {
-    return _eps;
+    return _epsDemo;
+}
+
+long ReplayBuffer::getEpsilonAgent() const
+{
+    return _epsAgent;
 }

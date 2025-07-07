@@ -25,7 +25,7 @@ public:
                         bool done,
                         unsigned numSplits,
                         bool isDemo );
-
+    void learn();
     void handleDone( const State &currentState, unsigned numSplits );
     std::unique_ptr<Action> act( const State &state, double eps = 0.1 );
     void saveNetworks( const std::string &path ) const;
@@ -38,7 +38,6 @@ public:
 
 private:
     static void softUpdate( const QNetwork &localModel, const QNetwork &targetModel );
-    void learn();
     torch::Device getDevice() const;
     ActionSpace _actionSpace;
     unsigned _numPlConstraints, _numPhases, _numActions;

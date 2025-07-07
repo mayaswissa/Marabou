@@ -224,24 +224,40 @@ void trainAgentOnExample( Options *options,
                           std::ofstream &outputTxtFile )
 {
     unsigned epochs = options->getInt( Options::DQN_EPOCHS );
-    unsigned guided = Options::get()->getInt( Options::DQN_EPOCHS ) / 10;
+    unsigned guided = Options::get()->getInt( Options::DQN_EPOCHS ) / 20;
     options->setString( Options::PROPERTY_FILE_PATH, examplePath );
     double epsilon = GlobalConfiguration::DQN_EPSILON_START;
+    unsigned learnGuidedSteps = 1000;
     agent = nullptr;
     if ( outputTxtFile.is_open() )
     {
         outputTxtFile << "\n\t results of each episode : \n";
         outputTxtFile << std::flush;
-        for ( unsigned int episode = 0; episode < epochs; ++episode )
+        for ( unsigned int guidedEpoch = 0; guidedEpoch < guided; ++guidedEpoch )
         {
-            if ( episode < guided )
-                GlobalConfiguration::GUIDED_STEPS = true;
-            else
-                GlobalConfiguration::GUIDED_STEPS = false;
+            DQN_LOG(
+                Stringf( "Injecting guided steps. guidedEpoch :  %d\n", guidedEpoch ).ascii() );
+            GlobalConfiguration::DON_TRAINING_PHASE = 0;
             int currentNumSplits = 0;
             agent = Marabou().trainDQNAgent(
                 epsilon, exampleID, std::move( agent ), &currentNumSplits );
-            if ( episode > guided )
+            *numSplits += currentNumSplits;
+            outputTxtFile.flush();
+        }
+        DQN_LOG( "Learning the guided steps.\n" );
+        for ( unsigned int learnGiuded = 0; learnGiuded < learnGuidedSteps; ++learnGiuded )
+        {
+            GlobalConfiguration::DON_TRAINING_PHASE = 1;
+            agent->learn();
+        }
+        DQN_LOG( "Online RL phase.\n" );
+        for ( unsigned int epoch = guided; epoch < epochs; ++epoch )
+        {
+            GlobalConfiguration::DON_TRAINING_PHASE = 2;
+            int currentNumSplits = 0;
+            agent = Marabou().trainDQNAgent(
+                epsilon, exampleID, std::move( agent ), &currentNumSplits );
+            if ( epoch > guided )
                 epsilon = std::max( GlobalConfiguration::DQN_EPSILON_END,
                                     epsilon * GlobalConfiguration::DQN_EPSILON_DECAY );
 

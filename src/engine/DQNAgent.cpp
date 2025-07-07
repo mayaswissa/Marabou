@@ -106,7 +106,8 @@ void Agent::handleDone( const State &currentState, const unsigned numSplits )
     // Insert all actions from actions buffer to the replay buffer and learn.
     _replayedBuffer.handleDone( currentState, numSplits );
     _tStep = ( _tStep + 1 ) % Options::get()->getInt( Options::DQN_EXPLORATION_RATE );
-    learn();
+    if ( GlobalConfiguration::DON_TRAINING_PHASE != 0 )
+        learn();
 }
 
 void Agent::stepAlternativeAction( const State &stateBeforeSplit,
@@ -115,7 +116,7 @@ void Agent::stepAlternativeAction( const State &stateBeforeSplit,
 {
     _replayedBuffer.applyNextAction( stateBeforeSplit, numSplits, numInconsistent );
     _tStep = ( _tStep + 1 ) % Options::get()->getInt( Options::DQN_EXPLORATION_RATE );
-    if ( _tStep == 0 )
+    if ( _tStep == 0 && GlobalConfiguration::DON_TRAINING_PHASE != 0 )
         learn();
 }
 
@@ -132,7 +133,7 @@ void Agent::stepNewAction( const State &previousState,
 {
     _replayedBuffer.pushActionEntry( action, previousState, numSplits, isDemo, done );
     _tStep = ( _tStep + 1 ) % Options::get()->getInt( Options::DQN_EXPLORATION_RATE );
-    if ( _tStep == 0 )
+    if ( _tStep == 0 && GlobalConfiguration::DON_TRAINING_PHASE != 0 )
         learn();
 }
 
@@ -194,66 +195,10 @@ std::unique_ptr<Action> Agent::actRandomly( const State &state )
 }
 
 
-//
-// std::unique_ptr<Action> Agent::act( const State &state, const double eps )
-// {
-//     _qNetworkLocal.eval();
-//     const auto tensorState = state.toTensor();
-//     torch::Tensor QValues = _qNetworkLocal.forward( tensorState );
-//     _qNetworkLocal.train();
-//     unsigned actionIndex;
-//
-//     // Create a mask to invalidate actions with phase not fixed or already fixed pl-constraint
-//     auto mask = torch::zeros( { static_cast<long>( _numActions ) }, torch::kFloat32 );
-//     auto mask2D =
-//         mask.view( { static_cast<long>( _numPlConstraints ), static_cast<long>( _numPhases ) } );
-//
-//     // can not choose to convert a constraint back to an unfixed phase.
-//     mask2D.index_put_( { torch::indexing::Slice(), static_cast<int64_t>( DQN_RELU_NOT_FIXED ) },
-//                        -std::numeric_limits<float>::infinity() );
-//
-//     // can not choose to change a fixed constraint.
-//     auto reluNotFixedColumn = tensorState.index(
-//         { torch::indexing::Slice(), static_cast<int64_t>( DQN_RELU_NOT_FIXED ) } );
-//     auto fixedMask = ( reluNotFixedColumn == 0 );
-//     auto expandedMask = fixedMask.unsqueeze( 1 ).expand( { -1, static_cast<long>( _numPhases ) }
-//     );
-//
-//     mask2D.masked_fill_( expandedMask, -std::numeric_limits<float>::infinity() );
-//
-//     auto maskFlat = mask2D.view( { -1 } );
-//     QValues += maskFlat;
-//
-//     if ( static_cast<double>( rand() ) / RAND_MAX > eps )
-//     {
-//         // best action - maximum Q-value from the masked values
-//         actionIndex = QValues.argmax().item<int>();
-//     }
-//     else
-//     {
-//         // random step
-//         auto validRandomMask = ( reluNotFixedColumn == 1 );
-//         torch::Tensor validRandomIndices = validRandomMask.nonzero();
-//         if ( validRandomIndices.size( 0 ) == 0 )
-//             return nullptr;
-//         std::random_device rd;
-//         std::mt19937 gen( rd() );
-//         int k = validRandomIndices.size( 0 ); // number of “not fixed” constraints
-//         std::uniform_int_distribution<> pickDist( 0, k - 1 );
-//         int row = pickDist( gen );
-//         const unsigned actionConstraint = validRandomIndices.index( { row, 0 } ).item<int>();
-//         std::uniform_int_distribution<> dist( RELU_PHASE_ACTIVE, RELU_PHASE_INACTIVE );
-//         const unsigned actionPhase = dist( gen );
-//         actionIndex = _actionSpace.getActionIndex( actionConstraint, actionPhase );
-//     }
-//
-//     auto [constraint, phase] = _actionSpace.decodeActionIndex( actionIndex );
-//     return std::make_unique<Action>( _numPhases, _numPlConstraints, constraint, phase );
-// }
-
-
 void Agent::learn()
 {
+    if ( GlobalConfiguration::DON_TRAINING_PHASE == 1 )
+        _lambdaSup = 1.0f;
     auto batch = _replayedBuffer.sample();
     if ( batch.indices.empty() )
         return;
@@ -331,12 +276,12 @@ void Agent::learn()
     }
 
     const auto loss = tdLoss + _lambdaSup * marginLoss;
-    _lossVerbosity = ( _lossVerbosity + 1 ) % 100;
+    _lossVerbosity = ( _lossVerbosity + 1 ) % 1;
     if ( _lossVerbosity == 0 )
     {
-        DQN_LOG( Stringf("TD Loss : %.10f\n", tdLoss.item<double>()).ascii() );
-        DQN_LOG( Stringf("MARGIN Loss : %.10f\n", marginLoss.item<double>()).ascii() );
-        DQN_LOG( Stringf("Loss : %.10f\n", loss.item<double>()).ascii() );
+        DQN_LOG( Stringf( "TD Loss : %.10f\n", tdLoss.item<double>() ).ascii() );
+        DQN_LOG( Stringf( "MARGIN Loss : %.10f\n", marginLoss.item<double>() ).ascii() );
+        DQN_LOG( Stringf( "Loss : %.10f\n", loss.item<double>() ).ascii() );
     }
 
 
@@ -348,18 +293,18 @@ void Agent::learn()
         _optimizer.step();
     softUpdate( _qNetworkLocal, _qNetworkTarget );
 
-    // --- update PER priorities ---
-    for ( size_t i = 0; i < batch.indices.size(); ++i )
-    {
-        float err = std::abs( ( QTargets[i].item<float>() - QExpected[i].item<float>() ) );
-        float pNew = err + _replayedBuffer.getEpsilon();
-        if ( batch.isDemo[i] )
-            pNew *= _replayedBuffer.getDemoFactor();
-        _replayedBuffer.updatePriority( batch.indices[i], pNew );
+    for ( size_t i = 0; i < batch.indices.size(); ++i ) {
+        float delta = QTargets[i].item<float>() - QExpected[i].item<float>();
+        float raw_p = std::fabs(delta)
+                    + ( batch.isDemo[i] ? _replayedBuffer.getEpsilonDemo() : _replayedBuffer.getEpsilonAgent() );
+        _replayedBuffer.updatePriority( batch.indices[i], raw_p );
     }
 
     // --- anneal supervised weight ---
-    _lambdaSup = std::fmax( 0.0f, _lambdaSup - _lambdaDecay );
+    if ( GlobalConfiguration::DON_TRAINING_PHASE == 1 )
+        _lambdaSup = 1.0f;
+    else
+        _lambdaSup = std::fmax( 0.0f, _lambdaSup - _lambdaDecay );
 }
 
 

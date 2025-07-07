@@ -267,8 +267,8 @@ public:
     static const double DQN_EPSILON_END;
     static const double DQN_EPSILON_DECAY;
     static const double DQN_EPSILON_PURE_EXPLOIT;
-    static bool GUIDED_STEPS;
     static double DQN_TAU; // Soft Update Parameter for target network
+    static unsigned DON_TRAINING_PHASE;
 
 
 #ifdef ENABLE_GUROBI

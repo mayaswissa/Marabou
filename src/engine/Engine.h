@@ -885,7 +885,6 @@ private:
     std::unique_ptr<State> _previousState;
     unsigned _numSplits;
      DQNStepType _stepType;
-    bool _guidedSteps = false;
 
     /*
       Returns true iff there is a variable with bounds that can explain infeasibility of the tableau
