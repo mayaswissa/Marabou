@@ -1,6 +1,8 @@
 #include "DQNAgent.h"
+
 #include "Options.h"
 #include "RandomGlobals.h"
+
 #include <random>
 #include <utility>
 
@@ -304,32 +306,39 @@ void Agent::learn()
     // TD loss component
     const auto tdLoss = torch::mse_loss( QExpected, QTargets.detach() );
     // Supervised margin loss for demonstration samples
-    torch::Tensor marginLoss = torch::zeros({}, device);
-    if (_lambdaSup > 0) {
+    torch::Tensor marginLoss = torch::zeros( {}, device );
+    if ( _lambdaSup > 0 )
+    {
         float running = 0.0f;
-        for (size_t i = 0; i < batch.indices.size(); ++i) {
-            if (batch.isDemo[i]) {
+        for ( size_t i = 0; i < batch.indices.size(); ++i )
+        {
+            if ( batch.isDemo[i] )
+            {
                 // get Q-values for state i
-                auto qvals = _qNetworkLocal.forward(statesTensor[i]);
+                auto qvals = _qNetworkLocal.forward( statesTensor[i] );
                 long demoAct = actionsTensor[i].item<long>();
                 // margin = max_a [qvals[a] + _margin] – qvals[demoAct]
                 auto shifted = qvals + _margin;
                 float maxAll = shifted.max().item<float>();
-                float demoQ  = qvals[demoAct].item<float>();
-                running += std::max(0.0f, maxAll - demoQ);
+                float demoQ = qvals[demoAct].item<float>();
+                running += std::max( 0.0f, maxAll - demoQ );
             }
         }
-        marginLoss = torch::full({},
-                        running / batch.indices.size(),
-                        torch::TensorOptions()
-                          .dtype(torch::kFloat32)
-                          .device(device));
+        marginLoss =
+            torch::full( {},
+                         running / batch.indices.size(),
+                         torch::TensorOptions().dtype( torch::kFloat32 ).device( device ) );
     }
 
     const auto loss = tdLoss + _lambdaSup * marginLoss;
-    _lossVerbosity = ( _lossVerbosity + 1 ) % 200;
+    _lossVerbosity = ( _lossVerbosity + 1 ) % 100;
     if ( _lossVerbosity == 0 )
-        DQN_LOG( Stringf( "MSE Loss : %f\n", loss.item<double>() ).ascii() );
+    {
+        DQN_LOG( Stringf("TD Loss : %.10f\n", tdLoss.item<double>()).ascii() );
+        DQN_LOG( Stringf("MARGIN Loss : %.10f\n", marginLoss.item<double>()).ascii() );
+        DQN_LOG( Stringf("Loss : %.10f\n", loss.item<double>()).ascii() );
+    }
+
 
     // Backpropagation
     _optimizer.zero_grad();
@@ -340,18 +349,17 @@ void Agent::learn()
     softUpdate( _qNetworkLocal, _qNetworkTarget );
 
     // --- update PER priorities ---
-    for (size_t i = 0; i < batch.indices.size(); ++i) {
-        float err = std::abs(
-            (QTargets[i].item<float>() - QExpected[i].item<float>())
-        );
+    for ( size_t i = 0; i < batch.indices.size(); ++i )
+    {
+        float err = std::abs( ( QTargets[i].item<float>() - QExpected[i].item<float>() ) );
         float pNew = err + _replayedBuffer.getEpsilon();
-        if (batch.isDemo[i])
+        if ( batch.isDemo[i] )
             pNew *= _replayedBuffer.getDemoFactor();
-        _replayedBuffer.updatePriority(batch.indices[i], pNew);
+        _replayedBuffer.updatePriority( batch.indices[i], pNew );
     }
 
     // --- anneal supervised weight ---
-    _lambdaSup = std::fmax(0.0f, _lambdaSup - _lambdaDecay);
+    _lambdaSup = std::fmax( 0.0f, _lambdaSup - _lambdaDecay );
 }
 
 
