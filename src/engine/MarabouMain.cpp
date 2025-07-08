@@ -224,7 +224,7 @@ void trainAgentOnExample( Options *options,
                           std::ofstream &outputTxtFile )
 {
     unsigned epochs = options->getInt( Options::DQN_EPOCHS );
-    unsigned guided = Options::get()->getInt( Options::DQN_EPOCHS ) / 20;
+    unsigned guided = Options::get()->getInt( Options::DQN_EPOCHS ) / 5;
     options->setString( Options::PROPERTY_FILE_PATH, examplePath );
     double epsilon = GlobalConfiguration::DQN_EPSILON_START;
     unsigned learnGuidedSteps = 1000;
@@ -260,7 +260,7 @@ void trainAgentOnExample( Options *options,
             if ( epoch > guided )
                 epsilon = std::max( GlobalConfiguration::DQN_EPSILON_END,
                                     epsilon * GlobalConfiguration::DQN_EPSILON_DECAY );
-
+            agent->schedulersStep();
             *numSplits += currentNumSplits;
             outputTxtFile.flush();
         }

@@ -50,9 +50,9 @@ private:
     torch::optim::StepLR _scheduler;
     ReplayBuffer _replayedBuffer;
     unsigned _lossVerbosity;
-    long _lambdaSup   = 1.0f;          // start with full demo influence
+    long _lambdaSup   = 1.0f;
     long _lambdaDecay = 1e-5;
-    long _margin      = 0.8f;          // your chosen margin for the loss
+    long _margin      = 0.8f;
     bool handleInvalidGradients();
     void applyActionMask( const torch::Tensor &tensorState, torch::Tensor &QValues ) const;
 

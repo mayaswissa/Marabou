@@ -21,7 +21,7 @@ Agent::Agent( const unsigned numPlConstraints,
     , _optimizer( _qNetworkLocal.parameters(),
                   torch::optim::AdamOptions( Options::get()->getFloat( Options::DQN_LR ) )
                       .weight_decay( Options::get()->getFloat( Options::DQN_WEIGHT_DECAY ) ) )
-    , _scheduler( _optimizer, 1, 0.9 )
+    , _scheduler( _optimizer, 4, 0.95 )
     , _replayedBuffer( ReplayBuffer( _numPlConstraints,
                                      Options::get()->getInt( Options::DQN_BUFFER_SIZE ),
                                      Options::get()->getInt( Options::DQN_BATCH_SIZE ) ) )
@@ -197,8 +197,6 @@ std::unique_ptr<Action> Agent::actRandomly( const State &state )
 
 void Agent::learn()
 {
-    if ( GlobalConfiguration::DON_TRAINING_PHASE == 1 )
-        _lambdaSup = 1.0f;
     auto batch = _replayedBuffer.sample();
     if ( batch.indices.empty() )
         return;
@@ -250,6 +248,9 @@ void Agent::learn()
     }
     // TD loss component
     const auto tdLoss = torch::mse_loss( QExpected, QTargets.detach() );
+
+    torch::Tensor weightedTdLoss = (tdLoss * torch::tensor(batch.weights).to(device)).mean();
+
     // Supervised margin loss for demonstration samples
     torch::Tensor marginLoss = torch::zeros( {}, device );
     if ( _lambdaSup > 0 )
@@ -275,11 +276,11 @@ void Agent::learn()
                          torch::TensorOptions().dtype( torch::kFloat32 ).device( device ) );
     }
 
-    const auto loss = tdLoss + _lambdaSup * marginLoss;
+    const auto loss = weightedTdLoss + _lambdaSup * marginLoss;
     _lossVerbosity = ( _lossVerbosity + 1 ) % 1;
     if ( _lossVerbosity == 0 )
     {
-        DQN_LOG( Stringf( "TD Loss : %.10f\n", tdLoss.item<double>() ).ascii() );
+        DQN_LOG( Stringf( "TD Loss : %.10f\n", weightedTdLoss.item<double>() ).ascii() );
         DQN_LOG( Stringf( "MARGIN Loss : %.10f\n", marginLoss.item<double>() ).ascii() );
         DQN_LOG( Stringf( "Loss : %.10f\n", loss.item<double>() ).ascii() );
     }
@@ -301,9 +302,7 @@ void Agent::learn()
     }
 
     // --- anneal supervised weight ---
-    if ( GlobalConfiguration::DON_TRAINING_PHASE == 1 )
-        _lambdaSup = 1.0f;
-    else
+    if ( GlobalConfiguration::DON_TRAINING_PHASE == 2 )
         _lambdaSup = std::fmax( 0.0f, _lambdaSup - _lambdaDecay );
 }
 
