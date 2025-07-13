@@ -26,6 +26,9 @@ Agent::Agent( const unsigned numPlConstraints,
                                      Options::get()->getInt( Options::DQN_BUFFER_SIZE ),
                                      Options::get()->getInt( Options::DQN_BATCH_SIZE ) ) )
     , _lossVerbosity( 0 )
+    , _lambdaSup( Options::get()->getFloat( Options::DQfD_LAMBDA_SUP ) )
+    , _lambdaDecay(Options::get()->getFloat( Options::DQfD_LAMBDA_DECAY ))
+    , _margin(Options::get()->getFloat( Options::DQfD_MARGIN ))
 {
     _qNetworkLocal.to( device );
     _qNetworkTarget.to( device );
@@ -247,37 +250,28 @@ void Agent::learn()
         throw std::runtime_error( "NaN detected in QTargets." );
     }
     // TD loss component
-    const auto tdLoss = torch::mse_loss( QExpected, QTargets.detach() );
-
-    torch::Tensor weightedTdLoss = (tdLoss * torch::tensor(batch.weights).to(device)).mean();
+    auto td_errors = torch::mse_loss( QExpected, QTargets.detach(), torch::Reduction::None );
+    auto weights = torch::tensor( batch.weights, torch::dtype( torch::kFloat32 ) ).to( device );
+    auto weightedTdLoss = ( td_errors * weights ).mean();
 
     // Supervised margin loss for demonstration samples
-    torch::Tensor marginLoss = torch::zeros( {}, device );
-    if ( _lambdaSup > 0 )
-    {
-        float running = 0.0f;
-        for ( size_t i = 0; i < batch.indices.size(); ++i )
-        {
-            if ( batch.isDemo[i] )
-            {
-                // get Q-values for state i
-                auto qvals = _qNetworkLocal.forward( statesTensor[i] );
-                long demoAct = actionsTensor[i].item<long>();
-                // margin = max_a [qvals[a] + _margin] – qvals[demoAct]
-                auto shifted = qvals + _margin;
-                float maxAll = shifted.max().item<float>();
-                float demoQ = qvals[demoAct].item<float>();
-                running += std::max( 0.0f, maxAll - demoQ );
-            }
-        }
-        marginLoss =
-            torch::full( {},
-                         running / batch.indices.size(),
-                         torch::TensorOptions().dtype( torch::kFloat32 ).device( device ) );
-    }
+    std::vector<int64_t> demo_mask_int( batch.isDemo.begin(), batch.isDemo.end() );
 
+    // 2. Tensor from that, then cast to float
+
+    auto all_q = _qNetworkLocal.forward( statesTensor );
+    auto shifted = all_q + _margin;
+    auto max_shift = std::get<0>( shifted.max( 1,true ) );
+    auto q_demo = all_q.gather( 1, actionsTensor ).squeeze(1);;
+    auto demo_mask = torch::tensor( demo_mask_int, torch::TensorOptions().dtype( torch::kInt64 ) )
+                         .to( device )
+                         .to( torch::kFloat32 );
+    auto raw_margin = torch::relu( max_shift - q_demo ).squeeze( 1 ) * demo_mask;
+    auto marginLoss = raw_margin.sum() / demo_mask.sum().clamp_min( 1.0 );
+
+    // Total loss
     const auto loss = weightedTdLoss + _lambdaSup * marginLoss;
-    _lossVerbosity = ( _lossVerbosity + 1 ) % 1;
+    _lossVerbosity = ( _lossVerbosity + 1 ) % 100;
     if ( _lossVerbosity == 0 )
     {
         DQN_LOG( Stringf( "TD Loss : %.10f\n", weightedTdLoss.item<double>() ).ascii() );
@@ -294,10 +288,11 @@ void Agent::learn()
         _optimizer.step();
     softUpdate( _qNetworkLocal, _qNetworkTarget );
 
-    for ( size_t i = 0; i < batch.indices.size(); ++i ) {
+    for ( size_t i = 0; i < batch.indices.size(); ++i )
+    {
         float delta = QTargets[i].item<float>() - QExpected[i].item<float>();
-        float raw_p = std::fabs(delta)
-                    + ( batch.isDemo[i] ? _replayedBuffer.getEpsilonDemo() : _replayedBuffer.getEpsilonAgent() );
+        float raw_p = std::fabs( delta ) + ( batch.isDemo[i] ? _replayedBuffer.getEpsilonDemo()
+                                                             : _replayedBuffer.getEpsilonAgent() );
         _replayedBuffer.updatePriority( batch.indices[i], raw_p );
     }
 

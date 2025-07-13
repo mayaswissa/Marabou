@@ -134,7 +134,6 @@ public:
         DQN_BUFFER_SIZE,
 
         DQN_EXPLORATION_RATE,
-
     };
 
     enum FloatOptions {
@@ -159,6 +158,12 @@ public:
 
         // DQN agent weight decay
         DQN_WEIGHT_DECAY,
+
+        DQfD_LAMBDA_SUP,
+
+        DQfD_LAMBDA_DECAY,
+
+        DQfD_MARGIN,
     };
 
     enum StringOptions {

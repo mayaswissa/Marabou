@@ -150,12 +150,11 @@ void OptionParser::initialize()
         boost::program_options::value<std::string>(
             &( *_stringOptions )[Options::DQN_AGENT_NETWORKS_PATH] )
             ->default_value( ( *_stringOptions )[Options::DQN_AGENT_NETWORKS_PATH] ),
-            "Path to load/ save DQN agent's networks." )(
-            "benchmarks",
-            boost::program_options::value<std::string>(
-                &( *_stringOptions )[Options::BENCHMARK] )
-                ->default_value( ( *_stringOptions )[Options::BENCHMARK] ),
-            "Benchmark of the current exampl." )(
+        "Path to load/ save DQN agent's networks." )(
+        "benchmarks",
+        boost::program_options::value<std::string>( &( *_stringOptions )[Options::BENCHMARK] )
+            ->default_value( ( *_stringOptions )[Options::BENCHMARK] ),
+        "Benchmark of the current exampl." )(
         "DQN-mode",
         boost::program_options::value<int>( &( ( *_intOptions )[Options::DQN_MODE] ) )
             ->default_value( ( *_intOptions )[Options::DQN_MODE] ),
@@ -187,7 +186,19 @@ void OptionParser::initialize()
         "DQN-exploration-rate",
         boost::program_options::value<int>( &( ( *_intOptions )[Options::DQN_EXPLORATION_RATE] ) )
             ->default_value( ( *_intOptions )[Options::DQN_EXPLORATION_RATE] ),
-        "DQN agent's exploration rate.\n" )
+        "DQN agent's exploration rate.\n" )(
+        "DQfD-lambda-sup",
+        boost::program_options::value<float>( &( ( *_floatOptions )[Options::DQfD_LAMBDA_SUP] ) )
+            ->default_value( ( *_floatOptions )[Options::DQfD_LAMBDA_SUP] ),
+        "balances the supervised large-margin demonstration loss against the TD losses.\n" )(
+        "DQfD-lambda-decay]",
+        boost::program_options::value<float>( &( ( *_floatOptions )[Options::DQfD_LAMBDA_DECAY] ) )
+            ->default_value( ( *_floatOptions )[Options::DQfD_LAMBDA_DECAY] ),
+        "DQfD lambda decay.\n" )(
+        "DQfD-margin",
+        boost::program_options::value<float>( &( ( *_floatOptions )[Options::DQfD_MARGIN] ) )
+            ->default_value( ( *_floatOptions )[Options::DQfD_MARGIN] ),
+        "DQfD margin.\n" )
 
 #ifdef ENABLE_GUROBI
 #endif // ENABLE_GUROBI

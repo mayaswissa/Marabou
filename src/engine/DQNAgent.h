@@ -50,11 +50,10 @@ private:
     torch::optim::StepLR _scheduler;
     ReplayBuffer _replayedBuffer;
     unsigned _lossVerbosity;
-    long _lambdaSup   = 1.0f;
-    long _lambdaDecay = 1e-5;
-    long _margin      = 0.8f;
+    float _lambdaSup;
+    float _lambdaDecay;
+    float _margin;
     bool handleInvalidGradients();
     void applyActionMask( const torch::Tensor &tensorState, torch::Tensor &QValues ) const;
-
 };
 #endif
