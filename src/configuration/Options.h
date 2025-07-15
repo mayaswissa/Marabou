@@ -127,6 +127,10 @@ public:
 
         DQN_EPOCHS,
 
+        DQN_GUIDED_EPOCHS,
+
+        DQN_GUIDED_STEPS,
+
         DQN_MAX_ITERS,
 
         DQN_BATCH_SIZE,

@@ -162,7 +162,15 @@ void OptionParser::initialize()
         "DQN-epochs",
         boost::program_options::value<int>( &( *_intOptions )[Options::DQN_EPOCHS] )
             ->default_value( ( *_intOptions )[Options::DQN_EPOCHS] ),
-        "number of epochs in DQN training." )(
+            "number of epochs in DQN training." )(
+        "DQN-guided-epochs",
+        boost::program_options::value<int>( &( *_intOptions )[Options::DQN_GUIDED_EPOCHS] )
+            ->default_value( ( *_intOptions )[Options::DQN_GUIDED_EPOCHS] ),
+            "number of guided epochs in DQN training." )(
+            "DQN-guided-steps",
+            boost::program_options::value<int>( &( *_intOptions )[Options::DQN_GUIDED_STEPS] )
+                ->default_value( ( *_intOptions )[Options::DQN_GUIDED_STEPS] ),
+            "number of guided steps in DQN training." )(
         "DQN-iters",
         boost::program_options::value<int>( &( *_intOptions )[Options::DQN_MAX_ITERS] )
             ->default_value( ( *_intOptions )[Options::DQN_MAX_ITERS] ),

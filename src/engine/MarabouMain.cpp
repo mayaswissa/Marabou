@@ -223,17 +223,17 @@ void trainAgentOnExample( Options *options,
                           int *numSplits,
                           std::ofstream &outputTxtFile )
 {
-    unsigned epochs = options->getInt( Options::DQN_EPOCHS );
-    unsigned guided = Options::get()->getInt( Options::DQN_EPOCHS ) / 5;
+    unsigned DQN_epochs = options->getInt( Options::DQN_EPOCHS );
+    unsigned guided_epochs = options->getInt( Options::DQN_GUIDED_EPOCHS );
     options->setString( Options::PROPERTY_FILE_PATH, examplePath );
     double epsilon = GlobalConfiguration::DQN_EPSILON_START;
-    unsigned learnGuidedSteps = 1000;
+    unsigned learnGuidedSteps = options->getInt( Options::DQN_GUIDED_STEPS );
     agent = nullptr;
     if ( outputTxtFile.is_open() )
     {
         outputTxtFile << "\n\t results of each episode : \n";
         outputTxtFile << std::flush;
-        for ( unsigned int guidedEpoch = 0; guidedEpoch < guided; ++guidedEpoch )
+        for ( unsigned int guidedEpoch = 0; guidedEpoch < guided_epochs; ++guidedEpoch )
         {
             DQN_LOG(
                 Stringf( "Injecting guided steps. guidedEpoch :  %d\n", guidedEpoch ).ascii() );
@@ -251,13 +251,13 @@ void trainAgentOnExample( Options *options,
             agent->learn();
         }
         DQN_LOG( "Online RL phase.\n" );
-        for ( unsigned int epoch = guided; epoch < epochs; ++epoch )
+        for ( unsigned int epoch = 0; epoch < DQN_epochs; ++epoch )
         {
             GlobalConfiguration::DON_TRAINING_PHASE = 2;
             int currentNumSplits = 0;
             agent = Marabou().trainDQNAgent(
                 epsilon, exampleID, std::move( agent ), &currentNumSplits );
-            if ( epoch > guided )
+
                 epsilon = std::max( GlobalConfiguration::DQN_EPSILON_END,
                                     epsilon * GlobalConfiguration::DQN_EPSILON_DECAY );
             agent->schedulersStep();
