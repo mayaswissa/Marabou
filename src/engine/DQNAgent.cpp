@@ -298,7 +298,7 @@ void Agent::learn()
 
     // --- anneal supervised weight ---
     if ( GlobalConfiguration::DON_TRAINING_PHASE == 2 )
-        _lambdaSup = std::fmax( 0.0f, _lambdaSup - _lambdaDecay );
+        _lambdaSup = std::fmax( 0.1f, _lambdaSup - _lambdaDecay );
 }
 
 
