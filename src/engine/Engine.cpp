@@ -153,6 +153,10 @@ void Engine::updateToCurrentDQNState( State &stateToUpdate )
             phase = DQN_RELU_ACTIVE;
         else
             phase = plConstraint->getPhaseStatus();
+        const auto variable = plConstraint->getParticipatingVariables().front();
+        stateToUpdate.updateBounds( index,
+                                    _boundManager.getUpperBound( variable ),
+                                    _boundManager.getLowerBound( variable ) );
         stateToUpdate.updateConstraintPhase( index, phase );
         if ( constraintsToUpdateSoI.exists( plConstraint ) )
             updateSoIScoreForConstraintInState(

@@ -41,24 +41,33 @@ torch::Tensor State::toTensor() const
 
 void State::updateConstraintPhase( const unsigned constraintIndex, const unsigned newPhase )
 {
-    if (constraintIndex >= _numConstraints || newPhase >= _numPhases || _stateData.empty()) {
+    if ( constraintIndex >= _numConstraints || newPhase >= _numPhases || _stateData.empty() )
         return;
-    }
+
     // Get pointer to the start of the row for this constraint.
     size_t rowStart = constraintIndex * NUM_FEATURES;
-    if (rowStart + _numPhases > _stateData.size()) {
+    if ( rowStart + _numPhases > _stateData.size() )
         return;
-    }
+
     double *rowPtr = &_stateData[rowStart];
     // Reset the first _numPhases entries (phase indicators).
     std::fill_n( rowPtr, _numPhases, 0.0 );
     // Set the new phase.
     rowPtr[newPhase] = 1.0;
 }
+void State::updateBounds( const unsigned constraintIndex,
+                          const double upperBound,
+                          const double lowerBound )
+{
+    if ( constraintIndex > _numConstraints )
+        return;
+    _stateData[constraintIndex * NUM_FEATURES + DQN_RELU_LOWER_BOUND] = lowerBound;
+    _stateData[constraintIndex * NUM_FEATURES + DQN_RELU_UPPER_BOUND] = upperBound;
+}
 
 void State::updateSoIScoreForAgent( const unsigned constraintIndex,
-                            const double SoiActiveScore,
-                            const double SoiInactiveScore )
+                                    const double SoiActiveScore,
+                                    const double SoiInactiveScore )
 {
     if ( constraintIndex >= _numConstraints )
         return;
