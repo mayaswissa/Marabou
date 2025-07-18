@@ -138,6 +138,8 @@ public:
         DQN_BUFFER_SIZE,
 
         DQN_EXPLORATION_RATE,
+
+        DQN_N_EXAMPLES
     };
 
     enum FloatOptions {

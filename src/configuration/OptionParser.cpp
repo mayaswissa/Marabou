@@ -162,15 +162,15 @@ void OptionParser::initialize()
         "DQN-epochs",
         boost::program_options::value<int>( &( *_intOptions )[Options::DQN_EPOCHS] )
             ->default_value( ( *_intOptions )[Options::DQN_EPOCHS] ),
-            "number of epochs in DQN training." )(
+        "number of epochs in DQN training." )(
         "DQN-guided-epochs",
         boost::program_options::value<int>( &( *_intOptions )[Options::DQN_GUIDED_EPOCHS] )
             ->default_value( ( *_intOptions )[Options::DQN_GUIDED_EPOCHS] ),
-            "number of guided epochs in DQN training." )(
-            "DQN-guided-steps",
-            boost::program_options::value<int>( &( *_intOptions )[Options::DQN_GUIDED_STEPS] )
-                ->default_value( ( *_intOptions )[Options::DQN_GUIDED_STEPS] ),
-            "number of guided steps in DQN training." )(
+        "number of guided epochs in DQN training." )(
+        "DQN-guided-steps",
+        boost::program_options::value<int>( &( *_intOptions )[Options::DQN_GUIDED_STEPS] )
+            ->default_value( ( *_intOptions )[Options::DQN_GUIDED_STEPS] ),
+        "number of guided steps in DQN training." )(
         "DQN-iters",
         boost::program_options::value<int>( &( *_intOptions )[Options::DQN_MAX_ITERS] )
             ->default_value( ( *_intOptions )[Options::DQN_MAX_ITERS] ),
@@ -195,6 +195,10 @@ void OptionParser::initialize()
         boost::program_options::value<int>( &( ( *_intOptions )[Options::DQN_EXPLORATION_RATE] ) )
             ->default_value( ( *_intOptions )[Options::DQN_EXPLORATION_RATE] ),
         "DQN agent's exploration rate.\n" )(
+        "DQN-n-examples",
+        boost::program_options::value<int>( &( ( *_intOptions )[Options::DQN_N_EXAMPLES] ) )
+            ->default_value( ( *_intOptions )[Options::DQN_N_EXAMPLES] ),
+        "Number of example to learn from.\n" )(
         "DQfD-lambda-sup",
         boost::program_options::value<float>( &( ( *_floatOptions )[Options::DQfD_LAMBDA_SUP] ) )
             ->default_value( ( *_floatOptions )[Options::DQfD_LAMBDA_SUP] ),

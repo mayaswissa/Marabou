@@ -216,69 +216,82 @@ std::vector<std::string> listDir( const std::string &dirPath )
     return names;
 }
 
-void trainAgentOnExample( Options *options,
-                          const std::string &examplePath,
-                          const std::string &exampleID,
-                          std::unique_ptr<Agent> &agent,
-                          int *numSplits,
-                          std::ofstream &outputTxtFile )
+void trainAgentOnExamples( Options *options,
+                           const std::vector<std::pair<std::string, std::string>> &examples,
+                           std::unique_ptr<Agent> &agent,
+                           int *numSplits,
+                           std::ofstream &outputTxtFile )
 {
     unsigned DQN_epochs = options->getInt( Options::DQN_EPOCHS );
     unsigned guided_epochs = options->getInt( Options::DQN_GUIDED_EPOCHS );
-    options->setString( Options::PROPERTY_FILE_PATH, examplePath );
+    unsigned learnGuidedSteps = options->getInt( Options::DQN_GUIDED_STEPS ); // pretrain steps
     double epsilon = GlobalConfiguration::DQN_EPSILON_START;
-    unsigned learnGuidedSteps = options->getInt( Options::DQN_GUIDED_STEPS );
     agent = nullptr;
-    if ( outputTxtFile.is_open() )
+    if ( !outputTxtFile.is_open() )
+        return;
+
+    outputTxtFile << "\n    results of each episode : \n" << std::flush;
+
+    // 1) COLLECT DEMONSTRATION TRAJECTORIES
+    DQN_LOG( "=== COLLECTING DEMOS ===\n" );
+    GlobalConfiguration::DON_TRAINING_PHASE = 0;
+    for ( auto &ex : examples )
     {
-        outputTxtFile << "\n\t results of each episode : \n";
-        outputTxtFile << std::flush;
-        for ( unsigned int guidedEpoch = 0; guidedEpoch < guided_epochs; ++guidedEpoch )
+        options->setString( Options::PROPERTY_FILE_PATH, ex.first );
+        for ( unsigned i = 0; i < guided_epochs; ++i )
         {
-            DQN_LOG(
-                Stringf( "Injecting guided steps. guidedEpoch :  %d\n", guidedEpoch ).ascii() );
-            GlobalConfiguration::DON_TRAINING_PHASE = 0;
-            int currentNumSplits = 0;
-            agent = Marabou().trainDQNAgent(
-                epsilon, exampleID, std::move( agent ), &currentNumSplits );
-            *numSplits += currentNumSplits;
-            outputTxtFile.flush();
-        }
-        DQN_LOG( "Learning the guided steps.\n" );
-        for ( unsigned int learnGiuded = 0; learnGiuded < learnGuidedSteps; ++learnGiuded )
-        {
-            GlobalConfiguration::DON_TRAINING_PHASE = 1;
-            agent->learn();
-        }
-        DQN_LOG( "Online RL phase.\n" );
-        for ( unsigned int epoch = 0; epoch < DQN_epochs; ++epoch )
-        {
-            GlobalConfiguration::DON_TRAINING_PHASE = 2;
-            int currentNumSplits = 0;
-            agent = Marabou().trainDQNAgent(
-                epsilon, exampleID, std::move( agent ), &currentNumSplits );
+            int splits = 0;
+            GlobalConfiguration::DQN_FORCED_HEURISTIC =
+                GlobalConfiguration::GuidedHeuristic::POLARITY;
 
-                epsilon = std::max( GlobalConfiguration::DQN_EPSILON_END,
-                                    epsilon * GlobalConfiguration::DQN_EPSILON_DECAY );
-            agent->schedulersStep();
-            *numSplits += currentNumSplits;
-            outputTxtFile.flush();
+            agent = Marabou().trainDQNAgent( epsilon, ex.second, std::move( agent ), &splits );
+            *numSplits += splits;
+            GlobalConfiguration::DQN_FORCED_HEURISTIC =
+                GlobalConfiguration::GuidedHeuristic::BABS_R;
+            splits = 0;
+            agent = Marabou().trainDQNAgent( epsilon, ex.second, std::move( agent ), &splits );
+            *numSplits += splits;
         }
-
-        if ( agent != nullptr &&
-             *numSplits >
-                 static_cast<int>( Options::get()->getInt( Options::DQN_BATCH_SIZE ) * 20 ) )
-        {
-            const auto path = options->getString( Options::DQN_AGENT_NETWORKS_PATH );
-            std::string filePath = std::string( path.ascii() ) + "/" + exampleID;
-            agent->saveNetworks( filePath );
-            outputTxtFile << "agent network has been saved. Path: " << filePath;
-            outputTxtFile << std::flush;
-        }
-
-        outputTxtFile << "\n";
     }
+
+    // 2) PRE‐TRAIN ON THE DEMOS (no environment rollouts)
+    DQN_LOG( "=== PRE‐TRAINING ON DEMOS ===\n" );
+    GlobalConfiguration::DON_TRAINING_PHASE = 1; // pre‐train phase (margin + TD)
+    for ( unsigned i = 0; i < learnGuidedSteps; ++i )
+        agent->learn();
+
+    // 3) ONLINE RL ACROSS ALL PROPERTIES
+    DQN_LOG( "=== ONLINE RL PHASE ===\n" );
+    GlobalConfiguration::DON_TRAINING_PHASE = 2;
+    for ( unsigned epoch = 0; epoch < DQN_epochs; ++epoch )
+    {
+        for ( auto &[path, id] : examples )
+        {
+            options->setString( Options::PROPERTY_FILE_PATH, path );
+            int splits = 0;
+            agent = Marabou().trainDQNAgent( epsilon, id, std::move( agent ), &splits );
+            *numSplits += splits;
+        }
+        epsilon = std::max( GlobalConfiguration::DQN_EPSILON_END,
+                            epsilon * GlobalConfiguration::DQN_EPSILON_DECAY );
+        // agent->schedulersStep();
+        outputTxtFile << Stringf( "Completed RL epoch %u, epilon=%.4f\n", epoch, epsilon ).ascii()
+                      << std::flush;
+    }
+
+    if ( agent != nullptr &&
+         *numSplits > static_cast<int>( Options::get()->getInt( Options::DQN_BATCH_SIZE ) * 20 ) )
+    {
+        const auto path = options->getString( Options::DQN_AGENT_NETWORKS_PATH );
+        std::string filePath = std::string( path.ascii() ) + "/agent";
+        agent->saveNetworks( filePath );
+        outputTxtFile << "agent network has been saved. Path: " << filePath;
+        outputTxtFile << std::flush;
+    }
+
+    outputTxtFile << "\n";
 }
+
 
 void setRandomSeed()
 {
@@ -387,6 +400,43 @@ int marabouMain( int argc, char **argv )
             if ( mode == 1 )
             {
                 // train
+                std::string root = parentDir( examplePath );
+                if ( root.empty() || !isDir( root ) )
+                {
+                    std::cerr << "Error: cannot determine root from '" << examplePath << "'\n";
+                    return 1;
+                }
+                std::vector<std::pair<std::string, std::string>> examples;
+                for ( auto &fname : listDir( root ) )
+                {
+                    if ( fname.size() < 4 || fname.substr( fname.size() - 4 ) != ".txt" )
+                        continue;
+                    std::string fullPath = root + "/" + fname;
+                    std::string currentID;
+                    if ( exampleType == "metaroom" )
+                        extractMetaroomID( fullPath, currentID );
+                    else if ( exampleType == "cora" )
+                        extractCoraID( fullPath, currentID );
+                    else
+                        extractExampleID( fullPath, currentID );
+                    examples.emplace_back( fullPath, currentID );
+                }
+
+                // -------- now randomly sample only M of them --------
+                int M = options->getInt( Options::DQN_N_EXAMPLES );
+                if ( (int)examples.size() > M )
+                {
+                    std::unordered_set<size_t> picks;
+                    while ( picks.size() < (size_t)M )
+                    {
+                        picks.insert( RandomGlobals::instance().randInt( 0, examples.size() - 1 ) );
+                    }
+                    std::vector<std::pair<std::string, std::string>> sampled;
+                    sampled.reserve( M );
+                    for ( auto idx : picks )
+                        sampled.push_back( examples[idx] );
+                    examples.swap( sampled );
+                }
                 options->setString( Options::SPLITTING_STRATEGY, "DQN-agent" );
                 struct timespec startTraining = TimeUtils::sampleMicro();
                 int numSplits = 0;
@@ -394,7 +444,7 @@ int marabouMain( int argc, char **argv )
                 DQN_LOG(
                     Stringf( "Start training agent on example: %s  ", exampleID.c_str() ).ascii() );
                 std::unique_ptr<Agent> agent;
-                trainAgentOnExample( options, examplePath, exampleID, agent, &numSplits, outFile );
+                trainAgentOnExamples( options, examples, agent, &numSplits, outFile );
 
                 struct timespec endTraining = TimeUtils::sampleMicro();
                 unsigned long long totalTraining =

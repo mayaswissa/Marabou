@@ -3301,8 +3301,8 @@ PiecewiseLinearConstraint *Engine::pickSplitPLConstraintByAgent()
 
     if ( GlobalConfiguration::DON_TRAINING_PHASE == 0 )
     {
-        int strat = RandomGlobals::instance().randInt( 0, 1 );
-        switch ( strat )
+        int heuristic = static_cast<int>( GlobalConfiguration::DQN_FORCED_HEURISTIC );
+        switch ( heuristic )
         {
         case 0:
             ENGINE_LOG( Stringf( "Guided: polarity heuristic" ).ascii() );

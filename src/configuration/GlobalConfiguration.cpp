@@ -124,6 +124,8 @@ const double GlobalConfiguration::DQN_EPSILON_PURE_EXPLOIT = 0.01;
 const double GlobalConfiguration::DQN_EPSILON_DECAY = 0.95;
 double GlobalConfiguration::DQN_TAU = 1e-3;
 unsigned GlobalConfiguration::DON_TRAINING_PHASE = 0;
+GlobalConfiguration::GuidedHeuristic GlobalConfiguration::DQN_FORCED_HEURISTIC =
+    GlobalConfiguration::GuidedHeuristic::POLARITY;
 
 
 #ifdef ENABLE_GUROBI
