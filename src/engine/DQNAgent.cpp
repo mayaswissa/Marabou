@@ -27,8 +27,8 @@ Agent::Agent( const unsigned numPlConstraints,
                                      Options::get()->getInt( Options::DQN_BATCH_SIZE ) ) )
     , _lossVerbosity( 0 )
     , _lambdaSup( Options::get()->getFloat( Options::DQfD_LAMBDA_SUP ) )
-    , _lambdaDecay(Options::get()->getFloat( Options::DQfD_LAMBDA_DECAY ))
-    , _margin(Options::get()->getFloat( Options::DQfD_MARGIN ))
+    , _lambdaDecay( Options::get()->getFloat( Options::DQfD_LAMBDA_DECAY ) )
+    , _margin( Options::get()->getFloat( Options::DQfD_MARGIN ) )
 {
     _qNetworkLocal.to( device );
     _qNetworkTarget.to( device );
@@ -249,26 +249,27 @@ void Agent::learn()
         std::cerr << "Next States: " << nextStatesTensor << std::endl;
         throw std::runtime_error( "NaN detected in QTargets." );
     }
-    // TD loss component
+    // TD loss
     auto td_errors = torch::mse_loss( QExpected, QTargets.detach(), torch::Reduction::None );
     auto weights = torch::tensor( batch.weights, torch::dtype( torch::kFloat32 ) ).to( device );
     auto weightedTdLoss = ( td_errors * weights ).mean();
-
-    // Supervised margin loss for demonstration samples
+    // Margin loss for demonstration samples
     std::vector<int64_t> demo_mask_int( batch.isDemo.begin(), batch.isDemo.end() );
-
-    // 2. Tensor from that, then cast to float
-
     auto all_q = _qNetworkLocal.forward( statesTensor );
-    auto shifted = all_q + _margin;
-    auto max_shift = std::get<0>( shifted.max( 1,true ) );
-    auto q_demo = all_q.gather( 1, actionsTensor ).squeeze(1);;
     auto demo_mask = torch::tensor( demo_mask_int, torch::TensorOptions().dtype( torch::kInt64 ) )
                          .to( device )
                          .to( torch::kFloat32 );
-    auto raw_margin = torch::relu( max_shift - q_demo ).squeeze( 1 ) * demo_mask;
+    auto flat_actions = actionsTensor.squeeze( -1 );
+    auto one_hot =
+        torch::nn::functional::one_hot( flat_actions, static_cast<int64_t>( _numActions ) )
+            .to( device )
+            .to( torch::kFloat32 );
+    auto non_demo_mask = ( 1.0f - one_hot );
+    auto shifted = all_q + non_demo_mask * _margin;
+    auto max_other = std::get<0>( shifted.max( 1 ) );
+    auto q_demo = all_q.gather( 1, flat_actions.unsqueeze( 1 ) ).squeeze( 1 );
+    auto raw_margin = torch::relu( max_other - q_demo ) * demo_mask;
     auto marginLoss = raw_margin.sum() / demo_mask.sum().clamp_min( 1.0 );
-
     // Total loss
     const auto loss = weightedTdLoss + _lambdaSup * marginLoss;
     _lossVerbosity = ( _lossVerbosity + 1 ) % 100;
@@ -278,7 +279,6 @@ void Agent::learn()
         DQN_LOG( Stringf( "MARGIN Loss : %.10f\n", marginLoss.item<double>() ).ascii() );
         DQN_LOG( Stringf( "Loss : %.10f\n", loss.item<double>() ).ascii() );
     }
-
 
     // Backpropagation
     _optimizer.zero_grad();
@@ -296,7 +296,6 @@ void Agent::learn()
         _replayedBuffer.updatePriority( batch.indices[i], raw_p );
     }
 
-    // --- anneal supervised weight ---
     if ( GlobalConfiguration::DON_TRAINING_PHASE == 2 )
         _lambdaSup = std::fmax( 0.1f, _lambdaSup - _lambdaDecay );
 }

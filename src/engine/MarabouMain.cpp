@@ -223,13 +223,11 @@ void trainAgentOnExamples( Options *options,
                            std::ofstream &outputTxtFile )
 {
     unsigned DQN_epochs = options->getInt( Options::DQN_EPOCHS );
-    unsigned guided_epochs = options->getInt( Options::DQN_GUIDED_EPOCHS );
     unsigned learnGuidedSteps = options->getInt( Options::DQN_GUIDED_STEPS ); // pretrain steps
     double epsilon = GlobalConfiguration::DQN_EPSILON_START;
     agent = nullptr;
     if ( !outputTxtFile.is_open() )
         return;
-
     outputTxtFile << "\n    results of each episode : \n" << std::flush;
 
     // 1) COLLECT DEMONSTRATION TRAJECTORIES
@@ -238,29 +236,23 @@ void trainAgentOnExamples( Options *options,
     for ( auto &ex : examples )
     {
         options->setString( Options::PROPERTY_FILE_PATH, ex.first );
-        for ( unsigned i = 0; i < guided_epochs; ++i )
-        {
-            int splits = 0;
-            GlobalConfiguration::DQN_FORCED_HEURISTIC =
-                GlobalConfiguration::GuidedHeuristic::POLARITY;
-
-            agent = Marabou().trainDQNAgent( epsilon, ex.second, std::move( agent ), &splits );
-            *numSplits += splits;
-            GlobalConfiguration::DQN_FORCED_HEURISTIC =
-                GlobalConfiguration::GuidedHeuristic::BABS_R;
-            splits = 0;
-            agent = Marabou().trainDQNAgent( epsilon, ex.second, std::move( agent ), &splits );
-            *numSplits += splits;
-        }
+        int splits = 0;
+        GlobalConfiguration::DQN_FORCED_HEURISTIC = GlobalConfiguration::GuidedHeuristic::POLARITY;
+        agent = Marabou().trainDQNAgent( epsilon, ex.second, std::move( agent ), &splits );
+        *numSplits += splits;
+        GlobalConfiguration::DQN_FORCED_HEURISTIC = GlobalConfiguration::GuidedHeuristic::BABS_R;
+        splits = 0;
+        agent = Marabou().trainDQNAgent( epsilon, ex.second, std::move( agent ), &splits );
+        *numSplits += splits;
     }
 
-    // 2) PRE‐TRAIN ON THE DEMOS (no environment rollouts)
+    // 2) PRE‐TRAIN ON THE DEMOS
     DQN_LOG( "=== PRE‐TRAINING ON DEMOS ===\n" );
-    GlobalConfiguration::DON_TRAINING_PHASE = 1; // pre‐train phase (margin + TD)
+    GlobalConfiguration::DON_TRAINING_PHASE = 1;
     for ( unsigned i = 0; i < learnGuidedSteps; ++i )
         agent->learn();
 
-    // 3) ONLINE RL ACROSS ALL PROPERTIES
+    // 3) ONLINE RL
     DQN_LOG( "=== ONLINE RL PHASE ===\n" );
     GlobalConfiguration::DON_TRAINING_PHASE = 2;
     for ( unsigned epoch = 0; epoch < DQN_epochs; ++epoch )
@@ -283,7 +275,7 @@ void trainAgentOnExamples( Options *options,
          *numSplits > static_cast<int>( Options::get()->getInt( Options::DQN_BATCH_SIZE ) * 20 ) )
     {
         const auto path = options->getString( Options::DQN_AGENT_NETWORKS_PATH );
-        std::string filePath = std::string( path.ascii() ) + "/agent";
+        const std::string filePath = std::string( path.ascii() ) + "/agent";
         agent->saveNetworks( filePath );
         outputTxtFile << "agent network has been saved. Path: " << filePath;
         outputTxtFile << std::flush;
