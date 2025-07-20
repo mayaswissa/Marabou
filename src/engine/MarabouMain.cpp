@@ -223,8 +223,22 @@ void trainAgentOnExamples( Options *options,
                            std::ofstream &outputTxtFile )
 {
     unsigned DQN_epochs = options->getInt( Options::DQN_EPOCHS );
-    unsigned learnGuidedSteps = options->getInt( Options::DQN_GUIDED_STEPS ); // pretrain steps
+    unsigned learnGuidedSteps = options->getInt( Options::DQN_GUIDED_STEPS );
     double epsilon = GlobalConfiguration::DQN_EPSILON_START;
+
+    // pick N demo indices from [0..M)
+    int N = options->getInt( Options::DQN_NUN_DEMO_EXAMPLES );
+    N = std::min( N, (int)examples.size() );
+    std::unordered_set<int> demoIndices;
+    while ( demoIndices.size() < (size_t)N )
+    {
+        demoIndices.insert( RandomGlobals::instance().randInt( 0, examples.size() - 1 ) );
+    }
+    std::vector<std::pair<std::string, std::string>> demos;
+    demos.reserve( N );
+    for ( int idx : demoIndices )
+        demos.push_back( examples[idx] );
+
     agent = nullptr;
     if ( !outputTxtFile.is_open() )
         return;
@@ -233,15 +247,17 @@ void trainAgentOnExamples( Options *options,
     // 1) COLLECT DEMONSTRATION TRAJECTORIES
     DQN_LOG( "=== COLLECTING DEMOS ===\n" );
     GlobalConfiguration::DON_TRAINING_PHASE = 0;
-    for ( auto &ex : examples )
+    for ( auto &ex : demos )
     {
         options->setString( Options::PROPERTY_FILE_PATH, ex.first );
         int splits = 0;
+        // polarity
         GlobalConfiguration::DQN_FORCED_HEURISTIC = GlobalConfiguration::GuidedHeuristic::POLARITY;
         agent = Marabou().trainDQNAgent( epsilon, ex.second, std::move( agent ), &splits );
         *numSplits += splits;
-        GlobalConfiguration::DQN_FORCED_HEURISTIC = GlobalConfiguration::GuidedHeuristic::BABS_R;
+        // BaBsr
         splits = 0;
+        GlobalConfiguration::DQN_FORCED_HEURISTIC = GlobalConfiguration::GuidedHeuristic::BABS_R;
         agent = Marabou().trainDQNAgent( epsilon, ex.second, std::move( agent ), &splits );
         *numSplits += splits;
     }
@@ -257,17 +273,21 @@ void trainAgentOnExamples( Options *options,
     GlobalConfiguration::DON_TRAINING_PHASE = 2;
     for ( unsigned epoch = 0; epoch < DQN_epochs; ++epoch )
     {
-        for ( auto &[path, id] : examples )
-        {
-            options->setString( Options::PROPERTY_FILE_PATH, path );
-            int splits = 0;
-            agent = Marabou().trainDQNAgent( epsilon, id, std::move( agent ), &splits );
-            *numSplits += splits;
-        }
+        auto &ex = examples[epoch % examples.size()];
+        options->setString( Options::PROPERTY_FILE_PATH, ex.first );
+        int splits = 0;
+        agent = Marabou().trainDQNAgent( epsilon, ex.second, std::move( agent ), &splits );
+        *numSplits += splits;
+
+        // decay ε
         epsilon = std::max( GlobalConfiguration::DQN_EPSILON_END,
                             epsilon * GlobalConfiguration::DQN_EPSILON_DECAY );
-        // agent->schedulersStep();
-        outputTxtFile << Stringf( "Completed RL epoch %u, epilon=%.4f\n", epoch, epsilon ).ascii()
+
+        outputTxtFile << Stringf( "Completed RL epoch %u (property=%s), epsilon=%.4f\n",
+                                  epoch,
+                                  ex.second.c_str(),
+                                  epsilon )
+                             .ascii()
                       << std::flush;
     }
 
@@ -415,7 +435,7 @@ int marabouMain( int argc, char **argv )
                 }
 
                 // -------- now randomly sample only M of them --------
-                int M = options->getInt( Options::DQN_N_EXAMPLES );
+                int M = options->getInt( Options::DQN_NUM_TRAINING_EXAMPLES );
                 if ( (int)examples.size() > M )
                 {
                     std::unordered_set<size_t> picks;
@@ -432,12 +452,8 @@ int marabouMain( int argc, char **argv )
                 options->setString( Options::SPLITTING_STRATEGY, "DQN-agent" );
                 struct timespec startTraining = TimeUtils::sampleMicro();
                 int numSplits = 0;
-                outFile << std::flush;
-                DQN_LOG(
-                    Stringf( "Start training agent on example: %s  ", exampleID.c_str() ).ascii() );
                 std::unique_ptr<Agent> agent;
                 trainAgentOnExamples( options, examples, agent, &numSplits, outFile );
-
                 struct timespec endTraining = TimeUtils::sampleMicro();
                 unsigned long long totalTraining =
                     TimeUtils::timePassed( startTraining, endTraining );
