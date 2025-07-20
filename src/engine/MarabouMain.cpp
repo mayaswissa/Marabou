@@ -134,7 +134,6 @@ void extractTrainedAgentID( std::string &trainedAgentPath, std::string &trainedA
 
 void extractExampleID( std::string &examplePath, std::string &exampleID )
 {
-    examplePath = Options::get()->getString( Options::PROPERTY_FILE_PATH ).ascii();
     size_t ex_pos = examplePath.find( "ex_" ) + 3;
     size_t label_pos = examplePath.find( "_label_" ) + 7;
     std::string ex_id = examplePath.substr( ex_pos, 4 );
@@ -175,6 +174,15 @@ void extractCoraID( std::string &examplePath, std::string &exampleID )
     exampleID = num;
 }
 
+void extractID( std::string &path, std::string &exampleType, std::string &outID )
+{
+    if ( exampleType == "metaroom" )
+        extractMetaroomID( path, outID );
+    else if ( exampleType == "cora" )
+        extractCoraID( path, outID );
+    else
+        extractExampleID( path, outID );
+}
 
 std::string parentDir( const std::string &path )
 {
@@ -182,6 +190,15 @@ std::string parentDir( const std::string &path )
     if ( pos == std::string::npos )
         return "";
     return path.substr( 0, pos );
+}
+
+std::string computeRootDir(const std::string &examplePath,
+                           const std::string &exampleType)
+{
+    std::string root = parentDir(examplePath);
+    if (exampleType == "property1")
+        root = parentDir(root);
+    return root;
 }
 
 bool isDir( const std::string &path )
@@ -216,6 +233,45 @@ std::vector<std::string> listDir( const std::string &dirPath )
     return names;
 }
 
+std::vector<std::pair<std::string,std::string>>
+collectExamples(std::string &root, std::string &exampleType) {
+    std::vector<std::pair<std::string,std::string>> examples;
+    for (auto &name : listDir(root)) {
+        std::string fullPath;
+        if (exampleType == "property1") {
+            if (name.find("label") == std::string::npos)
+                continue;
+            fullPath = root + "/" + name + "/eps02.txt";
+        }
+        else if (name.size() >= 4 && name.compare(name.size()-4, 4, ".txt") == 0)
+            fullPath = root + "/" + name;
+
+        else
+            continue;
+        std::string id;
+        extractID(fullPath, exampleType, id);
+
+        examples.emplace_back(fullPath, id);
+    }
+    return examples;
+}
+
+std::vector<std::pair<std::string,std::string>>
+randomSample(const std::vector<std::pair<std::string,std::string>> &all,
+             int M)
+{
+    int N = (int)all.size();
+    M = std::min(M, N);
+    std::unordered_set<int> picks;
+    while ((int)picks.size() < M) {
+        picks.insert(RandomGlobals::instance().randInt(0, N - 1));
+    }
+    std::vector<std::pair<std::string,std::string>> sampled;
+    sampled.reserve(M);
+    for (int idx : picks)
+        sampled.push_back(all[idx]);
+    return sampled;
+}
 void trainAgentOnExamples( Options *options,
                            const std::vector<std::pair<std::string, std::string>> &examples,
                            std::unique_ptr<Agent> &agent,
@@ -386,83 +442,46 @@ int marabouMain( int argc, char **argv )
 #endif
             auto const mode = options->getInt( Options::DQN_MODE );
             setRandomSeed();
-            std::ostringstream currentRunFile;
-            std::string examplePath;
+            std::string exampleType = options->getString( Options::BENCHMARK ).ascii();
             std::string exampleID;
-            auto const exampleType = options->getString( Options::BENCHMARK );
-            if ( exampleType == "metaroom" )
-                extractMetaroomID( examplePath, exampleID );
-            else if ( exampleType == "cora" )
-                extractCoraID( examplePath, exampleID );
-            else
-                extractExampleID( examplePath, exampleID );
-            auto txtOutputFilePath = options->getString( Options::DQN_OUTPUT_FILE_PATH );
+            std::string examplePath = Options::get()->getString( Options::PROPERTY_FILE_PATH ).ascii();
+            extractID( examplePath, exampleType, exampleID );
             std::string network;
             extractNetworkName( network );
-            currentRunFile << std::string( txtOutputFilePath.ascii() ) << exampleID << ".txt";
-            options->setString( Options::SUMMARY_FILE, currentRunFile.str() );
-            std::ofstream outFile( currentRunFile.str(), std::ios::out | std::ios::app );
-            outFile << "Example: " << exampleID << ". Network : " << network << "\n";
-            outFile.flush();
-            if ( !outFile )
+            const std::string outDir = options->getString( Options::DQN_OUTPUT_FILE_PATH ).ascii();
+
+            // Open summary file
+            const std::string summaryFile = outDir + "/" + exampleID + ".txt";
+            std::ofstream out( summaryFile, std::ios::app );
+            if ( !out )
             {
-                std::cerr << "Failed to open " << currentRunFile.str() << "\n";
+                std::cerr << "Failed to open " << summaryFile << std::endl;
                 return 1;
             }
+            out << "Example: " << exampleID << "  Network: " << network << "\n";
+
             if ( mode == 1 )
             {
-                // train
-                std::string root = parentDir( examplePath );
-                if ( root.empty() || !isDir( root ) )
-                {
-                    std::cerr << "Error: cannot determine root from '" << examplePath << "'\n";
-                    return 1;
-                }
-                std::vector<std::pair<std::string, std::string>> examples;
-                for ( auto &fname : listDir( root ) )
-                {
-                    if ( fname.size() < 4 || fname.substr( fname.size() - 4 ) != ".txt" )
-                        continue;
-                    std::string fullPath = root + "/" + fname;
-                    std::string currentID;
-                    if ( exampleType == "metaroom" )
-                        extractMetaroomID( fullPath, currentID );
-                    else if ( exampleType == "cora" )
-                        extractCoraID( fullPath, currentID );
-                    else
-                        extractExampleID( fullPath, currentID );
-                    examples.emplace_back( fullPath, currentID );
-                }
+                // TRAIN MODE
+                auto root = computeRootDir( examplePath, exampleType );
+                auto allExamples = collectExamples( root, exampleType );
+                auto sampled = randomSample(
+                    allExamples, options->getInt( Options::DQN_NUM_TRAINING_EXAMPLES ) );
 
-                // -------- now randomly sample only M of them --------
-                int M = options->getInt( Options::DQN_NUM_TRAINING_EXAMPLES );
-                if ( (int)examples.size() > M )
-                {
-                    std::unordered_set<size_t> picks;
-                    while ( picks.size() < (size_t)M )
-                    {
-                        picks.insert( RandomGlobals::instance().randInt( 0, examples.size() - 1 ) );
-                    }
-                    std::vector<std::pair<std::string, std::string>> sampled;
-                    sampled.reserve( M );
-                    for ( auto idx : picks )
-                        sampled.push_back( examples[idx] );
-                    examples.swap( sampled );
-                }
                 options->setString( Options::SPLITTING_STRATEGY, "DQN-agent" );
-                struct timespec startTraining = TimeUtils::sampleMicro();
-                int numSplits = 0;
                 std::unique_ptr<Agent> agent;
-                trainAgentOnExamples( options, examples, agent, &numSplits, outFile );
-                struct timespec endTraining = TimeUtils::sampleMicro();
-                unsigned long long totalTraining =
-                    TimeUtils::timePassed( startTraining, endTraining );
-                outFile << "\t Done training"
-                        << ". Time : " << totalTraining << " Splits : " << numSplits << "\n";
+                int numSplits = 0;
+
+                auto t0 = TimeUtils::sampleMicro();
+                trainAgentOnExamples( options, sampled, agent, &numSplits, out );
+                auto t1 = TimeUtils::sampleMicro();
+
+                auto elapsed = TimeUtils::timePassed( t0, t1 );
+                out << "  Done training. Time: " << elapsed << " Splits: " << numSplits << "\n";
             }
             else if ( mode == 2 )
             {
-                // run
+                // RUN MODE
                 options->setString( Options::SPLITTING_STRATEGY, "DQN-agent" );
                 std::string agentPath =
                     options->getString( Options::DQN_AGENT_NETWORKS_PATH ).ascii();
@@ -474,8 +493,8 @@ int marabouMain( int argc, char **argv )
                 std::string trainedAgentPath;
                 std::string trainedAgentID;
                 extractTrainedAgentID( trainedAgentPath, trainedAgentID );
-                outFile << "Trained on agent : " << trainedAgentID << "\n";
-                outFile.flush();
+                out << "Trained on agent : " << trainedAgentID << "\n";
+                out.flush();
                 std::string root = parentDir( examplePath );
                 if ( root.empty() || !isDir( root ) )
                 {
@@ -502,8 +521,8 @@ int marabouMain( int argc, char **argv )
                         options->setString( Options::PROPERTY_FILE_PATH, fullCurrentExamplePath );
                         struct timespec startTime = TimeUtils::sampleMicro();
                         int numSplits = 0;
-                        outFile << "epsilon : " << eps_id << "\n";
-                        outFile << std::flush;
+                        out << "epsilon : " << eps_id << "\n";
+                        out<< std::flush;
                         DQN_LOG( Stringf( "Start runing trained agent with example: %s  ",
                                           currentExampleID.c_str() )
                                      .ascii() );
@@ -526,8 +545,8 @@ int marabouMain( int argc, char **argv )
             else
             {
                 auto spittingHeuristic = options->getString( Options::SPLITTING_STRATEGY );
-                outFile << "Strategy : " << std::string( spittingHeuristic.ascii() ) << "\n";
-                outFile.flush();
+                out << "Strategy : " << std::string( spittingHeuristic.ascii() ) << "\n";
+                out.flush();
                 if ( exampleType == "property1" )
                 {
                     std::string root = parentDir( examplePath );
@@ -552,8 +571,8 @@ int marabouMain( int argc, char **argv )
                         std::string currentExampleID = ex_id + label_id + eps_id;
                         options->setString( Options::PROPERTY_FILE_PATH, fullCurrentExamplePath );
                         struct timespec startTime = TimeUtils::sampleMicro();
-                        outFile << "epsilon : " << eps_id << "\n";
-                        outFile << std::flush;
+                        out << "epsilon : " << eps_id << "\n";
+                        out << std::flush;
                         Marabou().run();
                         struct timespec endTime = TimeUtils::sampleMicro();
                         unsigned long long totalTraining =
@@ -568,7 +587,7 @@ int marabouMain( int argc, char **argv )
                     Marabou().run();
                 }
             }
-            outFile.close();
+            out.close();
             return 0;
         }
     }
