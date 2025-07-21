@@ -180,8 +180,17 @@ void extractID( std::string &path, std::string &exampleType, std::string &outID 
         extractMetaroomID( path, outID );
     else if ( exampleType == "cora" )
         extractCoraID( path, outID );
-    else
+    else if ( exampleType == "MarabouRobustness" )
         extractRobustnessExampleID( path, outID );
+    else
+    {
+        auto pos = path.find_last_of( '/' );
+        if ( pos == std::string::npos )
+            outID = "noID";
+        else
+            outID = path.substr( pos + 1 );
+    }
+
 }
 
 std::string parentDir( const std::string &path )
@@ -400,9 +409,9 @@ int runRobustnessProperties( Options *options,
         if ( agent )
         {
             int numSplits = 0;
-            DQN_LOG(
-                Stringf( "Start running trained agent with example: %s  ", currentExampleID.c_str() )
-                    .ascii() );
+            DQN_LOG( Stringf( "Start running trained agent with example: %s  ",
+                              currentExampleID.c_str() )
+                         .ascii() );
             Marabou().runTrainedAgentOnExample( &numSplits );
         }
         else
