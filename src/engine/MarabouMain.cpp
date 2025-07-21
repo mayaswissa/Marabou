@@ -499,6 +499,7 @@ int marabouMain( int argc, char **argv )
 
             // Open summary file
             const std::string summaryFile = outDir + "/" + exampleID + ".txt";
+            options->setString( Options::SUMMARY_FILE, summaryFile );
             std::ofstream out( summaryFile, std::ios::app );
             if ( !out )
             {
@@ -506,7 +507,6 @@ int marabouMain( int argc, char **argv )
                 return 1;
             }
             out << "Example: " << exampleID << "  Network: " << network << "\n";
-
             if ( mode == 1 )
             {
                 // TRAIN MODE
