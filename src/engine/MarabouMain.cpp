@@ -498,8 +498,7 @@ int marabouMain( int argc, char **argv )
             const std::string outDir = options->getString( Options::DQN_OUTPUT_FILE_PATH ).ascii();
 
             // Open summary file
-            const std::string summaryFile = outDir + "results.txt";
-            options->setString( Options::SUMMARY_FILE, summaryFile );
+            const std::string summaryFile = outDir + "/" + exampleID + ".txt";
             std::ofstream out( summaryFile, std::ios::app );
             if ( !out )
             {
