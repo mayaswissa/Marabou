@@ -314,19 +314,26 @@ void trainAgentOnExamples( Options *options,
     // 1) COLLECT DEMONSTRATION TRAJECTORIES
     DQN_LOG( "=== COLLECTING DEMOS ===\n" );
     GlobalConfiguration::DON_TRAINING_PHASE = 0;
+    int numRepeats = 1;
+    if (demos.size() == 1)
+        numRepeats = 4;
     for ( auto &ex : demos )
     {
-        options->setString( Options::PROPERTY_FILE_PATH, ex.first );
-        int splits = 0;
-        // polarity
-        GlobalConfiguration::DQN_FORCED_HEURISTIC = GlobalConfiguration::GuidedHeuristic::POLARITY;
-        agent = Marabou().trainDQNAgent( epsilon, ex.second, std::move( agent ), &splits );
-        *numSplits += splits;
-        // BaBsr
-        splits = 0;
-        GlobalConfiguration::DQN_FORCED_HEURISTIC = GlobalConfiguration::GuidedHeuristic::BABS_R;
-        agent = Marabou().trainDQNAgent( epsilon, ex.second, std::move( agent ), &splits );
-        *numSplits += splits;
+        for (auto iter =0; iter < numRepeats; iter++)
+        {
+            options->setString( Options::PROPERTY_FILE_PATH, ex.first );
+            int splits = 0;
+            // polarity
+            GlobalConfiguration::DQN_FORCED_HEURISTIC = GlobalConfiguration::GuidedHeuristic::POLARITY;
+            agent = Marabou().trainDQNAgent( epsilon, ex.second, std::move( agent ), &splits );
+            *numSplits += splits;
+            // BaBsr
+            splits = 0;
+            GlobalConfiguration::DQN_FORCED_HEURISTIC = GlobalConfiguration::GuidedHeuristic::BABS_R;
+            agent = Marabou().trainDQNAgent( epsilon, ex.second, std::move( agent ), &splits );
+            *numSplits += splits;
+        }
+
     }
 
     // 2) PRE‐TRAIN ON THE DEMOS
