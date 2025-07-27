@@ -139,7 +139,7 @@ void Engine::updateSoIScoreForConstraintInState( State &stateToUpdate,
     stateToUpdate.updateSoIScoreForAgent( index, activeSoiScore, inactiveSoiScore );
 }
 
-void Engine::updateToCurrentDQNState( State &stateToUpdate )
+void Engine::updateToCurrentDQNState( State &stateToUpdate, const int numSplits )
 {
     int index = 0;
     auto constraintsToUpdateSoI = _soiManager->getConstraintsUpdatedInLastProposal();
@@ -147,6 +147,7 @@ void Engine::updateToCurrentDQNState( State &stateToUpdate )
     Map<unsigned, double> currentAssignment;
     for ( unsigned i = 0; i < getQuery()->getNumberOfVariables(); ++i )
         currentAssignment[i] = _tableau->getValue( i );
+    unsigned numUnfixedConstraints = 0;
     for ( const auto &plConstraint : _plConstraints )
     {
         if ( !plConstraint->isActive() && !plConstraint->phaseFixed() )
@@ -171,7 +172,11 @@ void Engine::updateToCurrentDQNState( State &stateToUpdate )
             stateToUpdate.updateBaBsrScore( index, std::abs( reluConstraint->computeBaBsr() ) );
         }
         index++;
+        if ( !plConstraint->phaseFixed() )
+            numUnfixedConstraints++;
     }
+    stateToUpdate.updateGlobalFeatures(
+        numUnfixedConstraints, _smtCore.getStackDepth(), numSplits );
 }
 
 void Engine::setVerbosity( unsigned verbosity )
@@ -307,11 +312,11 @@ bool Engine::solve( double timeoutInSeconds, const std::string &trainedAgentPath
         if ( trainedAgentPath.empty() )
             throw std::runtime_error( "Agent is not set" );
         _currentDQNState = std::make_unique<State>( numPlConstraints );
-        updateToCurrentDQNState( *_currentDQNState );
+        updateToCurrentDQNState( *_currentDQNState, _numSplits );
         _agent = std::make_unique<Agent>( numPlConstraints, DQN_NUM_PHASES, trainedAgentPath );
         _action = nullptr;
         _previousState = std::make_unique<State>( numPlConstraints );
-        updateToCurrentDQNState( *_previousState );
+        updateToCurrentDQNState( *_previousState, _numSplits );
     }
     else if ( Options::get()->getInt( Options::DQN_MODE ) == 0 )
     {
@@ -605,9 +610,9 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
         _agent = std::move( agent );
     _action = nullptr;
     _currentDQNState = std::make_unique<State>( numPlConstraints );
-    updateToCurrentDQNState( *_currentDQNState );
+    updateToCurrentDQNState( *_currentDQNState, _numSplits );
     _previousState = std::make_unique<State>( numPlConstraints );
-    updateToCurrentDQNState( *_previousState );
+    updateToCurrentDQNState( *_previousState, _numSplits );
     const unsigned maxSplitsByAgent = Options::get()->getInt( Options::DQN_MAX_ITERS );
     while ( _numSplits < maxSplitsByAgent )
     {
@@ -618,7 +623,7 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
 
         if ( shouldExitDueToTimeout( timeoutInSeconds ) )
         {
-            updateToCurrentDQNState( *_currentDQNState );
+            updateToCurrentDQNState( *_currentDQNState, _numSplits );
             if ( _action == nullptr )
                 _agent->stepFakeAction( *_previousState, _numSplits );
             else
@@ -690,7 +695,7 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                 {
                     const auto smtStep = smtSteps.front();
                     smtSteps.pop_front();
-                    updateToCurrentDQNState( *_currentDQNState );
+                    updateToCurrentDQNState( *_currentDQNState, _numSplits );
                     // smtCore performed pop
                     if ( smtStep == ALTERNATIVE_ACTION )
                         _agent->stepAlternativeAction(
@@ -760,7 +765,7 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                                                    _numSplits,
                                                    GlobalConfiguration::DON_TRAINING_PHASE == 0 );
                         auto numSplitsForDoneSuccess = _smtCore.getStackDepth();
-                        updateToCurrentDQNState( *_currentDQNState );
+                        updateToCurrentDQNState( *_currentDQNState, _numSplits );
                         _agent->handleDone( *_currentDQNState, numSplitsForDoneSuccess );
 
                         mainLoopEnd = TimeUtils::sampleMicro();
@@ -789,7 +794,7 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                         }
                         _exitCode = Engine::UNKNOWN;
 
-                        updateToCurrentDQNState( *_currentDQNState );
+                        updateToCurrentDQNState( *_currentDQNState, _numSplits );
                         if ( _action == nullptr )
                             _agent->stepFakeAction( *_previousState, _numSplits );
                         else
@@ -862,7 +867,7 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                 }
                 _exitCode = Engine::UNSAT;
 
-                updateToCurrentDQNState( *_currentDQNState );
+                updateToCurrentDQNState( *_currentDQNState, _numSplits );
                 if ( _action == nullptr )
                     _agent->stepFakeAction( *_previousState, _numSplits );
                 else
@@ -918,7 +923,7 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
             return std::move( _agent );
         }
     }
-    updateToCurrentDQNState( *_currentDQNState );
+    updateToCurrentDQNState( *_currentDQNState, _numSplits );
     if ( _action == nullptr )
         _agent->stepFakeAction( *_previousState, _numSplits );
     else
@@ -3301,24 +3306,45 @@ PiecewiseLinearConstraint *Engine::pickSplitPLConstraintByAgent()
 
     if ( GlobalConfiguration::DON_TRAINING_PHASE == 0 )
     {
-        int heuristic = static_cast<int>( GlobalConfiguration::DQN_FORCED_HEURISTIC );
-        switch ( heuristic )
+        switch ( GlobalConfiguration::DQN_FORCED_HEURISTIC )
         {
-        case 0:
+        case GlobalConfiguration::GuidedHeuristic::POLARITY:
             ENGINE_LOG( Stringf( "Guided: polarity heuristic" ).ascii() );
             plConstraint = pickSplitPLConstraintBasedOnPolarity();
-            phase = plConstraint->getDirection();
-            _action = std::make_unique<Action>(
-                DQN_NUM_PHASES, _plConstraints.size(), _constraintToIndex[plConstraint], phase );
             break;
-        case 1:
+        case GlobalConfiguration::GuidedHeuristic::BABS_R:
             ENGINE_LOG( Stringf( "Guided: BaBsr heuristic" ).ascii() );
             plConstraint = pickSplitPLConstraintBasedOnBaBsrHeuristic();
-            phase = plConstraint->getDirection();
-            _action = std::make_unique<Action>(
-                DQN_NUM_PHASES, _plConstraints.size(), _constraintToIndex[plConstraint], phase );
+            break;
+        case GlobalConfiguration::GuidedHeuristic::PSEUDO_IMPACT:
+            ENGINE_LOG( Stringf( "Guided: Pseudo-impact heuristic" ).ascii() );
+            if ( _smtCore.getStackDepth() > 3 )
+            {
+                ENGINE_LOG( Stringf( "Using highest score heuristics..." ).ascii() );
+                plConstraint = _smtCore.getConstraintsWithHighestScore();
+            }
+            else if ( !_preprocessedQuery->getInputVariables().empty() &&
+                      _preprocessedQuery->getInputVariables().size() <
+                          GlobalConfiguration::INTERVAL_SPLITTING_THRESHOLD )
+                plConstraint = pickSplitPLConstraintBasedOnIntervalWidth();
+            else
+            {
+                plConstraint = pickSplitPLConstraintBasedOnPolarity();
+                if ( plConstraint == NULL )
+                    plConstraint = _smtCore.getConstraintsWithHighestScore();
+            }
             break;
         }
+        ReluConstraint *reluConstraint = dynamic_cast<ReluConstraint *>( plConstraint );
+        if ( plConstraint && !reluConstraint )
+        {
+            _stepType = FAKE;
+            return plConstraint;
+        }
+
+        phase = reluConstraint->getDirection();
+        _action = std::make_unique<Action>(
+            DQN_NUM_PHASES, _plConstraints.size(), _constraintToIndex[plConstraint], phase );
 
         if ( !_action )
             return nullptr;
@@ -3331,12 +3357,11 @@ PiecewiseLinearConstraint *Engine::pickSplitPLConstraintByAgent()
     else
     {
         _stepType = AGENT;
-        // --- After guided phase: fall back to standard ε-greedy DDQN ---
         double p = RandomGlobals::instance().rand01();
         if ( p > _eps )
         {
             ENGINE_LOG( Stringf( "Agent picks its own split..." ).ascii() );
-            updateToCurrentDQNState( *_previousState );
+            updateToCurrentDQNState( *_previousState, _numSplits );
             _action = _agent->actBestAction( *_previousState );
             if ( !_action )
                 return nullptr;

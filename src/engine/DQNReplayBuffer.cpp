@@ -23,12 +23,14 @@ ReplayBuffer::ReplayBuffer( const unsigned numConstraints,
     , _betaInc( ( 1.0f - 0.4f ) / 100000.0f )
 {
     _actions = torch::zeros( { static_cast<long>( bufferSize ), 1 }, torch::kFloat32 );
-    _states = torch::zeros( { static_cast<long>( bufferSize ), _numConstraints, NUM_FEATURES },
+    _states = torch::zeros( { static_cast<long>( bufferSize ),
+                              static_cast<long>( _numConstraints ),
+                              static_cast<long>( TOTAL_FEATURES ) },
                             torch::kFloat32 );
     _rewards = torch::zeros( { static_cast<long>( bufferSize ) }, torch::kFloat32 );
     _nextStates = torch::zeros( { static_cast<long>( bufferSize ),
                                   static_cast<long>( _numConstraints ),
-                                  static_cast<long>( NUM_FEATURES ) },
+                                  static_cast<long>( TOTAL_FEATURES ) },
                                 torch::kFloat32 );
     _dones = torch::zeros( { static_cast<long>( bufferSize ) }, torch::kInt );
 }
@@ -102,11 +104,11 @@ void ReplayBuffer::moveActionToRevisitBuffer( const State &stateAfterAction,
     double alpha = 10.0;
     reward = std::copysign( std::tanh( alpha * std::abs( reward ) ), reward );
     addExperienceToRevisitBuffer( activeAction._stateBeforeAction,
-                                      activeAction._action,
-                                      reward,
-                                      stateAfterAction,
-                                      done,
-                                      actionEntry->_isDemo );
+                                  activeAction._action,
+                                  reward,
+                                  stateAfterAction,
+                                  done,
+                                  actionEntry->_isDemo );
     actionEntry->_activeActions.popBack();
 }
 
@@ -171,8 +173,8 @@ void ReplayBuffer::addExperienceToRevisitBuffer( const State &state,
     _isDemo[_writePosition] = isDemo;
     float p = isDemo ? _epsDemo : _epsAgent;
 
-    updatePriority(_writePosition, p);
-    _maxPriority = std::max(_maxPriority, p);
+    updatePriority( _writePosition, p );
+    _maxPriority = std::max( _maxPriority, p );
     _writePosition = ( _writePosition + 1 ) % _bufferSize;
     if ( _size < _bufferSize )
         ++_size;

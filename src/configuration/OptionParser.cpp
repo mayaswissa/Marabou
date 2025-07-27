@@ -195,9 +195,14 @@ void OptionParser::initialize()
         boost::program_options::value<int>( &( ( *_intOptions )[Options::DQN_EXPLORATION_RATE] ) )
             ->default_value( ( *_intOptions )[Options::DQN_EXPLORATION_RATE] ),
         "DQN agent's exploration rate.\n" )(
+        "DQN-demo-examples",
+        boost::program_options::value<int>( &( ( *_intOptions )[Options::DQN_NUM_DEMO_EXAMPLES] ) )
+            ->default_value( ( *_intOptions )[Options::DQN_NUM_DEMO_EXAMPLES] ),
+        "Number of example to collect demonstrations from.\n" )(
         "DQN-n-examples",
-        boost::program_options::value<int>( &( ( *_intOptions )[Options::DQN_N_EXAMPLES] ) )
-            ->default_value( ( *_intOptions )[Options::DQN_N_EXAMPLES] ),
+        boost::program_options::value<int>(
+            &( ( *_intOptions )[Options::DQN_NUM_TRAINING_EXAMPLES] ) )
+            ->default_value( ( *_intOptions )[Options::DQN_NUM_TRAINING_EXAMPLES] ),
         "Number of example to learn from.\n" )(
         "DQfD-lambda-sup",
         boost::program_options::value<float>( &( ( *_floatOptions )[Options::DQfD_LAMBDA_SUP] ) )

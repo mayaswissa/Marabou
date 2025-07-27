@@ -6,11 +6,11 @@ State::State( const unsigned numConstraints )
     , _numPhases( DQN_NUM_PHASES )
 {
     // Allocate a contiguous vector with (numConstraints * NUM_FEATURES) elements.
-    _stateData.resize( numConstraints * NUM_FEATURES, 0.0 );
+    _stateData.resize( numConstraints * TOTAL_FEATURES, 0.0 );
 
     // For each constraint, set the feature at index DQN_RELU_NOT_FIXED to 1.0,
     for ( unsigned i = 0; i < numConstraints; ++i )
-        _stateData[i * NUM_FEATURES + DQN_RELU_NOT_FIXED] = 1.0;
+        _stateData[i * TOTAL_FEATURES + DQN_RELU_NOT_FIXED] = 1.0;
 }
 
 State::State( const State &other )
@@ -34,24 +34,25 @@ torch::Tensor State::toTensor() const
 {
     auto stateTensor = torch::tensor( _stateData );
     stateTensor = stateTensor.to( torch::kFloat32 );
-    return stateTensor.view(
-        { static_cast<long>( _numConstraints ), static_cast<long>( NUM_FEATURES ) } );
+    return stateTensor.view( {
+        static_cast<long>( _numConstraints ),
+        static_cast<long>( TOTAL_FEATURES ),
+    } );
 }
 
 
 void State::updateConstraintPhase( const unsigned constraintIndex, const unsigned newPhase )
 {
-    if ( constraintIndex >= _numConstraints || newPhase >= _numPhases || _stateData.empty() )
+    if ( constraintIndex >= _numConstraints || newPhase >= DQN_NUM_PHASES || _stateData.empty() )
         return;
 
     // Get pointer to the start of the row for this constraint.
-    size_t rowStart = constraintIndex * NUM_FEATURES;
-    if ( rowStart + _numPhases > _stateData.size() )
+    size_t rowStart = constraintIndex * TOTAL_FEATURES;
+    if ( rowStart + DQN_NUM_PHASES > _stateData.size() )
         return;
 
     double *rowPtr = &_stateData[rowStart];
-    // Reset the first _numPhases entries (phase indicators).
-    std::fill_n( rowPtr, _numPhases, 0.0 );
+    std::fill_n( rowPtr, DQN_NUM_PHASES, 0.0 );
     // Set the new phase.
     rowPtr[newPhase] = 1.0;
 }
@@ -61,8 +62,8 @@ void State::updateBounds( const unsigned constraintIndex,
 {
     if ( constraintIndex > _numConstraints )
         return;
-    _stateData[constraintIndex * NUM_FEATURES + DQN_RELU_LOWER_BOUND] = lowerBound;
-    _stateData[constraintIndex * NUM_FEATURES + DQN_RELU_UPPER_BOUND] = upperBound;
+    _stateData[constraintIndex * TOTAL_FEATURES + DQN_RELU_LOWER_BOUND] = lowerBound;
+    _stateData[constraintIndex * TOTAL_FEATURES + DQN_RELU_UPPER_BOUND] = upperBound;
 }
 
 void State::updateSoIScoreForAgent( const unsigned constraintIndex,
@@ -71,19 +72,35 @@ void State::updateSoIScoreForAgent( const unsigned constraintIndex,
 {
     if ( constraintIndex >= _numConstraints )
         return;
-    _stateData[constraintIndex * NUM_FEATURES + SOI_ACTIVE_SCORE] = SoiActiveScore;
-    _stateData[constraintIndex * NUM_FEATURES + SOI_INACTIVE_SCORE] = SoiInactiveScore;
+    _stateData[constraintIndex * NUM_GLOBAL_FEATURES + SOI_ACTIVE_SCORE] = SoiActiveScore;
+    _stateData[constraintIndex * NUM_GLOBAL_FEATURES + SOI_INACTIVE_SCORE] = SoiInactiveScore;
 }
 
 void State::updatePolarity( const unsigned constraintIndex, const double polarityScore )
 {
     if ( constraintIndex >= _numConstraints )
         return;
-    _stateData[constraintIndex * NUM_FEATURES + POLARITY_SCORE] = polarityScore;
+    _stateData[constraintIndex * TOTAL_FEATURES + POLARITY_SCORE] = polarityScore;
 }
 void State::updateBaBsrScore( const unsigned constraintIndex, const double BaBsrScore )
 {
     if ( constraintIndex >= _numConstraints )
         return;
-    _stateData[constraintIndex * NUM_FEATURES + BaBsr_SCORE] = BaBsrScore;
+    _stateData[constraintIndex * TOTAL_FEATURES + BaBsr_SCORE] = BaBsrScore;
+}
+
+
+void State::updateGlobalFeatures( unsigned unstableCount, unsigned treeDepth, unsigned splitsSoFar )
+{
+    // For each constraint i, its row starts at i*TOTAL_FEATURES
+    for ( unsigned i = 0; i < _numConstraints; ++i )
+    {
+        const size_t base = i * TOTAL_FEATURES;
+        // global fields begin right after the local block:
+        _stateData[base + NUM_LOCAL_FEATURES + GF_UNSTABLE_COUNT] =
+            static_cast<double>( unstableCount );
+        _stateData[base + NUM_LOCAL_FEATURES + GF_TREE_DEPTH] = static_cast<double>( treeDepth );
+        _stateData[base + NUM_LOCAL_FEATURES + GF_SPLITS_SO_FAR] =
+            static_cast<double>( splitsSoFar );
+    }
 }

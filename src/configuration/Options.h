@@ -139,7 +139,9 @@ public:
 
         DQN_EXPLORATION_RATE,
 
-        DQN_N_EXAMPLES
+        DQN_NUM_TRAINING_EXAMPLES,
+
+        DQN_NUM_DEMO_EXAMPLES
     };
 
     enum FloatOptions {

@@ -269,7 +269,11 @@ public:
     static const double DQN_EPSILON_PURE_EXPLOIT;
     static double DQN_TAU; // Soft Update Parameter for target network
     static unsigned DON_TRAINING_PHASE;
-    enum GuidedHeuristic { POLARITY = 0, BABS_R = 1 };
+    enum GuidedHeuristic {
+        POLARITY = 0,
+        BABS_R = 1,
+        PSEUDO_IMPACT = 2
+    };
     static GuidedHeuristic DQN_FORCED_HEURISTIC;
 
 

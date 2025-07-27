@@ -16,8 +16,10 @@ Agent::Agent( const unsigned numPlConstraints,
     , _tStep( 0 )
     , device( torch::cuda::is_available() ? torch::kCUDA : torch::kCPU )
     , _trainedAgentFilePath( trainedAgentPath )
-    , _qNetworkLocal( QNetwork( _numPlConstraints, NUM_FEATURES, _numActions ) )
-    , _qNetworkTarget( QNetwork( _numPlConstraints, NUM_FEATURES, _numActions ) )
+    , _qNetworkLocal(
+          QNetwork( _numPlConstraints, NUM_LOCAL_FEATURES, _numActions, NUM_GLOBAL_FEATURES ) )
+    , _qNetworkTarget(
+          QNetwork( _numPlConstraints, NUM_LOCAL_FEATURES, _numActions, NUM_GLOBAL_FEATURES ) )
     , _optimizer( _qNetworkLocal.parameters(),
                   torch::optim::AdamOptions( Options::get()->getFloat( Options::DQN_LR ) )
                       .weight_decay( Options::get()->getFloat( Options::DQN_WEIGHT_DECAY ) ) )
@@ -142,17 +144,18 @@ void Agent::stepNewAction( const State &previousState,
 
 void Agent::applyActionMask( const torch::Tensor &tensorState, torch::Tensor &QValues ) const
 {
-    auto mask = torch::zeros( { static_cast<long>( _numActions ) }, torch::kFloat32 );
     auto mask2D =
         mask.view( { static_cast<long>( _numPlConstraints ), static_cast<long>( _numPhases ) } );
 
+        torch::zeros( { static_cast<long>( _numPlConstraints ), static_cast<long>( _numPhases ) },
+                      torch::kFloat32 );
     mask2D.index_put_( { torch::indexing::Slice(), static_cast<int64_t>( DQN_RELU_NOT_FIXED ) },
                        -std::numeric_limits<float>::infinity() );
-
-    auto reluNotFixedColumn = tensorState.index(
+    const auto localState = tensorState.narrow( 1, 0, NUM_LOCAL_FEATURES );
+    const auto reluNotFixedColumn = localState.index(
         { torch::indexing::Slice(), static_cast<int64_t>( DQN_RELU_NOT_FIXED ) } );
-    auto fixedMask = ( reluNotFixedColumn == 0 );
-    auto expandedMask = fixedMask.unsqueeze( 1 ).expand( { -1, static_cast<long>( _numPhases ) } );
+    const auto fixedMask = ( reluNotFixedColumn == 0 );
+    const auto expandedMask = fixedMask.unsqueeze( 1 ).expand( { -1, static_cast<long>( _numPhases ) } );
     mask2D.masked_fill_( expandedMask, -std::numeric_limits<float>::infinity() );
 
     QValues += mask2D.view( { -1 } );

@@ -337,8 +337,7 @@ private:
         PERFORMED_WEAK_RESTORATION = 2,
     };
 
-    enum DQNStepType
-    {
+    enum DQNStepType {
         DEMO = 0,
         FAKE = 1,
         AGENT = 2
@@ -884,7 +883,7 @@ private:
     std::unique_ptr<State> _currentDQNState;
     std::unique_ptr<State> _previousState;
     unsigned _numSplits;
-     DQNStepType _stepType;
+    DQNStepType _stepType;
 
     /*
       Returns true iff there is a variable with bounds that can explain infeasibility of the tableau
@@ -957,7 +956,7 @@ private:
     /*
       DQN functions
      */
-    void updateToCurrentDQNState( State &stateToUpdate );
+    void updateToCurrentDQNState( State &stateToUpdate, int numSplits );
     PiecewiseLinearConstraint *indexToConstraint( int index,
                                                   List<PiecewiseLinearConstraint *> *constraints );
 };

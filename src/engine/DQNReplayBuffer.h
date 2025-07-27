@@ -2,9 +2,7 @@
 #define DQNREPLAYBUFFER_H
 #include "DQNActoin.h"
 #include "DQNState.h"
-#include "Vector.h"
 
-#include <deque>
 #include <utility>
 #undef Warning
 #include <torch/torch.h>
