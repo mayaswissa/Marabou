@@ -145,8 +145,6 @@ void Agent::stepNewAction( const State &previousState,
 void Agent::applyActionMask( const torch::Tensor &tensorState, torch::Tensor &QValues ) const
 {
     auto mask2D =
-        mask.view( { static_cast<long>( _numPlConstraints ), static_cast<long>( _numPhases ) } );
-
         torch::zeros( { static_cast<long>( _numPlConstraints ), static_cast<long>( _numPhases ) },
                       torch::kFloat32 );
     mask2D.index_put_( { torch::indexing::Slice(), static_cast<int64_t>( DQN_RELU_NOT_FIXED ) },
