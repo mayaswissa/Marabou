@@ -72,8 +72,8 @@ void State::updateSoIScoreForAgent( const unsigned constraintIndex,
 {
     if ( constraintIndex >= _numConstraints )
         return;
-    _stateData[constraintIndex * NUM_GLOBAL_FEATURES + SOI_ACTIVE_SCORE] = SoiActiveScore;
-    _stateData[constraintIndex * NUM_GLOBAL_FEATURES + SOI_INACTIVE_SCORE] = SoiInactiveScore;
+    _stateData[constraintIndex * TOTAL_FEATURES + SOI_ACTIVE_SCORE] = SoiActiveScore;
+    _stateData[constraintIndex * TOTAL_FEATURES + SOI_INACTIVE_SCORE] = SoiInactiveScore;
 }
 
 void State::updatePolarity( const unsigned constraintIndex, const double polarityScore )
@@ -92,7 +92,6 @@ void State::updateBaBsrScore( const unsigned constraintIndex, const double BaBsr
 
 void State::updateGlobalFeatures( unsigned unstableCount, unsigned treeDepth, unsigned splitsSoFar )
 {
-    // For each constraint i, its row starts at i*TOTAL_FEATURES
     for ( unsigned i = 0; i < _numConstraints; ++i )
     {
         const size_t base = i * TOTAL_FEATURES;
