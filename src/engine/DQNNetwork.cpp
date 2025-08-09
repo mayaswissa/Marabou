@@ -9,9 +9,7 @@ QNetwork::QNetwork( const unsigned numConstraints,
     , _numGlobalFeatures( numGlobalFeatures )
     , _outputDim( numActions )
 {
-    // total flattened input = C·F + G
     _inputDim = numConstraints * numLocalFeatures + numGlobalFeatures;
-
     fc1 = register_module( "fc1", torch::nn::Linear( _inputDim, 128 ) );
     fc2 = register_module( "fc2", torch::nn::Linear( 128, 128 ) );
     fcAdv1 = register_module( "adv1", torch::nn::Linear( 128, 64 ) );

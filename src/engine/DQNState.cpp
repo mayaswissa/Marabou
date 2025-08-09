@@ -10,7 +10,7 @@ State::State( const unsigned numConstraints )
 
     // For each constraint, set the feature at index DQN_RELU_NOT_FIXED to 1.0,
     for ( unsigned i = 0; i < numConstraints; ++i )
-        _stateData[i * TOTAL_FEATURES + DQN_RELU_NOT_FIXED] = 1.0;
+        _stateData[i * TOTAL_FEATURES + DQN_RELU_NOT_FIXED_VALUE] = 1.0;
 }
 
 State::State( const State &other )
@@ -46,21 +46,16 @@ void State::updateConstraintPhase( const unsigned constraintIndex, const unsigne
     if ( constraintIndex >= _numConstraints || newPhase >= DQN_NUM_PHASES || _stateData.empty() )
         return;
 
-    // Get pointer to the start of the row for this constraint.
-    size_t rowStart = constraintIndex * TOTAL_FEATURES;
-    if ( rowStart + DQN_NUM_PHASES > _stateData.size() )
-        return;
-
-    double *rowPtr = &_stateData[rowStart];
-    std::fill_n( rowPtr, DQN_NUM_PHASES, 0.0 );
-    // Set the new phase.
-    rowPtr[newPhase] = 1.0;
+	size_t rowStart = constraintIndex * TOTAL_FEATURES;
+	for (unsigned k = 0; k < 3; ++k)
+    	_stateData[rowStart + DQN_RELU_NOT_FIXED_VALUE + k] = 0.0;
+	_stateData[rowStart + DQN_RELU_NOT_FIXED_VALUE + newPhase] = 1.0;
 }
 void State::updateBounds( const unsigned constraintIndex,
                           const double upperBound,
                           const double lowerBound )
 {
-    if ( constraintIndex > _numConstraints )
+    if ( constraintIndex >= _numConstraints )
         return;
     _stateData[constraintIndex * TOTAL_FEATURES + DQN_RELU_LOWER_BOUND] = lowerBound;
     _stateData[constraintIndex * TOTAL_FEATURES + DQN_RELU_UPPER_BOUND] = upperBound;

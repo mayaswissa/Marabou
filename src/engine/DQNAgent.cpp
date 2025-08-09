@@ -151,7 +151,7 @@ void Agent::applyActionMask( const torch::Tensor &tensorState, torch::Tensor &QV
                        -std::numeric_limits<float>::infinity() );
     const auto localState = tensorState.narrow( 1, 0, NUM_LOCAL_FEATURES );
     const auto reluNotFixedColumn = localState.index(
-        { torch::indexing::Slice(), static_cast<int64_t>( DQN_RELU_NOT_FIXED ) } );
+        { torch::indexing::Slice(), static_cast<int64_t>( DQN_RELU_NOT_FIXED_VALUE ) } );
     const auto fixedMask = ( reluNotFixedColumn == 0 );
     const auto expandedMask = fixedMask.unsqueeze( 1 ).expand( { -1, static_cast<long>( _numPhases ) } );
     mask2D.masked_fill_( expandedMask, -std::numeric_limits<float>::infinity() );
@@ -178,7 +178,7 @@ std::unique_ptr<Action> Agent::actRandomly( const State &state )
 {
     const auto tensorState = state.toTensor();
     auto reluNotFixedColumn = tensorState.index(
-        { torch::indexing::Slice(), static_cast<int64_t>( DQN_RELU_NOT_FIXED ) } );
+        { torch::indexing::Slice(), static_cast<int64_t>( DQN_RELU_NOT_FIXED_VALUE ) } );
     auto validRandomMask = ( reluNotFixedColumn == 1 );
     const torch::Tensor validRandomIndices = validRandomMask.nonzero();
 
