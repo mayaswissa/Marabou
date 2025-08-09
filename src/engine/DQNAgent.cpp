@@ -228,10 +228,12 @@ void Agent::learn()
 
     // Double DQN : Use local network to select the best action for next states
     const auto forwardLocalNet = _qNetworkLocal.forward( nextStatesTensor );
+    applyActionMask(nextStatesTensor, forwardLocalNet); 
     const auto localQValuesNextState = forwardLocalNet.detach().argmax( 1 );
 
     // Use target network to calculate the Q-value of these actions
     const auto forwardTargetNet = _qNetworkTarget.forward( nextStatesTensor );
+    applyActionMask(nextStatesTensor, forwardTargetNet); 
     const auto targetQValuesNextState =
         forwardTargetNet.detach().gather( 1, localQValuesNextState.unsqueeze( -1 ) ).squeeze( -1 );
     // Calculate Q targets for current states
@@ -259,6 +261,7 @@ void Agent::learn()
     // Margin loss for demonstration samples
     std::vector<int64_t> demo_mask_int( batch.isDemo.begin(), batch.isDemo.end() );
     auto all_q = _qNetworkLocal.forward( statesTensor );
+    applyActionMask(statesTensor, all_q);
     auto demo_mask = torch::tensor( demo_mask_int, torch::TensorOptions().dtype( torch::kInt64 ) )
                          .to( device )
                          .to( torch::kFloat32 );

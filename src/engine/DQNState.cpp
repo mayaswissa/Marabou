@@ -90,7 +90,6 @@ void State::updateGlobalFeatures( unsigned unstableCount, unsigned treeDepth, un
     for ( unsigned i = 0; i < _numConstraints; ++i )
     {
         const size_t base = i * TOTAL_FEATURES;
-        // global fields begin right after the local block:
         _stateData[base + NUM_LOCAL_FEATURES + GF_UNSTABLE_COUNT] =
             static_cast<double>( unstableCount );
         _stateData[base + NUM_LOCAL_FEATURES + GF_TREE_DEPTH] = static_cast<double>( treeDepth );
