@@ -47,6 +47,7 @@ Action &Action::operator=( Action &&other ) noexcept
         _numPhases = other.getNumPhases();
         _plConstraintActionIndex = other.getActionPlConstraintIndex();
         _phaseActionIndex = other.getActionPhase();
+        _numPlConstraints = other.getNumPlConstraints();
     }
     return *this;
 }
@@ -58,6 +59,7 @@ Action &Action::operator=( const Action &other )
         _numPhases = other.getNumPhases();
         _plConstraintActionIndex = other.getActionPlConstraintIndex();
         _phaseActionIndex = other.getActionPhase();
+        _numPlConstraints = other.getNumPlConstraints();
     }
     return *this;
 }

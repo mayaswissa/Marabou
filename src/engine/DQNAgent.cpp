@@ -144,18 +144,20 @@ void Agent::stepNewAction( const State &previousState,
 
 void Agent::applyActionMask( const torch::Tensor &tensorState, torch::Tensor &QValues ) const
 {
+    QValues.to( device );
+    auto negInf = -std::numeric_limits<float>::infinity();
     auto mask2D =
         torch::zeros( { static_cast<long>( _numPlConstraints ), static_cast<long>( _numPhases ) },
                       torch::kFloat32 );
     mask2D.index_put_( { torch::indexing::Slice(), static_cast<int64_t>( DQN_RELU_NOT_FIXED ) },
-                       -std::numeric_limits<float>::infinity() );
+                       negInf );
     const auto localState = tensorState.narrow( 1, 0, NUM_LOCAL_FEATURES );
     const auto reluNotFixedColumn = localState.index(
         { torch::indexing::Slice(), static_cast<int64_t>( DQN_RELU_NOT_FIXED_VALUE ) } );
     const auto fixedMask = ( reluNotFixedColumn == 0 );
     const auto expandedMask =
         fixedMask.unsqueeze( 1 ).expand( { -1, static_cast<long>( _numPhases ) } );
-    mask2D.masked_fill_( expandedMask, -std::numeric_limits<float>::infinity() );
+    mask2D.masked_fill_( expandedMask, negInf );
 
     QValues += mask2D.view( { -1 } );
 }
@@ -164,7 +166,7 @@ void Agent::applyActionMask( const torch::Tensor &tensorState, torch::Tensor &QV
 std::unique_ptr<Action> Agent::actBestAction( const State &state )
 {
     _qNetworkLocal.eval();
-    const auto tensorState = state.toTensor();
+    const auto tensorState = state.toTensor().to( device );
     torch::Tensor QValues = _qNetworkLocal.forward( tensorState );
     _qNetworkLocal.train();
 
@@ -207,8 +209,7 @@ void Agent::learn()
         return;
 
     auto idxTensor = torch::tensor( std::vector<long>( batch.indices.begin(), batch.indices.end() ),
-                                    torch::kLong )
-                         .to( device );
+                                    torch::kLong );
     auto states = _replayedBuffer.getStates();
     const auto statesTensor = _replayedBuffer.getStates().index( { idxTensor } ).to( device );
     const auto actionsTensor =

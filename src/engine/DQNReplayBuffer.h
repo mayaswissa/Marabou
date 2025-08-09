@@ -134,7 +134,6 @@ class ReplayBuffer
 public:
     ReplayBuffer( unsigned numConstraints, unsigned bufferSize, unsigned batchSize );
     void pushFakeActionEntry( const State &stateBeforeAction, unsigned numSplitsBeforeAction );
-    std::vector<unsigned> sample() const;
     unsigned getNumRevisitExperiences() const;
     unsigned getBatchSize() const;
 

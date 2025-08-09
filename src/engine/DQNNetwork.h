@@ -3,7 +3,6 @@
 #undef Warning
 #include <torch/torch.h>
 
-#endif
 class QNetwork final : public torch::nn::Module
 {
 public:
@@ -28,3 +27,4 @@ private:
     // value head
     torch::nn::Linear fcVal1{nullptr}, fcVal2{nullptr};
 };
+#endif
