@@ -142,25 +142,31 @@ void Agent::stepNewAction( const State &previousState,
         learn();
 }
 
-void Agent::applyActionMask( const torch::Tensor &tensorState, torch::Tensor &QValues ) const
+void Agent::applyActionMask(const torch::Tensor& tensorState, torch::Tensor& QValues) const
 {
-    QValues.to( device );
-    auto negInf = -std::numeric_limits<float>::infinity();
-    auto mask2D =
-        torch::zeros( { static_cast<long>( _numPlConstraints ), static_cast<long>( _numPhases ) },
-                      torch::kFloat32 );
-    mask2D.index_put_( { torch::indexing::Slice(), static_cast<int64_t>( DQN_RELU_NOT_FIXED ) },
-                       negInf );
-    const auto localState = tensorState.narrow( 1, 0, NUM_LOCAL_FEATURES );
-    const auto reluNotFixedColumn = localState.index(
-        { torch::indexing::Slice(), static_cast<int64_t>( DQN_RELU_NOT_FIXED_VALUE ) } );
-    const auto fixedMask = ( reluNotFixedColumn == 0 );
-    const auto expandedMask =
-        fixedMask.unsqueeze( 1 ).expand( { -1, static_cast<long>( _numPhases ) } );
-    mask2D.masked_fill_( expandedMask, negInf );
+    const float negInf = -std::numeric_limits<float>::infinity();
 
-    QValues += mask2D.view( { -1 } );
+    auto mask2D = torch::zeros({ static_cast<long>( _numPlConstraints ), static_cast<long>( _numPhases ) }, QValues.options());
+
+    // Disable NOT_FIXED action (phase index 0) in every block
+    mask2D.index_put_({ torch::indexing::Slice(), static_cast<int64_t>( DQN_RELU_NOT_FIXED ) }, negInf);
+
+    // 2) Figure out which rows are already fixed (read the FEATURE column!)
+    auto localState = tensorState.to(QValues.options()).narrow(1, 0, NUM_LOCAL_FEATURES);
+    auto reluNotFixedCol = localState.index({ torch::indexing::Slice(),
+                                              static_cast<int64_t>( DQN_RELU_NOT_FIXED_VALUE ) });
+    auto fixedMask = reluNotFixedCol.le(0.5);                 // bool [numConstraints], same device
+
+    // Convert to row indices and fill entire rows with -inf
+    auto rows = fixedMask.nonzero().squeeze(1);               // int64 [K], same device
+    if (rows.numel() > 0) {
+        mask2D.index_put_({ rows, torch::indexing::Slice() }, negInf);
+    }
+
+    // 3) Add the flattened mask to flat Q-values (broadcast over batch dim)
+    QValues.add_(mask2D.view(-1));
 }
+
 
 
 std::unique_ptr<Action> Agent::actBestAction( const State &state )
