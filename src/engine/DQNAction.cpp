@@ -1,4 +1,4 @@
-#include "DQNActoin.h"
+#include "DQNAction.h"
 
 Action::Action( const unsigned numPhases, const unsigned numPlConstraints )
     : _numPhases( numPhases )

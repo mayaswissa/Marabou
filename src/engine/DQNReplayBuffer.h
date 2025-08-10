@@ -1,6 +1,6 @@
 #ifndef DQNREPLAYBUFFER_H
 #define DQNREPLAYBUFFER_H
-#include "DQNActoin.h"
+#include "DQNAction.h"
 #include "DQNState.h"
 
 #include <utility>

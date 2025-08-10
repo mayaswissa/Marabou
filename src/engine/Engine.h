@@ -23,7 +23,7 @@
 #include "BlandsRule.h"
 #include "BoundManager.h"
 #include "Checker.h"
-#include "DQNActoin.h"
+#include "DQNAction.h"
 #include "DQNAgent.h"
 #include "DQNState.h"
 #include "DantzigsRule.h"

@@ -206,11 +206,11 @@ std::unique_ptr<Action> Agent::actBestAction( const State &state )
     _qNetworkLocal.eval();
     const auto tensorState = state.toTensor().to( device );
     torch::Tensor QValues = _qNetworkLocal.forward( tensorState );
-    sanitizeInPlace(QValues);
+    sanitizeInPlace( QValues );
     _qNetworkLocal.train();
     if ( maskQInPlace( tensorState, QValues ).item<bool>() )
         return nullptr;
-    unsigned actionIndex = QValues.argmax(1).item<int>();
+    unsigned actionIndex = QValues.argmax( 1 ).item<int>();
     auto [constraint, phase] = _actionSpace.decodeActionIndex( actionIndex );
     return std::make_unique<Action>( _numPhases, _numPlConstraints, constraint, phase );
 }
@@ -269,10 +269,10 @@ void Agent::learn()
     const auto doneTensor =
         _replayedBuffer.getDones().index( { idxTensor } ).to( device ).to( torch::kUInt8 );
     auto QExpected = _qNetworkLocal.forward( statesTensor )
-                               .gather( 1, actionsTensor )
-                               .squeeze( -1 )
-                               .to( torch::kFloat32 );
-    sanitizeInPlace(QExpected);
+                         .gather( 1, actionsTensor )
+                         .squeeze( -1 )
+                         .to( torch::kFloat32 );
+    sanitizeInPlace( QExpected );
     auto QTargets = rewardsTensor;
 
     // Double DQN : Use local network to select the best action for next states
@@ -297,8 +297,9 @@ void Agent::learn()
         throw std::runtime_error( "NaN detected in QTargets." );
     }
     // TD loss
-    auto td_errors = torch::mse_loss( QExpected, QTargets.detach(), torch::Reduction::None );
+    auto td_errors = torch::smooth_l1_loss( QExpected, QTargets.detach(), torch::Reduction::None );
     auto weights = torch::tensor( batch.weights, torch::dtype( torch::kFloat32 ) ).to( device );
+    weights = weights / ( weights.max().item<float>() + 1e-6f );
     auto weightedTdLoss = ( td_errors * weights ).mean();
     // Margin loss for demonstration samples
     std::vector<int64_t> demo_mask_int( batch.isDemo.begin(), batch.isDemo.end() );

@@ -1,8 +1,8 @@
 #ifndef DQNAGENT_H
 #define DQNAGENT_H
 
+#include "DQNAction.h"
 #include "DQNActionSpace.h"
-#include "DQNActoin.h"
 #include "DQNNetwork.h"
 #include "DQNReplayBuffer.h"
 #include "DQNState.h"

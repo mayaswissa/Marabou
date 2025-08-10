@@ -1,5 +1,5 @@
-#ifndef DQNACTOIN_H
-#define DQNACTOIN_H
+#ifndef DQNACTION_H
+#define DQNACTION_H
 
 #include "PiecewiseLinearConstraint.h"
 #undef Warning
@@ -27,4 +27,4 @@ private:
 };
 
 
-#endif // DQNACTOIN_H
+#endif // DQNACTION_H
