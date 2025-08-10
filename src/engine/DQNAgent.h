@@ -55,5 +55,6 @@ private:
     float _margin;
     bool handleInvalidGradients();
     void applyActionMask( const torch::Tensor &tensorState, torch::Tensor &QValues ) const;
+    torch::Tensor maskQInPlace( const torch::Tensor &state, torch::Tensor &Q ) const;
 };
 #endif

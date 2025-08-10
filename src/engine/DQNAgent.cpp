@@ -142,68 +142,112 @@ void Agent::stepNewAction( const State &previousState,
         learn();
 }
 
-void Agent::applyActionMask(const torch::Tensor& tensorState, torch::Tensor& QValues) const
+torch::Tensor Agent::maskQInPlace( const torch::Tensor &state, torch::Tensor &Q ) const
 {
-    const float negInf = -std::numeric_limits<float>::infinity();
+    constexpr float NEG = -1e9f;   // large finite to avoid inf math
+    const auto opts = Q.options(); // match device + dtype
 
-    auto mask2D = torch::zeros({ static_cast<long>( _numPlConstraints ), static_cast<long>( _numPhases ) }, QValues.options());
+    // Bring state to Q's device/dtype
+    auto s = state.to( opts );
 
-    // Disable NOT_FIXED action (phase index 0) in every block
-    mask2D.index_put_({ torch::indexing::Slice(), static_cast<int64_t>( DQN_RELU_NOT_FIXED ) }, negInf);
-
-    // 2) Figure out which rows are already fixed (read the FEATURE column!)
-    auto localState = tensorState.to(QValues.options()).narrow(1, 0, NUM_LOCAL_FEATURES);
-    auto reluNotFixedCol = localState.index({ torch::indexing::Slice(),
-                                              static_cast<int64_t>( DQN_RELU_NOT_FIXED_VALUE ) });
-    auto fixedMask = reluNotFixedCol.le(0.5);                 // bool [numConstraints], same device
-
-    // Convert to row indices and fill entire rows with -inf
-    auto rows = fixedMask.nonzero().squeeze(1);               // int64 [K], same device
-    if (rows.numel() > 0) {
-        mask2D.index_put_({ rows, torch::indexing::Slice() }, negInf);
+    // Extract NOT_FIXED feature into [B,C]
+    torch::Tensor notFixed;
+    int64_t B = 1, C = (int64_t)_numPlConstraints, P = (int64_t)_numPhases;
+    if ( s.dim() == 2 )
+    {                                                                               // [C,F]
+        notFixed = s.select( 1, (int64_t)DQN_RELU_NOT_FIXED_VALUE ).unsqueeze( 0 ); // [1,C]
+    }
+    else
+    {                                                                // [B,C,F]
+        notFixed = s.select( 2, (int64_t)DQN_RELU_NOT_FIXED_VALUE ); // [B,C]
+        B = notFixed.size( 0 );
+        C = notFixed.size( 1 );
     }
 
-    // 3) Add the flattened mask to flat Q-values (broadcast over batch dim)
-    QValues.add_(mask2D.view(-1));
+    // Legal rows = NOT_FIXED; terminals if none
+    auto rowLegal = notFixed.gt( 0.5 );              // [B,C] bool
+    auto terminalByMask = rowLegal.sum( 1 ).eq( 0 ); // [B]   bool
+
+    // Legal phases = {ACTIVE, INACTIVE}
+    auto phaseIdx =
+        torch::arange( P, torch::TensorOptions().device( Q.device() ).dtype( torch::kLong ) )
+            .view( { 1, 1, -1 } );
+    auto phaseLegal = phaseIdx.ne( (int64_t)DQN_RELU_NOT_FIXED ); // [1,1,P] bool
+
+    // legal3D[b,c,p] = rowLegal[b,c] && phaseLegal[p]
+    auto legal3D = rowLegal.unsqueeze( 2 ) & phaseLegal; // [B,C,P]
+
+    // Mask by ASSIGNMENT (no +/−inf arithmetic)
+    if ( Q.dim() == 3 )
+    { // [B,C,P]
+        Q.masked_fill_( ~legal3D, NEG );
+    }
+    else
+    { // [B,A] with A=C*P
+        Q.masked_fill_( ( ~legal3D ).reshape( { B, C * P } ), NEG );
+    }
+
+    return terminalByMask;
 }
 
 
+static inline void sanitizeInPlace( torch::Tensor &T )
+{
+    auto bad = ~torch::isfinite( T );
+    if ( bad.any().item<bool>() )
+    {
+        T.masked_fill_( bad, 0 ); // NaN/±inf → 0
+        T.clamp_( -1e9f, 1e9f );  // optional but helps stability
+    }
+}
 
 std::unique_ptr<Action> Agent::actBestAction( const State &state )
 {
     _qNetworkLocal.eval();
     const auto tensorState = state.toTensor().to( device );
     torch::Tensor QValues = _qNetworkLocal.forward( tensorState );
+    sanitizeInPlace(QValues);
     _qNetworkLocal.train();
-
-    applyActionMask( tensorState, QValues );
-
-    unsigned actionIndex = QValues.argmax().item<int>();
+    if ( maskQInPlace( tensorState, QValues ).item<bool>() )
+        return nullptr;
+    unsigned actionIndex = QValues.argmax(1).item<int>();
     auto [constraint, phase] = _actionSpace.decodeActionIndex( actionIndex );
     return std::make_unique<Action>( _numPhases, _numPlConstraints, constraint, phase );
 }
 
 std::unique_ptr<Action> Agent::actRandomly( const State &state )
 {
-    const auto tensorState = state.toTensor();
-    auto reluNotFixedColumn = tensorState.index(
-        { torch::indexing::Slice(), static_cast<int64_t>( DQN_RELU_NOT_FIXED_VALUE ) } );
-    auto validRandomMask = ( reluNotFixedColumn == 1 );
-    const torch::Tensor validRandomIndices = validRandomMask.nonzero();
+    // State tensor is [C, F] on CPU
+    const auto s = state.toTensor();
 
-    const auto k = validRandomIndices.size( 0 );
-    if ( k == 0 )
+    // Read the NOT_FIXED feature flag column (robust to float dtype)
+    const auto notFixedCol =
+        s.index( { torch::indexing::Slice(), (int64_t)DQN_RELU_NOT_FIXED_VALUE } )
+            .to( torch::kFloat32 );
+
+    // Collect candidate constraint rows (NOT_FIXED == true)
+    std::vector<unsigned> candidates;
+    candidates.reserve( _numPlConstraints );
+    for ( unsigned c = 0; c < _numPlConstraints; ++c )
+    {
+        if ( notFixedCol[c].item<float>() > 0.5f )
+            candidates.push_back( c );
+    }
+
+    // No legal rows left → let caller treat as terminal
+    if ( candidates.empty() )
         return nullptr;
 
-    int row = RandomGlobals::instance().randInt( 0, static_cast<int>( k ) - 1 );
-    const unsigned actionConstraint = validRandomIndices.index( { row, 0 } ).item<int>();
+    // Uniformly pick a candidate row
+    const int pick = RandomGlobals::instance().randInt( 0, (int)candidates.size() - 1 );
+    const unsigned constraint = candidates[(size_t)pick];
 
-    // pick a random phase
-    const unsigned actionPhase =
-        RandomGlobals::instance().randInt( RELU_PHASE_ACTIVE, RELU_PHASE_INACTIVE );
+    // Uniformly pick a legal phase (NOT_FIXED is disallowed)
+    const unsigned phase = ( RandomGlobals::instance().randInt( 0, 1 ) == 0 )
+                             ? (unsigned)DQN_RELU_ACTIVE
+                             : (unsigned)DQN_RELU_INACTIVE;
 
-    const unsigned actionIndex = _actionSpace.getActionIndex( actionConstraint, actionPhase );
-    auto [constraint, phase] = _actionSpace.decodeActionIndex( actionIndex );
+    // Build action
     return std::make_unique<Action>( _numPhases, _numPlConstraints, constraint, phase );
 }
 
@@ -216,48 +260,40 @@ void Agent::learn()
 
     auto idxTensor = torch::tensor( std::vector<long>( batch.indices.begin(), batch.indices.end() ),
                                     torch::kLong );
-    auto states = _replayedBuffer.getStates();
     auto statesTensor = _replayedBuffer.getStates().index( { idxTensor } ).to( device );
     const auto actionsTensor =
         _replayedBuffer.getActions().index( { idxTensor } ).to( device ).to( torch::kLong );
     const auto rewardsTensor =
         _replayedBuffer.getRewards().index( { idxTensor } ).to( device ).to( torch::kFloat32 );
-    auto nextStatesTensor =
-        _replayedBuffer.getNextStates().index( { idxTensor } ).to( device );
+    auto nextStatesTensor = _replayedBuffer.getNextStates().index( { idxTensor } ).to( device );
     const auto doneTensor =
         _replayedBuffer.getDones().index( { idxTensor } ).to( device ).to( torch::kUInt8 );
-    const auto QExpected = _qNetworkLocal.forward( statesTensor )
+    auto QExpected = _qNetworkLocal.forward( statesTensor )
                                .gather( 1, actionsTensor )
                                .squeeze( -1 )
                                .to( torch::kFloat32 );
+    sanitizeInPlace(QExpected);
     auto QTargets = rewardsTensor;
 
     // Double DQN : Use local network to select the best action for next states
     auto forwardLocalNet = _qNetworkLocal.forward( nextStatesTensor );
-    applyActionMask(nextStatesTensor, forwardLocalNet); 
+    sanitizeInPlace( forwardLocalNet );
+    auto termMask = maskQInPlace( nextStatesTensor, forwardLocalNet );
     const auto localQValuesNextState = forwardLocalNet.detach().argmax( 1 );
 
     // Use target network to calculate the Q-value of these actions
     auto forwardTargetNet = _qNetworkTarget.forward( nextStatesTensor );
-    applyActionMask(nextStatesTensor, forwardTargetNet); 
+    sanitizeInPlace( forwardTargetNet );
+    maskQInPlace( nextStatesTensor, forwardTargetNet );
     const auto targetQValuesNextState =
         forwardTargetNet.detach().gather( 1, localQValuesNextState.unsqueeze( -1 ) ).squeeze( -1 );
     // Calculate Q targets for current states
-    QTargets =
-        rewardsTensor + GAMMA * targetQValuesNextState * ( 1 - doneTensor.to( torch::kFloat32 ) );
+    auto notDoneAll = ( ~doneTensor.to( torch::kBool ) & ~termMask ).to( torch::kFloat32 );
+    QTargets = rewardsTensor + GAMMA * targetQValuesNextState * notDoneAll;
 
     if ( torch::isnan( QTargets ).any().item<bool>() )
     {
         std::cerr << "Error: QTargets contains NaN values!" << std::endl;
-        throw std::runtime_error( "NaN detected in QTargets." );
-    }
-    if ( torch::isnan( QTargets ).any().item<bool>() )
-    {
-        std::cerr << "Error: QTargets contains NaN values! Dumping sample data:" << std::endl;
-        std::cerr << "States: " << statesTensor << std::endl;
-        std::cerr << "Actions: " << actionsTensor << std::endl;
-        std::cerr << "Rewards: " << rewardsTensor << std::endl;
-        std::cerr << "Next States: " << nextStatesTensor << std::endl;
         throw std::runtime_error( "NaN detected in QTargets." );
     }
     // TD loss
@@ -267,7 +303,8 @@ void Agent::learn()
     // Margin loss for demonstration samples
     std::vector<int64_t> demo_mask_int( batch.isDemo.begin(), batch.isDemo.end() );
     auto all_q = _qNetworkLocal.forward( statesTensor );
-    applyActionMask(statesTensor, all_q);
+    sanitizeInPlace( all_q );
+    maskQInPlace( statesTensor, all_q );
     auto demo_mask = torch::tensor( demo_mask_int, torch::TensorOptions().dtype( torch::kInt64 ) )
                          .to( device )
                          .to( torch::kFloat32 );

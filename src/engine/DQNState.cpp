@@ -47,7 +47,7 @@ void State::updateConstraintPhase( const unsigned constraintIndex, const unsigne
         return;
 
     size_t rowStart = constraintIndex * TOTAL_FEATURES;
-	for (unsigned k = 0; k < 3; ++k)
+	for (unsigned k = 0; k < DQN_NUM_PHASES; ++k)
     	_stateData[rowStart + DQN_RELU_NOT_FIXED_VALUE + k] = 0.0;
 	_stateData[rowStart + DQN_RELU_NOT_FIXED_VALUE + newPhase] = 1.0;
 }
