@@ -211,12 +211,12 @@ void Agent::learn()
     auto idxTensor = torch::tensor( std::vector<long>( batch.indices.begin(), batch.indices.end() ),
                                     torch::kLong );
     auto states = _replayedBuffer.getStates();
-    const auto statesTensor = _replayedBuffer.getStates().index( { idxTensor } ).to( device );
+    auto statesTensor = _replayedBuffer.getStates().index( { idxTensor } ).to( device );
     const auto actionsTensor =
         _replayedBuffer.getActions().index( { idxTensor } ).to( device ).to( torch::kLong );
     const auto rewardsTensor =
         _replayedBuffer.getRewards().index( { idxTensor } ).to( device ).to( torch::kFloat32 );
-    const auto nextStatesTensor =
+    auto nextStatesTensor =
         _replayedBuffer.getNextStates().index( { idxTensor } ).to( device );
     const auto doneTensor =
         _replayedBuffer.getDones().index( { idxTensor } ).to( device ).to( torch::kUInt8 );
@@ -227,12 +227,12 @@ void Agent::learn()
     auto QTargets = rewardsTensor;
 
     // Double DQN : Use local network to select the best action for next states
-    const auto forwardLocalNet = _qNetworkLocal.forward( nextStatesTensor );
+    auto forwardLocalNet = _qNetworkLocal.forward( nextStatesTensor );
     applyActionMask(nextStatesTensor, forwardLocalNet); 
     const auto localQValuesNextState = forwardLocalNet.detach().argmax( 1 );
 
     // Use target network to calculate the Q-value of these actions
-    const auto forwardTargetNet = _qNetworkTarget.forward( nextStatesTensor );
+    auto forwardTargetNet = _qNetworkTarget.forward( nextStatesTensor );
     applyActionMask(nextStatesTensor, forwardTargetNet); 
     const auto targetQValuesNextState =
         forwardTargetNet.detach().gather( 1, localQValuesNextState.unsqueeze( -1 ) ).squeeze( -1 );
