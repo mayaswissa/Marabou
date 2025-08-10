@@ -313,7 +313,7 @@ void trainAgentOnExamples( Options *options,
     // 1) COLLECT DEMONSTRATION TRAJECTORIES
     DQN_LOG( "=== COLLECTING DEMOS ===\n" );
     GlobalConfiguration::DON_TRAINING_PHASE = 0;
-    int numRepeats = 4;
+    int numRepeats = 2;
     for ( auto &ex : demos )
     {
         for ( auto iter = 0; iter < numRepeats; iter++ )
