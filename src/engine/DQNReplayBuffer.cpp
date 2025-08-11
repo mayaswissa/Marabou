@@ -22,7 +22,8 @@ ReplayBuffer::ReplayBuffer( const unsigned numConstraints,
     , _beta( 0.4f )
     , _betaInc( ( 1.0f - 0.4f ) / 100000.0f )
 {
-    _actions = torch::zeros( { static_cast<long>( bufferSize ), 1 }, torch::kFloat32 );
+    _actions =
+        torch::zeros( { static_cast<long>( bufferSize ), 1 }, torch::dtype( torch::kInt64 ) );
     _states = torch::zeros( { static_cast<long>( bufferSize ),
                               static_cast<long>( _numConstraints ),
                               static_cast<long>( TOTAL_FEATURES ) },
