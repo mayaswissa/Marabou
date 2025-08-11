@@ -362,6 +362,17 @@ void Agent::learn()
         _optimizer.step();
     softUpdate( _qNetworkLocal, _qNetworkTarget );
 
+    // ----- Decay supervised coefficient (phase-dependent) -----
+if (GlobalConfiguration::DON_TRAINING_PHASE == 2) {
+    // Linear decay with floor (your previous behavior)
+    const float min_lambda = 0.1f;            
+    _lambdaSup = std::max(min_lambda, _lambdaSup - _lambdaDecay);
+} else {
+    // Multiplicative decay elsewhere
+    const float min_lambda = 0.0f;                 // or reuse the same floor
+    _lambdaSup = std::max(min_lambda, _lambdaSup * _lambdaDecay);
+}
+
     // optional: decay supervised weight
     _lambdaSup *= _lambdaDecay;
 
