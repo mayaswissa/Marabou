@@ -20,7 +20,7 @@ class Agent
 public:
     Agent( unsigned numPlConstraints,
            unsigned numPhases,
-           const std::string &trainedAgentPath );
+           const std::string &trainedAgentPath = "" );
 
     // persistence
     void saveNetworks( const std::string &path ) const;
