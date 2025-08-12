@@ -54,8 +54,10 @@ Agent::Agent( const unsigned numPlConstraints,
     , _lambdaDecay( Options::get()->getFloat( Options::DQfD_LAMBDA_DECAY ) ) // repurposed: multiplicative
     , _margin( Options::get()->getFloat( Options::DQfD_MARGIN ) )
 {
-    _qNetworkLocal.to( device ).to( torch::kFloat32 );
-    _qNetworkTarget.to( device ).to( torch::kFloat32 );
+    _qNetworkLocal.to( device );
+    _qNetworkLocal.to( torch::kFloat32 );
+    _qNetworkTarget.to( device );
+    _qNetworkTarget.to( torch::kFloat32 );
 
     // hard-sync target ← local at init (not EMA)
     {
