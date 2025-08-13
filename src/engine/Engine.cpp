@@ -117,36 +117,36 @@ Engine::~Engine()
 }
 
 // DQN methods:
-void Engine::updateSoIScoreForConstraintInState( State &stateToUpdate,
-                                                 const int index,
-                                                 PiecewiseLinearConstraint *const &plConstraint,
-                                                 const Map<unsigned, double> &currentAssignment )
-{
-    auto currentPhase = plConstraint->getPhaseStatus();
-    if ( currentPhase == RELU_PHASE_ACTIVE || currentPhase == RELU_PHASE_INACTIVE ||
-         plConstraint->haveOutOfBoundVariables() )
-    {
-        stateToUpdate.updateSoIScoreForAgent( index, 0, 0 );
-        return;
-    }
-    LinearExpression costComponent;
-    LinearExpression activeCostComponent;
-    plConstraint->getCostFunctionComponent( activeCostComponent, RELU_PHASE_ACTIVE );
-    const double activeSoiScore = activeCostComponent.evaluate( currentAssignment );
-    LinearExpression inactiveCostComponent;
-    plConstraint->getCostFunctionComponent( inactiveCostComponent, RELU_PHASE_INACTIVE );
-    const double inactiveSoiScore = inactiveCostComponent.evaluate( currentAssignment );
-    stateToUpdate.updateSoIScoreForAgent( index, activeSoiScore, inactiveSoiScore );
-}
+// void Engine::updateSoIScoreForConstraintInState( State &stateToUpdate,
+//                                                  const int index,
+//                                                  PiecewiseLinearConstraint *const &plConstraint,
+//                                                  const Map<unsigned, double> &currentAssignment )
+// {
+//     auto currentPhase = plConstraint->getPhaseStatus();
+//     if ( currentPhase == RELU_PHASE_ACTIVE || currentPhase == RELU_PHASE_INACTIVE ||
+//          plConstraint->haveOutOfBoundVariables() )
+//     {
+//         stateToUpdate.updateSoIScoreForAgent( index, 0, 0 );
+//         return;
+//     }
+//     LinearExpression costComponent;
+//     LinearExpression activeCostComponent;
+//     plConstraint->getCostFunctionComponent( activeCostComponent, RELU_PHASE_ACTIVE );
+//     const double activeSoiScore = activeCostComponent.evaluate( currentAssignment );
+//     LinearExpression inactiveCostComponent;
+//     plConstraint->getCostFunctionComponent( inactiveCostComponent, RELU_PHASE_INACTIVE );
+//     const double inactiveSoiScore = inactiveCostComponent.evaluate( currentAssignment );
+//     stateToUpdate.updateSoIScoreForAgent( index, activeSoiScore, inactiveSoiScore );
+// }
 
 void Engine::updateToCurrentDQNState( State &stateToUpdate, const int numSplits )
 {
     int index = 0;
     auto constraintsToUpdateSoI = _soiManager->getConstraintsUpdatedInLastProposal();
     int phase;
-    Map<unsigned, double> currentAssignment;
-    for ( unsigned i = 0; i < getQuery()->getNumberOfVariables(); ++i )
-        currentAssignment[i] = _tableau->getValue( i );
+    // Map<unsigned, double> currentAssignment;
+    // for ( unsigned i = 0; i < getQuery()->getNumberOfVariables(); ++i )
+    //     currentAssignment[i] = _tableau->getValue( i );
     unsigned numUnfixedConstraints = 0;
     for ( const auto &plConstraint : _plConstraints )
     {
@@ -159,9 +159,9 @@ void Engine::updateToCurrentDQNState( State &stateToUpdate, const int numSplits 
                                     _boundManager.getUpperBound( variable ),
                                     _boundManager.getLowerBound( variable ) );
         stateToUpdate.updateConstraintPhase( index, phase );
-        if ( constraintsToUpdateSoI.exists( plConstraint ) )
-            updateSoIScoreForConstraintInState(
-                stateToUpdate, index, plConstraint, currentAssignment );
+        // if ( constraintsToUpdateSoI.exists( plConstraint ) )
+        //     updateSoIScoreForConstraintInState(
+        //         stateToUpdate, index, plConstraint, currentAssignment );
         stateToUpdate.updatePolarity( index, std::abs( plConstraint->computePolarity() ) );
         ReluConstraint *reluConstraint = dynamic_cast<ReluConstraint *>( plConstraint );
         if ( reluConstraint )
@@ -3316,24 +3316,24 @@ PiecewiseLinearConstraint *Engine::pickSplitPLConstraintByAgent()
             ENGINE_LOG( Stringf( "Guided: BaBsr heuristic" ).ascii() );
             plConstraint = pickSplitPLConstraintBasedOnBaBsrHeuristic();
             break;
-        case GlobalConfiguration::GuidedHeuristic::PSEUDO_IMPACT:
-            ENGINE_LOG( Stringf( "Guided: Pseudo-impact heuristic" ).ascii() );
-            if ( _smtCore.getStackDepth() > 3 )
-            {
-                ENGINE_LOG( Stringf( "Using highest score heuristics..." ).ascii() );
-                plConstraint = _smtCore.getConstraintsWithHighestScore();
-            }
-            else if ( !_preprocessedQuery->getInputVariables().empty() &&
-                      _preprocessedQuery->getInputVariables().size() <
-                          GlobalConfiguration::INTERVAL_SPLITTING_THRESHOLD )
-                plConstraint = pickSplitPLConstraintBasedOnIntervalWidth();
-            else
-            {
-                plConstraint = pickSplitPLConstraintBasedOnPolarity();
-                if ( plConstraint == NULL )
-                    plConstraint = _smtCore.getConstraintsWithHighestScore();
-            }
-            break;
+        // case GlobalConfiguration::GuidedHeuristic::PSEUDO_IMPACT:
+        //     ENGINE_LOG( Stringf( "Guided: Pseudo-impact heuristic" ).ascii() );
+        //     if ( _smtCore.getStackDepth() > 3 )
+        //     {
+        //         ENGINE_LOG( Stringf( "Using highest score heuristics..." ).ascii() );
+        //         plConstraint = _smtCore.getConstraintsWithHighestScore();
+        //     }
+        //     else if ( !_preprocessedQuery->getInputVariables().empty() &&
+        //               _preprocessedQuery->getInputVariables().size() <
+        //                   GlobalConfiguration::INTERVAL_SPLITTING_THRESHOLD )
+        //         plConstraint = pickSplitPLConstraintBasedOnIntervalWidth();
+        //     else
+        //     {
+        //         plConstraint = pickSplitPLConstraintBasedOnPolarity();
+        //         if ( plConstraint == NULL )
+        //             plConstraint = _smtCore.getConstraintsWithHighestScore();
+        //     }
+        //     break;
         }
         ReluConstraint *reluConstraint = dynamic_cast<ReluConstraint *>( plConstraint );
         if ( plConstraint && !reluConstraint )

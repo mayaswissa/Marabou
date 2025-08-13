@@ -61,15 +61,15 @@ void State::updateBounds( const unsigned constraintIndex,
     _stateData[constraintIndex * TOTAL_FEATURES + DQN_RELU_UPPER_BOUND] = upperBound;
 }
 
-void State::updateSoIScoreForAgent( const unsigned constraintIndex,
-                                    const double SoiActiveScore,
-                                    const double SoiInactiveScore )
-{
-    if ( constraintIndex >= _numConstraints )
-        return;
-    _stateData[constraintIndex * TOTAL_FEATURES + SOI_ACTIVE_SCORE] = SoiActiveScore;
-    _stateData[constraintIndex * TOTAL_FEATURES + SOI_INACTIVE_SCORE] = SoiInactiveScore;
-}
+// void State::updateSoIScoreForAgent( const unsigned constraintIndex,
+//                                     const double SoiActiveScore,
+//                                     const double SoiInactiveScore )
+// {
+//     if ( constraintIndex >= _numConstraints )
+//         return;
+//     _stateData[constraintIndex * TOTAL_FEATURES + SOI_ACTIVE_SCORE] = SoiActiveScore;
+//     _stateData[constraintIndex * TOTAL_FEATURES + SOI_INACTIVE_SCORE] = SoiInactiveScore;
+// }
 
 void State::updatePolarity( const unsigned constraintIndex, const double polarityScore )
 {
