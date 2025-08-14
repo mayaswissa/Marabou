@@ -1,33 +1,11 @@
-// DQNAgent.cpp — robust “best-of” variant (respects DQN_EXPLORATION_RATE)
 #include "DQNAgent.h"
 
 #include "Options.h"
 #include "RandomGlobals.h"
 
-#include <cmath>
-#include <limits>
 #include <random>
 #include <utility>
 
-// ───────────────────────── helpers ─────────────────────────
-static inline float perStepDecayToReach( float start, float floor, int steps )
-{
-    if ( steps <= 0 || start <= 0.0f || floor <= 0.0f ) return 1.0f;
-    floor = std::min( floor, start ); // never go up
-    return std::pow( floor / start, 1.0f / static_cast<float>( steps ) );
-}
-
-static inline void sanitizeInPlace( torch::Tensor &T )
-{
-    auto bad = ~torch::isfinite( T );
-    if ( bad.any().item<bool>() )
-    {
-        T.masked_fill_( bad, 0 );  // NaN/±inf → 0
-        T.clamp_( -1e9f, 1e9f );   // tame extremes
-    }
-}
-
-// ───────────────────────── ctor ─────────────────────────
 Agent::Agent( const unsigned numPlConstraints,
               const unsigned numPhases,
               const std::string &trainedAgentPath )
@@ -51,45 +29,54 @@ Agent::Agent( const unsigned numPlConstraints,
                                      Options::get()->getInt( Options::DQN_BATCH_SIZE ) ) )
     , _lossVerbosity( 0 )
     , _lambdaSup( Options::get()->getFloat( Options::DQfD_LAMBDA_SUP ) )
-    , _lambdaDecay( Options::get()->getFloat( Options::DQfD_LAMBDA_DECAY ) ) // repurposed: multiplicative
+    , _lambdaDecay( Options::get()->getFloat( Options::DQfD_LAMBDA_DECAY ) )
     , _margin( Options::get()->getFloat( Options::DQfD_MARGIN ) )
 {
     _qNetworkLocal.to( device );
-    _qNetworkLocal.to( torch::kFloat32 );
     _qNetworkTarget.to( device );
+    _qNetworkLocal.to( torch::kFloat32 );
     _qNetworkTarget.to( torch::kFloat32 );
-
-    // hard-sync target ← local at init (not EMA)
-    {
-        torch::NoGradGuard ng;
-        const auto lp = _qNetworkLocal.getParameters();
-        const auto tp = _qNetworkTarget.getParameters();
-        for ( size_t i = 0; i < lp.size(); ++i )
-            tp[i].data().copy_( lp[i].data() );
-    }
-
-    // stronger, longer DQfD: multiplicative anneal to a higher floor over ~1000 learns
-    const float lambdaFloor = std::max( 0.2f, std::min( 0.5f * _lambdaSup, 0.4f ) );
-    _lambdaDecay = perStepDecayToReach( _lambdaSup, lambdaFloor, /*steps*/ 1000 );
-
+    // If a load path is provided, load the networks
     if ( !trainedAgentPath.empty() )
         loadNetworks();
 }
 
-// ───────────────── save/load ─────────────────
 void Agent::saveNetworks( const std::string &path ) const
 {
-    { torch::serialize::OutputArchive a; _qNetworkLocal.save( a );  a.save_to( path + "_local.pth"  ); }
-    { torch::serialize::OutputArchive a; _qNetworkTarget.save( a ); a.save_to( path + "_target.pth" ); }
+    // Save local network
+    {
+        torch::serialize::OutputArchive local_archive;
+        _qNetworkLocal.save( local_archive );
+        local_archive.save_to( path + "_local.pth" );
+    }
+
+    // Save target network
+    {
+        torch::serialize::OutputArchive target_archive;
+        _qNetworkTarget.save( target_archive );
+        target_archive.save_to( path + "_target.pth" );
+    }
     DQN_LOG( "saved agent's networks" )
 }
+
 
 void Agent::loadNetworks()
 {
     try
     {
-        { torch::serialize::InputArchive a; a.load_from( _trainedAgentFilePath + "_local.pth" );  _qNetworkLocal.load( a ); }
-        { torch::serialize::InputArchive a; a.load_from( _trainedAgentFilePath + "_target.pth" ); _qNetworkTarget.load( a ); }
+        // Load local network
+        {
+            torch::serialize::InputArchive local_archive;
+            local_archive.load_from( _trainedAgentFilePath + "_local.pth" );
+            _qNetworkLocal.load( local_archive );
+        }
+
+        // Load target network
+        {
+            torch::serialize::InputArchive target_archive;
+            target_archive.load_from( _trainedAgentFilePath + "_target.pth" );
+            _qNetworkTarget.load( target_archive );
+        }
         DQN_LOG( "loaded trained agent networks" )
     }
     catch ( const torch::Error &e )
@@ -98,28 +85,34 @@ void Agent::loadNetworks()
     }
 }
 
-// ─────────────── stability utilities ───────────────
 bool Agent::handleInvalidGradients()
 {
     bool invalid = false;
     for ( auto &group : _optimizer.param_groups() )
+    {
         for ( auto &p : group.params() )
+        {
             if ( p.grad().defined() && ( torch::isnan( p.grad() ).any().item<bool>() ||
                                          torch::isinf( p.grad() ).any().item<bool>() ) )
             {
                 std::cerr << "Invalid gradient detected, resetting gradient..." << std::endl;
-                p.grad().detach_(); p.grad().zero_(); invalid = true;
+                p.grad().detach_();
+                p.grad().zero_();
+                invalid = true;
             }
+        }
+    }
     return invalid;
 }
 
-// ─────────────── environment hooks ───────────────
+
 void Agent::handleDone( const State &currentState, const unsigned numSplits )
 {
+    // Insert all actions from actions buffer to the replay buffer and learn.
     _replayedBuffer.handleDone( currentState, numSplits );
     _tStep = ( _tStep + 1 ) % Options::get()->getInt( Options::DQN_EXPLORATION_RATE );
     if ( GlobalConfiguration::DON_TRAINING_PHASE != 0 )
-        learn(); // learn at episode boundary
+        learn();
 }
 
 void Agent::stepAlternativeAction( const State &stateBeforeSplit,
@@ -141,7 +134,7 @@ void Agent::stepNewAction( const State &previousState,
                            const Action &action,
                            const bool done,
                            const unsigned numSplits,
-                           bool isDemo )
+                           const bool isDemo )
 {
     _replayedBuffer.pushActionEntry( action, previousState, numSplits, isDemo, done );
     _tStep = ( _tStep + 1 ) % Options::get()->getInt( Options::DQN_EXPLORATION_RATE );
@@ -149,209 +142,244 @@ void Agent::stepNewAction( const State &previousState,
         learn();
 }
 
-// ─────────────── masking of illegal actions ───────────────
-// Masks illegal (fixed rows or NOT_FIXED phase) with a large finite negative.
-// Returns [B] bool tensor: terminal rows with no legal action.
-torch::Tensor Agent::maskQInPlace( const torch::Tensor &state, torch::Tensor &Q ) const
+torch::Tensor Agent::applyActionMask( const torch::Tensor &tensorState,
+                                      const torch::Tensor &QValues ) const
 {
-    constexpr float NEG = -1e9f;
-    const auto opts = Q.options();     // device + dtype
-    auto s = state.to( opts );
-
+    const int64_t P = static_cast<int64_t>( _numPhases );
     torch::Tensor notFixed;
-    int64_t B = 1, C = (int64_t)_numPlConstraints, P = (int64_t)_numPhases;
-    if ( s.dim() == 2 )
-        notFixed = s.select( 1, (int64_t)DQN_RELU_NOT_FIXED_VALUE ).unsqueeze( 0 ); // [1, C]
-    else
-    {
-        notFixed = s.select( 2, (int64_t)DQN_RELU_NOT_FIXED_VALUE ); // [B, C]
-        B = notFixed.size( 0 ); C = notFixed.size( 1 );
+    int64_t B = 1;
+    auto C = static_cast<int64_t>( _numPlConstraints );
+    if ( tensorState.dim() == 2 )
+    { // [C,F]
+        notFixed = tensorState.select( 1, static_cast<int64_t>( DQN_RELU_NOT_FIXED_VALUE ) )
+                       .unsqueeze( 0 ); // [1,C]
     }
+    else
+    { // [B,C,F]
+        notFixed =
+            tensorState.select( 2, static_cast<int64_t>( DQN_RELU_NOT_FIXED_VALUE ) ); // [B,C]
+        B = notFixed.size( 0 );
+        C = notFixed.size( 1 );
+    }
+    const auto rowLegal = notFixed.gt( 0.5 ); // [B,C] bool
+    const auto phaseIdx =
+        torch::arange( P, torch::TensorOptions().device( QValues.device() ).dtype( torch::kLong ) )
+            .view( { 1, 1, -1 } );
+    const auto phaseLegal = phaseIdx.ne( static_cast<int64_t>( DQN_RELU_NOT_FIXED ) ); // [1,1,P]
+                                                                                       // bool
+    const auto legal3D = rowLegal.unsqueeze( 2 ) & phaseLegal;                         // [B,C,P]
+    const auto legal2D = legal3D.reshape( { B, C * P } );                              // [B,A]
 
-    auto rowLegal       = notFixed.gt( 0.5 );              // [B, C]
-    auto terminalByMask = rowLegal.sum( 1 ).eq( 0 );       // [B]
-    auto phaseIdx       = torch::arange( P, torch::TensorOptions().device( Q.device() ).dtype( torch::kLong ) ).view( { 1,1,-1 } );
-    auto phaseLegal     = phaseIdx.ne( (int64_t)DQN_RELU_NOT_FIXED ); // [1,1,P]
-    auto legal3D        = rowLegal.unsqueeze( 2 ) & phaseLegal;       // [B,C,P]
+    if ( QValues.dim() == 1 )
+        QValues.masked_fill_( ~legal2D.view( { -1 } ), -1e9f );
 
-    if ( Q.dim() == 3 ) Q.masked_fill_( ~legal3D, NEG );                         // [B,C,P]
-    else                Q.masked_fill_( ( ~legal3D ).reshape( { B, C*P } ), NEG ); // [B,A]
+    else
+        QValues.masked_fill_( ~legal2D, -1e9f );
 
+    // true where row has zero legal actions
+    const auto terminalByMask = legal2D.sum( 1 ).eq( 0 );
     return terminalByMask;
 }
-
-// ─────────────── policies ───────────────
 std::unique_ptr<Action> Agent::actBestAction( const State &state )
 {
     torch::NoGradGuard ng;
     _qNetworkLocal.eval();
-
     const auto tensorState = state.toTensor().to( device );
-    auto QValues = _qNetworkLocal.forward( tensorState );
-    sanitizeInPlace( QValues );
-    if ( maskQInPlace( tensorState, QValues ).item<bool>() )
+    const torch::Tensor QValues = _qNetworkLocal.forward( tensorState );
+    _qNetworkLocal.train();
+
+    auto termMask = applyActionMask( tensorState, QValues );
+    if ( termMask.to( torch::kCPU ).item<bool>() )
     {
-        _qNetworkLocal.train();
-        return nullptr;
+        std::cerr << "Error: no valid next actions!" << std::endl;
+        throw std::runtime_error( "no valid next actions." );
     }
 
     unsigned actionIndex = QValues.argmax( 1 ).item<int>();
-    _qNetworkLocal.train();
-
     auto [constraint, phase] = _actionSpace.decodeActionIndex( actionIndex );
     return std::make_unique<Action>( _numPhases, _numPlConstraints, constraint, phase );
 }
 
 std::unique_ptr<Action> Agent::actRandomly( const State &state )
 {
-    const auto s = state.toTensor(); // [C, F] CPU
-    const auto notFixedCol =
-        s.index( { torch::indexing::Slice(), (int64_t)DQN_RELU_NOT_FIXED_VALUE } ).to( torch::kFloat32 );
+    const auto tensorState = state.toTensor();
+    auto reluNotFixedColumn = tensorState.index(
+        { torch::indexing::Slice(), static_cast<int64_t>( DQN_RELU_NOT_FIXED_VALUE ) } );
+    auto validRandomMask = ( reluNotFixedColumn == 1 );
+    const torch::Tensor validRandomIndices = validRandomMask.nonzero();
 
-    std::vector<unsigned> candidates; candidates.reserve( _numPlConstraints );
-    for ( unsigned c = 0; c < _numPlConstraints; ++c )
-        if ( notFixedCol[c].item<float>() > 0.5f ) candidates.push_back( c );
+    const auto k = validRandomIndices.size( 0 );
+    if ( k == 0 )
+        return nullptr;
 
-    if ( candidates.empty() ) return nullptr;
+    int row = RandomGlobals::instance().randInt( 0, static_cast<int>( k ) - 1 );
+    const unsigned actionConstraint = validRandomIndices.index( { row, 0 } ).item<int>();
 
-    const int pick = RandomGlobals::instance().randInt( 0, (int)candidates.size() - 1 );
-    const unsigned constraint = candidates[(size_t)pick];
-    const unsigned phase = ( RandomGlobals::instance().randInt( 0, 1 ) == 0 )
-                             ? (unsigned)DQN_RELU_ACTIVE
-                             : (unsigned)DQN_RELU_INACTIVE;
+    // pick a random phase
+    const unsigned actionPhase =
+        RandomGlobals::instance().randInt( RELU_PHASE_ACTIVE, RELU_PHASE_INACTIVE );
 
+    const unsigned actionIndex = _actionSpace.getActionIndex( actionConstraint, actionPhase );
+    auto [constraint, phase] = _actionSpace.decodeActionIndex( actionIndex );
     return std::make_unique<Action>( _numPhases, _numPlConstraints, constraint, phase );
 }
 
-// ─────────────── learning ───────────────
+
 void Agent::learn()
 {
     auto batch = _replayedBuffer.sample();
-    if ( batch.indices.empty() ) return;
+    if ( batch.indices.empty() )
+        return;
 
-    // indices [B]
-    std::vector<int64_t> idx64( batch.indices.begin(), batch.indices.end() );
-    auto idxTensor = torch::tensor( idx64, torch::dtype( torch::kLong ) );
+    auto idxTensor = torch::tensor( std::vector<long>( batch.indices.begin(), batch.indices.end() ),
+                                    torch::kLong )
+                         .to( device );
+    auto states = _replayedBuffer.getStates();
+    const auto statesTensor = _replayedBuffer.getStates().index( { idxTensor } ).to( device );
+    const auto actionsTensor =
+        _replayedBuffer.getActions().index( { idxTensor } ).to( device ).to( torch::kLong );
+    const auto rewardsTensor =
+        _replayedBuffer.getRewards().index( { idxTensor } ).to( device ).to( torch::kFloat32 );
+    const auto nextStatesTensor =
+        _replayedBuffer.getNextStates().index( { idxTensor } ).to( device );
+    const auto doneTensor =
+        _replayedBuffer.getDones().index( { idxTensor } ).to( device ).to( torch::kUInt8 );
+    const auto QExpected = _qNetworkLocal.forward( statesTensor )
+                               .gather( 1, actionsTensor )
+                               .squeeze( -1 )
+                               .to( torch::kFloat32 );
+    auto QTargets = rewardsTensor;
 
-    // tensors
-    auto statesTensor     = _replayedBuffer.getStates().index( { idxTensor } ).to( device );
-    auto actionsTensorB   = _replayedBuffer.getActions().index( { idxTensor } ).to( device ).to( torch::kLong );     // [B]
-    auto rewardsTensor    = _replayedBuffer.getRewards().index( { idxTensor } ).to( device ).to( torch::kFloat32 );  // [B]
-    auto nextStatesTensor = _replayedBuffer.getNextStates().index( { idxTensor } ).to( device );
-    auto doneTensor       = _replayedBuffer.getDones().index( { idxTensor } ).to( device ).to( torch::kBool ).view( { -1 } );
-
-    // Q(s,a)
-    auto Qs = _qNetworkLocal.forward( statesTensor );   // [B, A]
-    sanitizeInPlace( Qs );
-    auto QExpected = Qs.gather( 1, actionsTensorB.view( { -1, 1 } ) ).squeeze( 1 ).to( torch::kFloat32 ); // [B]
-
-    // ----- Double DQN targets (scoped no-grad) -----
-    torch::Tensor QTargets;
+    // Double DQN : Use local network to select the best action for next states
+    auto forwardLocalNet = _qNetworkLocal.forward( nextStatesTensor );
+    auto termMask = applyActionMask( nextStatesTensor, forwardLocalNet );
+    auto bad = ( ( ~doneTensor ) & termMask );
+    ;
+    if ( bad.any().to( torch::kCPU ).item<bool>() )
     {
-        torch::NoGradGuard ng;
-        auto next_local = _qNetworkLocal.forward( nextStatesTensor ); // [B, A]
-        sanitizeInPlace( next_local );
-        auto termMask     = maskQInPlace( nextStatesTensor, next_local );
-        auto next_actions = next_local.argmax( 1 ).view( { -1, 1 } ); // [B,1]
-
-        auto next_target = _qNetworkTarget.forward( nextStatesTensor ); // [B, A]
-        sanitizeInPlace( next_target );
-        maskQInPlace( nextStatesTensor, next_target );
-        auto targetQValuesNextState = next_target.gather( 1, next_actions ).squeeze( 1 ); // [B]
-
-        auto notDone = ( ( ~doneTensor ) & ( ~termMask ) ).to( torch::kFloat32 );
-        QTargets = rewardsTensor + GAMMA * targetQValuesNextState * notDone; // [B]
+        std::cerr << "Error: no valid next actions!" << std::endl;
+        throw std::runtime_error( "no valid next actions." );
     }
+    const auto localQValuesNextState = forwardLocalNet.detach().argmax( 1 );
+
+    // Use target network to calculate the Q-value of these actions
+    auto forwardTargetNet = _qNetworkTarget.forward( nextStatesTensor );
+    termMask = applyActionMask( nextStatesTensor, forwardTargetNet );
+    bad = ( ( ~doneTensor ) & termMask );
+    if ( bad.any().to( torch::kCPU ).item<bool>() )
+    {
+        std::cerr << "Error: no valid next actions!" << std::endl;
+        throw std::runtime_error( "no valid next actions." );
+    }
+    const auto targetQValuesNextState =
+        forwardTargetNet.detach().gather( 1, localQValuesNextState.unsqueeze( -1 ) ).squeeze( -1 );
+    // Calculate Q targets for current states
+    QTargets =
+        rewardsTensor + GAMMA * targetQValuesNextState * ( 1 - doneTensor.to( torch::kFloat32 ) );
 
     if ( torch::isnan( QTargets ).any().item<bool>() )
-        throw std::runtime_error( "NaN detected in QTargets." );
-
-    // TD loss (PER-weighted, MSE)
-    auto td_errors = torch::mse_loss( QExpected, QTargets.detach(), torch::Reduction::None ); // [B]
-    auto weights   = torch::tensor( batch.weights, statesTensor.options().dtype( torch::kFloat32 ) ).to( device );
-    weights = weights.clamp_min( 1e-8 ); // keep scale / avoid zeros
-    auto weightedTdLoss = ( td_errors * weights ).mean();
-
-    // DQfD margin — only on demo samples
-    std::vector<int64_t> demo_mask_int( batch.isDemo.begin(), batch.isDemo.end() );
-    auto demo_mask = torch::tensor( demo_mask_int, torch::kLong ).to( device ).to( torch::kFloat32 ); // [B]
-
-    torch::Tensor margin_loss = torch::zeros( {}, statesTensor.options().dtype( torch::kFloat32 ) );
-    if ( demo_mask.sum().item<float>() > 0.0f )
     {
-        auto all_q = _qNetworkLocal.forward( statesTensor ); // [B, A]
-        sanitizeInPlace( all_q );
-        maskQInPlace( statesTensor, all_q );
-
-        auto a = actionsTensorB.view( { -1 } ); // [B]
-        auto one_hot = torch::nn::functional::one_hot( a, (int64_t)_numActions )
-                           .to( device ).to( torch::kFloat32 ); // [B, A]
-        auto non_selected = 1.0f - one_hot;
-        auto shifted      = all_q + non_selected * _margin;        // margin on non-selected
-        auto max_other    = std::get<0>( shifted.max( 1 ) );        // [B]
-        auto q_demo       = all_q.gather( 1, a.unsqueeze( 1 ) ).squeeze( 1 ); // [B]
-        auto raw_margin   = torch::relu( max_other - q_demo ) * demo_mask;    // [B]
-        margin_loss       = raw_margin.sum() / demo_mask.sum().clamp_min( 1.0f );
+        std::cerr << "Error: QTargets contains NaN values!" << std::endl;
+        throw std::runtime_error( "NaN detected in QTargets." );
     }
-
-    auto loss = weightedTdLoss + _lambdaSup * margin_loss;
-
-    // log occasionally
+    if ( torch::isnan( QTargets ).any().item<bool>() )
+    {
+        std::cerr << "Error: QTargets contains NaN values! Dumping sample data:" << std::endl;
+        std::cerr << "States: " << statesTensor << std::endl;
+        std::cerr << "Actions: " << actionsTensor << std::endl;
+        std::cerr << "Rewards: " << rewardsTensor << std::endl;
+        std::cerr << "Next States: " << nextStatesTensor << std::endl;
+        throw std::runtime_error( "NaN detected in QTargets." );
+    }
+    // TD loss
+    auto td_errors = torch::smooth_l1_loss( QExpected, QTargets.detach(), torch::Reduction::None );
+    auto weights = torch::tensor( batch.weights, statesTensor.options().dtype( torch::kFloat32 ) )
+                       .to( device );
+    weights = weights / weights.mean().clamp_min( 1e-8 );
+    auto weightedTdLoss = ( td_errors * weights ).mean();
+    // Margin loss for demonstration samples
+    std::vector<int64_t> demo_mask_int( batch.isDemo.begin(), batch.isDemo.end() );
+    auto all_q = _qNetworkLocal.forward( statesTensor );
+    termMask = applyActionMask( statesTensor, all_q );
+    bad = ( ( ~doneTensor ) & termMask );
+    if ( bad.any().to( torch::kCPU ).item<bool>() )
+    {
+        std::cerr << "Error: no valid next actions!" << std::endl;
+        throw std::runtime_error( "no valid next actions." );
+    }
+    auto demo_mask = torch::tensor( demo_mask_int, torch::TensorOptions().dtype( torch::kInt64 ) )
+                         .to( device )
+                         .to( torch::kFloat32 );
+    auto flat_actions = actionsTensor.squeeze( -1 );
+    auto one_hot =
+        torch::nn::functional::one_hot( flat_actions, static_cast<int64_t>( _numActions ) )
+            .to( device )
+            .to( torch::kFloat32 );
+    auto non_demo_mask = ( 1.0f - one_hot );
+    auto shifted = all_q + non_demo_mask * _margin;
+    auto max_other = std::get<0>( shifted.max( 1 ) );
+    auto q_demo = all_q.gather( 1, flat_actions.unsqueeze( 1 ) ).squeeze( 1 );
+    auto raw_margin = torch::relu( max_other - q_demo ) * demo_mask;
+    auto marginLoss = raw_margin.sum() / demo_mask.sum().clamp_min( 1.0 );
+    // Total loss
+    const auto loss = weightedTdLoss + _lambdaSup * marginLoss;
     _lossVerbosity = ( _lossVerbosity + 1 ) % 100;
     if ( _lossVerbosity == 0 )
     {
-        DQN_LOG( Stringf( "TD Loss: %.6f  Margin: %.6f  Total: %.6f  lambdaSup: %.3f",
-                          weightedTdLoss.item<double>(),
-                          margin_loss.item<double>(),
-                          loss.item<double>(),
-                          _lambdaSup )
-                     .ascii() );
+        DQN_LOG( Stringf( "TD Loss : %.10f\n", weightedTdLoss.item<double>() ).ascii() );
+        DQN_LOG( Stringf( "MARGIN Loss : %.10f\n", marginLoss.item<double>() ).ascii() );
+        DQN_LOG( Stringf( "Loss : %.10f\n", loss.item<double>() ).ascii() );
     }
 
-    // backprop
+    // Backpropagation
     _optimizer.zero_grad();
     loss.backward();
     torch::nn::utils::clip_grad_norm_( _qNetworkLocal.parameters(), 1.0 );
     if ( !handleInvalidGradients() )
         _optimizer.step();
+    softUpdate( _qNetworkLocal, _qNetworkTarget );
 
-    // soft target update (EMA)
-    {
-        torch::NoGradGuard ng2;
-        softUpdate( _qNetworkLocal, _qNetworkTarget );
-    }
-
-    // update PER priorities: |TD error| + epsilon
-    auto abs_td = torch::abs( QTargets.detach() - QExpected.detach() ).to( torch::kCPU ); // [B]
-    auto acc = abs_td.accessor<float, 1>();
     for ( size_t i = 0; i < batch.indices.size(); ++i )
     {
-        float base_eps = batch.isDemo[i] ? (float)_replayedBuffer.getEpsilonDemo()
-                                         : (float)_replayedBuffer.getEpsilonAgent();
-        float p = acc[i] + base_eps;
-        if ( !std::isfinite( p ) ) p = base_eps;
-        _replayedBuffer.updatePriority( batch.indices[i], p );
+        float delta = QTargets[i].item<float>() - QExpected[i].item<float>();
+        float raw_p = std::fabs( delta ) + ( batch.isDemo[i] ? _replayedBuffer.getEpsilonDemo()
+                                                             : _replayedBuffer.getEpsilonAgent() );
+        _replayedBuffer.updatePriority( batch.indices[i], raw_p );
     }
 
-    // anneal λ_sup multiplicatively during RL phase
     if ( GlobalConfiguration::DON_TRAINING_PHASE == 2 )
-        _lambdaSup = std::max( 0.2f, _lambdaSup * _lambdaDecay );
+        _lambdaSup = std::fmax( 0.1f, _lambdaSup - _lambdaDecay );
 }
 
-// EMA target update with tau
-void Agent::softUpdate( const QNetwork &localModel, const QNetwork &targetModel )
+
+void Agent::softUpdate( const QNetwork &localModel, QNetwork &targetModel )
 {
-    const auto lp = localModel.getParameters();
-    const auto tp = targetModel.getParameters();
-    for ( size_t i = 0; i < lp.size(); ++i )
+    const auto localParams = localModel.getParameters();
+    const auto targetParams = targetModel.getParameters();
+    for ( size_t i = 0; i < localParams.size(); ++i )
     {
-        tp[i].data().copy_( GlobalConfiguration::DQN_TAU * lp[i].data() +
-                            ( 1.0 - GlobalConfiguration::DQN_TAU ) * tp[i].data() );
+        targetParams[i].data().copy_( GlobalConfiguration::DQN_TAU * localParams[i].data() +
+                                      ( 1.0 - GlobalConfiguration::DQN_TAU ) *
+                                          targetParams[i].data() );
     }
 }
 
-// ─────────────── misc ───────────────
-torch::Device Agent::getDevice() const { return device; }
-int Agent::getActionStackSize() const { return _replayedBuffer.getActionStackSize(); }
-int Agent::getReplayBufferSize() const { return _replayedBuffer.getNumRevisitExperiences(); }
-void Agent::schedulersStep() { _scheduler.step(); }
+torch::Device Agent::getDevice() const
+{
+    return device;
+}
+
+int Agent::getActionStackSize() const
+{
+    return _replayedBuffer.getActionStackSize();
+}
+
+int Agent::getReplayBufferSize() const
+{
+    return _replayedBuffer.getNumRevisitExperiences();
+}
+
+void Agent::schedulersStep()
+{
+    _scheduler.step();
+}

@@ -32,14 +32,20 @@ State &State::operator=( const State &other )
 
 torch::Tensor State::toTensor() const
 {
-    auto stateTensor = torch::tensor( _stateData );
-    stateTensor = stateTensor.to( torch::kFloat32 );
-    return stateTensor.view( {
-        static_cast<long>( _numConstraints ),
-        static_cast<long>( TOTAL_FEATURES ),
-    } );
-}
+    auto stateTensor =
+        torch::tensor( _stateData, torch::dtype( torch::kFloat32 ) )
+            .view( { static_cast<long>( _numConstraints ), static_cast<long>( TOTAL_FEATURES ) } );
 
+    // Replace +-inf with large finite values
+    constexpr float INF_CAP = 1e9f;
+    stateTensor.masked_fill_( stateTensor == std::numeric_limits<float>::infinity(), INF_CAP );
+    stateTensor.masked_fill_( stateTensor == -std::numeric_limits<float>::infinity(), -INF_CAP );
+
+    if ( !torch::isfinite( stateTensor ).all().to( torch::kCPU ).item<bool>() )
+        throw std::runtime_error( "Non-finite features after State::toTensor()" );
+
+    return stateTensor;
+}
 
 void State::updateConstraintPhase( const unsigned constraintIndex, const unsigned newPhase )
 {
@@ -47,9 +53,9 @@ void State::updateConstraintPhase( const unsigned constraintIndex, const unsigne
         return;
 
     size_t rowStart = constraintIndex * TOTAL_FEATURES;
-	for (unsigned k = 0; k < DQN_NUM_PHASES; ++k)
-    	_stateData[rowStart + DQN_RELU_NOT_FIXED_VALUE + k] = 0.0;
-	_stateData[rowStart + DQN_RELU_NOT_FIXED_VALUE + newPhase] = 1.0;
+    for ( unsigned k = 0; k < DQN_NUM_PHASES; ++k )
+        _stateData[rowStart + DQN_RELU_NOT_FIXED_VALUE + k] = 0.0;
+    _stateData[rowStart + DQN_RELU_NOT_FIXED_VALUE + newPhase] = 1.0;
 }
 void State::updateBounds( const unsigned constraintIndex,
                           const double upperBound,
