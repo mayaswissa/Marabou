@@ -1,8 +1,8 @@
 #ifndef DQNAGENT_H
 #define DQNAGENT_H
 
-#include "DQNActionSpace.h"
 #include "DQNAction.h"
+#include "DQNActionSpace.h"
 #include "DQNNetwork.h"
 #include "DQNReplayBuffer.h"
 #include "DQNState.h"
@@ -54,7 +54,6 @@ private:
     float _lambdaDecay;
     float _margin;
     bool handleInvalidGradients();
-    torch::Tensor applyActionMask( const torch::Tensor &tensorState,
-                                   const torch::Tensor &QValues ) const;
+    torch::Tensor applyActionMask( const torch::Tensor &tensorState, torch::Tensor &QValues ) const;
 };
 #endif
