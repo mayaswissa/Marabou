@@ -704,13 +704,14 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                     // smtCore performed split
                     else if ( smtStep == NEW_ACTION )
                     {
+                        const unsigned numSplitsBefore = _numSplits > 0 ? _numSplits - 1 : 0;
                         if ( _action == nullptr )
-                            _agent->stepFakeAction( *_previousState, _numSplits );
+                            _agent->stepFakeAction( *_previousState, numSplitsBefore );
                         else
                             _agent->stepNewAction( *_previousState,
                                                    *_action,
                                                    false,
-                                                   _numSplits,
+                                                   numSplitsBefore,
                                                    GlobalConfiguration::DON_TRAINING_PHASE == 0 );
                     }
                 }
