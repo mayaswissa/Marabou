@@ -230,11 +230,8 @@ void Agent::learn()
     if ( batch.indices.empty() )
         return;
 
-    auto idxTensor =
-        torch::tensor( std::vector<int64_t>( batch.indices.begin(), batch.indices.end() ),
-                       torch::kLong )
-            .to( device );
-    auto states = _replayedBuffer.getStates();
+    auto idxTensor = torch::tensor(
+        std::vector<int64_t>( batch.indices.begin(), batch.indices.end() ), torch::kLong );
     const auto statesTensor = _replayedBuffer.getStates().index( { idxTensor } ).to( device );
     const auto actionsTensor =
         _replayedBuffer.getActions().index( { idxTensor } ).to( device ).to( torch::kLong );
@@ -254,20 +251,21 @@ void Agent::learn()
     auto QTargets = rewardsTensor;
 
     // Double DQN : Use local network to select the best action for next states
-    auto forwardLocalNet = _qNetworkLocal.forward(nextStatesTensor);
-    auto termMaskLocal   = applyActionMask(nextStatesTensor, forwardLocalNet); // [B] bool
-    auto bad = ((~doneTensor) & termMaskLocal);
-    if (bad.any().to(torch::kCPU).item<bool>()) {
+    auto forwardLocalNet = _qNetworkLocal.forward( nextStatesTensor );
+    auto termMaskLocal = applyActionMask( nextStatesTensor, forwardLocalNet ); // [B] bool
+    auto bad = ( ( ~doneTensor ) & termMaskLocal );
+    if ( bad.any().to( torch::kCPU ).item<bool>() )
+    {
         std::cerr << "Error: no valid next actions!" << std::endl;
-        throw std::runtime_error("no valid next actions.");
+        throw std::runtime_error( "no valid next actions." );
     }
-    const auto localQValuesNextState = forwardLocalNet.detach().argmax(1).view({-1,1});
+    const auto localQValuesNextState = forwardLocalNet.detach().argmax( 1 ).view( { -1, 1 } );
 
     // Target evaluation for those actions (mask values, ignore returned mask)
-    auto forwardTargetNet = _qNetworkTarget.forward(nextStatesTensor);
-    (void)applyActionMask(nextStatesTensor, forwardTargetNet);
+    auto forwardTargetNet = _qNetworkTarget.forward( nextStatesTensor );
+    (void)applyActionMask( nextStatesTensor, forwardTargetNet );
     const auto targetQValuesNextState =
-        forwardTargetNet.detach().gather(1, localQValuesNextState).squeeze(1);
+        forwardTargetNet.detach().gather( 1, localQValuesNextState ).squeeze( 1 );
 
     auto notDone = ( ( ~doneTensor ) & ( ~termMaskLocal ) ).to( torch::kFloat32 );
     QTargets = rewardsTensor + GAMMA * targetQValuesNextState * notDone;
@@ -320,12 +318,14 @@ void Agent::learn()
         _optimizer.step();
     softUpdate( _qNetworkLocal, _qNetworkTarget );
 
-    auto abs_td = (QTargets.detach() - QExpected.detach()).abs().to(torch::kCPU).contiguous(); // [B]
-    auto acc = abs_td.accessor<float,1>();
-    for (size_t i = 0; i < batch.indices.size(); ++i) {
+    auto abs_td =
+        ( QTargets.detach() - QExpected.detach() ).abs().to( torch::kCPU ).contiguous(); // [B]
+    auto acc = abs_td.accessor<float, 1>();
+    for ( size_t i = 0; i < batch.indices.size(); ++i )
+    {
         float base = batch.isDemo[i] ? static_cast<float>( _replayedBuffer.getEpsilonDemo() )
                                      : static_cast<float>( _replayedBuffer.getEpsilonAgent() );
-        _replayedBuffer.updatePriority(batch.indices[i], acc[i] + base);
+        _replayedBuffer.updatePriority( batch.indices[i], acc[i] + base );
     }
 
     if ( GlobalConfiguration::DON_TRAINING_PHASE == 2 )

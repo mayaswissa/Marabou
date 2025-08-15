@@ -78,5 +78,5 @@ torch::Tensor Action::actionToTensor() const
 {
     int combinedIndex = static_cast<int>( _plConstraintActionIndex ) * _numPhases +
                         static_cast<int>( _phaseActionIndex );
-    return torch::tensor( { combinedIndex }, dtype( torch::kInt64 ) );
+    return torch::tensor( { combinedIndex }, torch::dtype( torch::kInt64 ) );
 }
