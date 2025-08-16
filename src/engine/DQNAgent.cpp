@@ -39,6 +39,9 @@ Agent::Agent( const unsigned numPlConstraints,
     // If a load path is provided, load the networks
     if ( !trainedAgentPath.empty() )
         loadNetworks();
+    ASSERT(_numActions == _numPlConstraints * _numPhases);
+    static_assert(DQN_RELU_ACTIVE   == DQN_RELU_NOT_FIXED + 1);
+    static_assert(DQN_RELU_INACTIVE == DQN_RELU_NOT_FIXED + 2);
 }
 
 void Agent::saveNetworks( const std::string &path ) const
@@ -145,87 +148,38 @@ void Agent::stepNewAction( const State &previousState,
 torch::Tensor Agent::applyActionMask( const torch::Tensor &tensorState,
                                       torch::Tensor &QValues ) const
 {
-    const int64_t P = static_cast<int64_t>( _numPhases );
-    torch::Tensor notFixed;
+    const int64_t P = (int64_t)_numPhases;
+    const int64_t C = (int64_t)_numPlConstraints;
     int64_t B = 1;
-    auto C = static_cast<int64_t>( _numPlConstraints );
-    if ( tensorState.dim() != 2 && tensorState.dim() != 3 )
-        std::cerr << "[DBG][mask] tensorState.dim()=" << tensorState.dim()
-                  << " (expected 2 or 3)\n";
-    if ( P != DQN_NUM_PHASES )
-        std::cerr << "[DBG][mask] _numPhases=" << P
-                  << " (expected DQN_NUM_PHASES=" << DQN_NUM_PHASES << ")\n";
 
-    if ( tensorState.dim() == 2 )
-    { // [C,F]
-        notFixed = tensorState.select( 1, static_cast<int64_t>( DQN_RELU_NOT_FIXED_VALUE ) )
-                       .unsqueeze( 0 ); // [1,C]
-    }
-    else
-    { // [B,C,F]
-        notFixed =
-            tensorState.select( 2, static_cast<int64_t>( DQN_RELU_NOT_FIXED_VALUE ) ); // [B,C]
-        B = notFixed.size( 0 );
-        C = notFixed.size( 1 );
+    torch::Tensor notFixed;
+    if (tensorState.dim() == 2) {                          // [C,F]
+        notFixed = tensorState
+            .select(1, (int64_t)DQN_RELU_NOT_FIXED_VALUE)
+            .unsqueeze(0);
+    } else {                                               // [B,C,F]
+        notFixed = tensorState
+            .select(2, (int64_t)DQN_RELU_NOT_FIXED_VALUE); // [B,C]
+        B = notFixed.size(0);
     }
 
-    // Build masks
-    auto rowLegal = notFixed.gt( 0.5 ).to( torch::kBool ).to( QValues.device() ); // [B,C]
-    const auto phaseIdx =
-        torch::arange( P, torch::TensorOptions().device( QValues.device() ).dtype( torch::kLong ) )
-            .view( { 1, 1, -1 } );
-    auto phaseLegal =
-        phaseIdx.ne( static_cast<int64_t>( DQN_RELU_NOT_FIXED ) ).to( torch::kBool ); // [1,1,P]
+    // Legal constraints - not fixed
+    auto legalRows = notFixed.gt(0.5).to(torch::kBool).to(QValues.device()); // [B,C]
 
-    const auto legal3D = rowLegal.unsqueeze( 2 ) & phaseLegal; // [B,C,P]
-    const auto legal2D = legal3D.reshape( { B, C * P } );      // [B,A]
+    auto qBAP = (QValues.dim()==1 ? QValues.view({1, C*P}) : QValues).view({B, C, P});
 
-    const int64_t A_expected = C * P;
-    const int64_t A_actual = ( QValues.dim() == 1 ) ? QValues.size( 0 ) : QValues.size( 1 );
-    if ( A_actual != A_expected )
-        std::cerr << "[DBG][mask] A mismatch: expected " << A_expected << " got " << A_actual
-                  << " (B=" << B << ", C=" << C << ", P=" << P << ", Q.dim=" << QValues.dim()
-                  << ")\n";
-    if ( legal2D.device() != QValues.device() )
-        std::cerr << "[DBG][mask] device mismatch between mask (" << legal2D.device()
-                  << ") and QValues (" << QValues.device() << ")\n";
+    qBAP.masked_fill_( (~legalRows).unsqueeze(2), -1e9f );
 
-    // Apply mask
-    if ( QValues.dim() == 1 )
-        QValues.masked_fill_( ~legal2D.view( { -1 } ), -1e9f );
-    else
-        QValues.masked_fill_( ~legal2D, -1e9f );
+    qBAP.index_put_({ torch::indexing::Slice(),
+                      torch::indexing::Slice(),
+                      (int64_t)DQN_RELU_NOT_FIXED }, -1e9f);
 
-    // Numeric check
-    if ( !torch::isfinite( QValues ).all().item<bool>() )
-        std::cerr << "[DBG][mask] non-finite values detected in QValues after masking\n";
+    QValues = qBAP.view({B, C*P});
+    QValues = torch::where(torch::isfinite(QValues), QValues, torch::full_like(QValues, -1e9f));
 
-    // Verify NOT_FIXED phase (j=0) fully masked (≤ -1e8)
-    auto q2 = ( QValues.dim() == 1 ) ? QValues.view( { 1, -1 } ) : QValues; // [B,A]
-    auto q3 = q2.view( { B, C, P } );                                       // [B,C,P]
-    const float max_not_fixed = q3.index( { torch::indexing::Slice(),
-                                            torch::indexing::Slice(),
-                                            static_cast<int64_t>( DQN_RELU_NOT_FIXED ) } )
-                                    .max()
-                                    .item<float>();
-    if ( max_not_fixed > -1e8f )
-        std::cerr << "[DBG][mask] NOT_FIXED phase not fully masked; max=" << max_not_fixed << "\n";
-
-
-
-    auto fixedMask2D = ( ~rowLegal ); // [B,C] bool
-    if ( fixedMask2D.any().item<bool>() )
-    {
-        auto fixedMask3D = fixedMask2D.unsqueeze( 2 ).expand( { B, C, P } ); // [B,C,P] bool
-        auto sel = q3.masked_select( fixedMask3D );                          // 1-D
-        const float max_fixed_rows = sel.numel() ? sel.max().item<float>() : -1e9f;
-        if ( max_fixed_rows > -1e8f )
-            std::cerr << "[DBG][mask] some fixed rows not fully masked; max=" << max_fixed_rows
-                      << "\n";
-    }
-
-    return legal2D.sum( 1 ).eq( 0 );
+    return legalRows.sum(1).eq(0);
 }
+
 
 std::unique_ptr<Action> Agent::actBestAction( const State &state )
 {
@@ -303,6 +257,10 @@ void Agent::learn()
     // Double DQN : Use local network to select the best action for next states
     auto forwardLocalNet = _qNetworkLocal.forward( nextStatesTensor );
     auto termMaskLocal = applyActionMask( nextStatesTensor, forwardLocalNet ); // [B] bool
+    forwardLocalNet = torch::where(torch::isfinite(forwardLocalNet),
+                               forwardLocalNet,
+                               torch::full_like(forwardLocalNet, -1e9f));
+
     auto bad = ( ( ~doneTensor ) & termMaskLocal );
     if ( bad.any().to( torch::kCPU ).item<bool>() )
     {
