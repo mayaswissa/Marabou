@@ -2,7 +2,7 @@
 
 #include "Options.h"
 #include "RandomGlobals.h"
-
+#include <limits>
 #include <random>
 #include <utility>
 
@@ -168,14 +168,14 @@ torch::Tensor Agent::applyActionMask( const torch::Tensor &tensorState,
 
     auto qBAP = (QValues.dim()==1 ? QValues.view({1, C*P}) : QValues).view({B, C, P});
 
-    qBAP.masked_fill_( (~legalRows).unsqueeze(2), -1e9f );
+    const auto negInf = -std::numeric_limits<float>::infinity();
+    qBAP.masked_fill_( (~legalRows).unsqueeze(2), negInf);
 
     qBAP.index_put_({ torch::indexing::Slice(),
                       torch::indexing::Slice(),
-                      (int64_t)DQN_RELU_NOT_FIXED }, -1e9f);
+                      (int64_t)DQN_RELU_NOT_FIXED }, negInf);
 
     QValues = qBAP.view({B, C*P});
-    QValues = torch::where(torch::isfinite(QValues), QValues, torch::full_like(QValues, -1e9f));
 
     return legalRows.sum(1).eq(0);
 }
@@ -189,13 +189,19 @@ std::unique_ptr<Action> Agent::actBestAction( const State &state )
     torch::Tensor QValues = _qNetworkLocal.forward( tensorState );
 
     auto termMask = applyActionMask( tensorState, QValues );
+    if (!torch::isfinite(QValues).all().item<bool>()) {
+        auto n_nan   = torch::isnan(QValues).sum().item<int64_t>();
+        auto n_pinf  = (torch::isinf(QValues) & QValues.gt(0)).sum().item<int64_t>();
+        auto n_ninf  = (torch::isinf(QValues) & QValues.lt(0)).sum().item<int64_t>();
+        std::cerr << "[bug] Non-finite Q in actBestAction: NaN=" << n_nan
+                  << " +Inf=" << n_pinf << " -Inf=" << n_ninf << std::endl;
+        throw std::runtime_error("Non-finite QValues in actBestAction");
+    }
     if ( termMask.to( torch::kCPU ).item<bool>() )
     {
         std::cerr << "Error: no valid actions!" << std::endl;
         throw std::runtime_error( "no valid actions." );
     }
-    QValues =
-        torch::where( torch::isfinite( QValues ), QValues, torch::full_like( QValues, -1e9f ) );
     unsigned actionIndex = QValues.argmax( 1 ).item<int>();
     _qNetworkLocal.train();
     auto [constraint, phase] = _actionSpace.decodeActionIndex( actionIndex );
@@ -236,13 +242,13 @@ void Agent::learn()
 
     auto idxTensor = torch::tensor(
         std::vector<int64_t>( batch.indices.begin(), batch.indices.end() ), torch::kLong );
-    const auto statesTensor = _replayedBuffer.getStates().index( { idxTensor } ).to( device );
+    const auto statesTensor = _replayedBuffer.getStates().index( { idxTensor } ).to( device ).to(torch::kFloat32);
     const auto actionsTensor =
         _replayedBuffer.getActions().index( { idxTensor } ).to( device ).to( torch::kLong );
     const auto rewardsTensor =
         _replayedBuffer.getRewards().index( { idxTensor } ).to( device ).to( torch::kFloat32 );
     const auto nextStatesTensor =
-        _replayedBuffer.getNextStates().index( { idxTensor } ).to( device );
+        _replayedBuffer.getNextStates().index( { idxTensor } ).to( device ).to(torch::kFloat32);
     auto doneTensor = _replayedBuffer.getDones()
                           .index( { idxTensor } )
                           .to( device )
@@ -257,10 +263,14 @@ void Agent::learn()
     // Double DQN : Use local network to select the best action for next states
     auto forwardLocalNet = _qNetworkLocal.forward( nextStatesTensor );
     auto termMaskLocal = applyActionMask( nextStatesTensor, forwardLocalNet ); // [B] bool
-    forwardLocalNet = torch::where(torch::isfinite(forwardLocalNet),
-                               forwardLocalNet,
-                               torch::full_like(forwardLocalNet, -1e9f));
-
+    if (!torch::isfinite(forwardLocalNet).all().item<bool>()) {
+        auto n_nan   = torch::isnan(forwardLocalNet).sum().item<int64_t>();
+        auto n_pinf  = (torch::isinf(forwardLocalNet) & forwardLocalNet.gt(0)).sum().item<int64_t>();
+        auto n_ninf  = (torch::isinf(forwardLocalNet) & forwardLocalNet.lt(0)).sum().item<int64_t>();
+        std::cerr << "[bug] Non-finite Q(next) in learn(): NaN=" << n_nan
+                  << " +Inf=" << n_pinf << " -Inf=" << n_ninf << std::endl;
+        throw std::runtime_error("Non-finite forwardLocalNet in learn()");
+    }
     auto bad = ( ( ~doneTensor ) & termMaskLocal );
     if ( bad.any().to( torch::kCPU ).item<bool>() )
     {
