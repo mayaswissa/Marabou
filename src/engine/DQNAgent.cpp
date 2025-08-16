@@ -329,7 +329,7 @@ void Agent::learn()
     auto td_errors = torch::smooth_l1_loss( QExpected, QTargets.detach(), torch::Reduction::None );
     auto weights = torch::tensor( batch.weights, statesTensor.options().dtype( torch::kFloat32 ) )
                        .to( device );
-    weights = weights / weights.mean().clamp_min( 1e-8 );
+    weights = weights / weights.max().clamp_min(1e-8f);
     auto weightedTdLoss = ( td_errors * weights ).mean();
     // Margin loss for demonstration samples
     std::vector<int64_t> demo_mask_int( batch.isDemo.begin(), batch.isDemo.end() );

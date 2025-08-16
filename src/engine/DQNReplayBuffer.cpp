@@ -92,18 +92,17 @@ void ReplayBuffer::moveActionToRevisitBuffer( const State &stateAfterAction,
         actionEntry->_activeActions.popBack();
         return;
     }
-    const double deltaSplit = static_cast<double>( activeAction._splitsBeforeActiveAction ) -
-                              static_cast<double>( numSplitsAfterAction );
+    const double deltaSplit = static_cast<double>( numSplitsAfterAction ) -
+                         static_cast<double>( activeAction._splitsBeforeActiveAction );
+    const double denom = std::max( 1.0, potentialSubtreeSize() );
+    const double base = deltaSplit / denom;
 
+    const double alpha = 3.0;
+    double reward = -std::tanh( alpha * base );
     if ( deltaSplit == 0 && !done )
     {
-        actionEntry->_activeActions.popBack();
-        return;
+        reward = -1e-3;
     }
-
-    auto reward = potentialSubtreeSize() != 0 ? deltaSplit / potentialSubtreeSize() : 0;
-    double alpha = 10.0;
-    reward = std::copysign( std::tanh( alpha * std::abs( reward ) ), reward );
     addExperienceToRevisitBuffer( activeAction._stateBeforeAction,
                                   activeAction._action,
                                   reward,
@@ -140,12 +139,15 @@ void ReplayBuffer::applyNextAction( const State &stateAfterAction,
         }
         // alternative action exists - push it to activeSplits with current numSplits:
         actionEntry = _actionsStack.back();
-        // while ( !actionEntry->_activeActions.empty() ) // todo check ?
-        //     moveActionToRevisitBuffer( stateAfterAction, numSplits, actionEntry );
+        ASSERT( !actionEntry->_activeActions.empty() );
+
+        const auto &finishedActiveAction = actionEntry->_activeActions.back();
+        const State preState = finishedActiveAction._stateBeforeAction;
+        // const unsigned preSplits = finishedActiveAction._splitsBeforeActiveAction;
+        moveActionToRevisitBuffer( stateAfterAction, numSplits, actionEntry );
 
         auto action = actionEntry->_alternativeActions.begin();
-        actionEntry->_activeActions.append(
-            ActiveAction( *action, actionEntry->_stateBeforeAction, numSplits ) );
+        actionEntry->_activeActions.append( ActiveAction( *action, preState, numSplits ) );
         actionEntry->_alternativeActions.erase( action );
         numInconsistent--;
     }
