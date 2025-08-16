@@ -49,7 +49,7 @@ public:
     void updatePolarity( unsigned constraintIndex, double polarityScore );
     void updateBaBsrScore( unsigned constraintIndex, double BaBsrScore );
     // Accessor
-    const std::vector<double> &getRawData() const
+    const std::vector<float> &getRawData() const
     {
         return _stateData;
     }
@@ -58,7 +58,7 @@ public:
 private:
     // each inner vector represents a pl-constraint in one-hot encoding:
     // a single 1 indicating the current phase and 0s elsewhere.
-    std::vector<double> _stateData; // length = numConstraints * NUM_FEATURES
+    std::vector<float> _stateData;
     unsigned _numConstraints;
     unsigned _numPhases;
 };
