@@ -2,6 +2,7 @@
 
 #include "Options.h"
 #include "RandomGlobals.h"
+
 #include <limits>
 #include <random>
 #include <utility>
@@ -39,9 +40,9 @@ Agent::Agent( const unsigned numPlConstraints,
     // If a load path is provided, load the networks
     if ( !trainedAgentPath.empty() )
         loadNetworks();
-    ASSERT(_numActions == _numPlConstraints * _numPhases);
-    static_assert(DQN_RELU_ACTIVE   == DQN_RELU_NOT_FIXED + 1);
-    static_assert(DQN_RELU_INACTIVE == DQN_RELU_NOT_FIXED + 2);
+    ASSERT( _numActions == _numPlConstraints * _numPhases );
+    static_assert( DQN_RELU_ACTIVE == DQN_RELU_NOT_FIXED + 1 );
+    static_assert( DQN_RELU_INACTIVE == DQN_RELU_NOT_FIXED + 2 );
 }
 
 void Agent::saveNetworks( const std::string &path ) const
@@ -153,35 +154,33 @@ torch::Tensor Agent::applyActionMask( const torch::Tensor &tensorState,
     int64_t B = 1;
 
     torch::Tensor notFixed;
-    if (tensorState.dim() == 2) {                          // [C,F]
-        notFixed = tensorState.select(1, (int64_t)DQN_RELU_NOT_FIXED_VALUE).unsqueeze(0); // [1,C]
-    } else {                                               // [B,C,F]
-        notFixed = tensorState.select(2, (int64_t)DQN_RELU_NOT_FIXED_VALUE);               // [B,C]
-        B = notFixed.size(0);
+    if ( tensorState.dim() == 2 )
+    { // [C,F]
+        notFixed =
+            tensorState.select( 1, (int64_t)DQN_RELU_NOT_FIXED_VALUE ).unsqueeze( 0 ); // [1,C]
+    }
+    else
+    {                                                                          // [B,C,F]
+        notFixed = tensorState.select( 2, (int64_t)DQN_RELU_NOT_FIXED_VALUE ); // [B,C]
+        B = notFixed.size( 0 );
     }
 
-    auto legalRows = notFixed.gt(0.5).to(torch::kBool).to(QValues.device()); // [B,C]
+    auto legalRows = notFixed.gt( 0.5 ).to( torch::kBool ).to( QValues.device() ); // [B,C]
 
     // View as [B,C,P] (ensure contiguity just in case)
-    auto qBCP = (QValues.dim()==1 ? QValues.view({1, C*P}) : QValues).contiguous().view({B, C, P});
+    auto qBCP =
+        ( QValues.dim() == 1 ? QValues.view( { 1, C * P } ) : QValues ).reshape( { B, C, P } );
 
     constexpr float NEG_INF = -std::numeric_limits<float>::infinity();
-
-    // Mask fixed constraints
-    qBCP.masked_fill_((~legalRows).unsqueeze(2), NEG_INF);
-
-    // Mask NOT_FIXED phase (phase index 0)
-    qBCP.index_put_({ torch::indexing::Slice(),
-                      torch::indexing::Slice(),
-                      (int64_t)DQN_RELU_NOT_FIXED }, NEG_INF);
+    (void)qBCP.masked_fill_( ( ~legalRows ).unsqueeze( 2 ), NEG_INF );
+    (void)qBCP.select( 2, (int64_t)DQN_RELU_NOT_FIXED ).fill_( NEG_INF );
 
     // Flatten back
-    QValues = qBCP.view({B, C*P});
+    QValues = qBCP.view( { B, C * P } );
 
     // Terminal where there are no legal constraints
-    return legalRows.sum(1).eq(0);
+    return legalRows.sum( 1 ).eq( 0 );
 }
-
 
 
 std::unique_ptr<Action> Agent::actBestAction( const State &state )
@@ -190,13 +189,14 @@ std::unique_ptr<Action> Agent::actBestAction( const State &state )
     _qNetworkLocal.eval();
     const auto tensorState = state.toTensor().to( device );
     torch::Tensor QValues = _qNetworkLocal.forward( tensorState );
-    if ( !torch::isfinite(QValues).all().item<bool>() ) {
-        auto n_nan  = torch::isnan(QValues).sum().item<int64_t>();
-        auto n_pinf = (torch::isinf(QValues) & QValues.gt(0)).sum().item<int64_t>();
-        auto n_ninf = (torch::isinf(QValues) & QValues.lt(0)).sum().item<int64_t>();
+    if ( !torch::isfinite( QValues ).all().item<bool>() )
+    {
+        auto n_nan = torch::isnan( QValues ).sum().item<int64_t>();
+        auto n_pinf = ( torch::isinf( QValues ) & QValues.gt( 0 ) ).sum().item<int64_t>();
+        auto n_ninf = ( torch::isinf( QValues ) & QValues.lt( 0 ) ).sum().item<int64_t>();
         std::cerr << "[bug] Non-finite Q in actBestAction (pre-mask): NaN=" << n_nan
                   << " +Inf=" << n_pinf << " -Inf=" << n_ninf << std::endl;
-        throw std::runtime_error("Non-finite QValues in actBestAction (pre-mask)");
+        throw std::runtime_error( "Non-finite QValues in actBestAction (pre-mask)" );
     }
     auto termMask = applyActionMask( tensorState, QValues );
 
@@ -208,7 +208,7 @@ std::unique_ptr<Action> Agent::actBestAction( const State &state )
     unsigned actionIndex = QValues.argmax( 1 ).item<int>();
     _qNetworkLocal.train();
     auto [constraint, phase] = _actionSpace.decodeActionIndex( actionIndex );
-    ASSERT(phase == DQN_RELU_ACTIVE || phase == DQN_RELU_INACTIVE);
+    ASSERT( phase == DQN_RELU_ACTIVE || phase == DQN_RELU_INACTIVE );
     return std::make_unique<Action>( _numPhases, _numPlConstraints, constraint, phase );
 }
 
@@ -245,86 +245,101 @@ void Agent::learn()
 
     auto idxTensor = torch::tensor(
         std::vector<int64_t>( batch.indices.begin(), batch.indices.end() ), torch::kLong );
-    const auto statesTensor = _replayedBuffer.getStates().index( { idxTensor } ).to( device ).to(torch::kFloat32);
+
+    const auto statesTensor =
+        _replayedBuffer.getStates().index( { idxTensor } ).to( device ).to( torch::kFloat32 );
     const auto actionsTensor =
         _replayedBuffer.getActions().index( { idxTensor } ).to( device ).to( torch::kLong );
     const auto rewardsTensor =
         _replayedBuffer.getRewards().index( { idxTensor } ).to( device ).to( torch::kFloat32 );
     const auto nextStatesTensor =
-        _replayedBuffer.getNextStates().index( { idxTensor } ).to( device ).to(torch::kFloat32);
+        _replayedBuffer.getNextStates().index( { idxTensor } ).to( device ).to( torch::kFloat32 );
     auto doneTensor = _replayedBuffer.getDones()
                           .index( { idxTensor } )
                           .to( device )
                           .to( torch::kBool )
                           .view( { -1 } );
-    const auto QExpected = _qNetworkLocal.forward( statesTensor )
-                               .gather( 1, actionsTensor )
-                               .squeeze( -1 )
-                               .to( torch::kFloat32 );
+
+    auto all_q = _qNetworkLocal.forward( statesTensor );
+    const auto QExpected = all_q.gather( 1, actionsTensor ).squeeze( -1 ).to( torch::kFloat32 );
     auto QTargets = rewardsTensor;
 
-    // Double DQN : Use local network to select the best action for next states
-    auto forwardLocalNet = _qNetworkLocal.forward( nextStatesTensor );
-    if (!torch::isfinite(forwardLocalNet).all().item<bool>()) {
-        auto n_nan   = torch::isnan(forwardLocalNet).sum().item<int64_t>();
-        auto n_pinf  = (torch::isinf(forwardLocalNet) & forwardLocalNet.gt(0)).sum().item<int64_t>();
-        auto n_ninf  = (torch::isinf(forwardLocalNet) & forwardLocalNet.lt(0)).sum().item<int64_t>();
-        std::cerr << "[bug] Non-finite Q(next) in learn(): NaN=" << n_nan
-                  << " +Inf=" << n_pinf << " -Inf=" << n_ninf << std::endl;
-        throw std::runtime_error("Non-finite forwardLocalNet in learn()");
-    }
-    auto termMaskLocal = applyActionMask( nextStatesTensor, forwardLocalNet ); // [B] bool
-    auto bad = ( ( ~doneTensor ) & termMaskLocal );
-    if ( bad.any().to( torch::kCPU ).item<bool>() )
+    // --- Double DQN ---
     {
-        std::cerr << "Error: no valid next actions!" << std::endl;
-        throw std::runtime_error( "no valid next actions." );
+        torch::NoGradGuard _ng;
+        auto forwardLocalNet = _qNetworkLocal.forward( nextStatesTensor );
+        if ( !torch::isfinite( forwardLocalNet ).all().item<bool>() )
+        {
+            auto n_nan = torch::isnan( forwardLocalNet ).sum().item<int64_t>();
+            auto n_pinf =
+                ( torch::isinf( forwardLocalNet ) & forwardLocalNet.gt( 0 ) ).sum().item<int64_t>();
+            auto n_ninf =
+                ( torch::isinf( forwardLocalNet ) & forwardLocalNet.lt( 0 ) ).sum().item<int64_t>();
+            std::cerr << "[bug] Non-finite Q(next) in learn(): NaN=" << n_nan << " +Inf=" << n_pinf
+                      << " -Inf=" << n_ninf << std::endl;
+            throw std::runtime_error( "Non-finite forwardLocalNet in learn()" );
+        }
+        auto termMaskLocal = applyActionMask( nextStatesTensor, forwardLocalNet ); // [B] bool
+        auto bad = ( ( ~doneTensor ) & termMaskLocal );
+        if ( bad.any().to( torch::kCPU ).item<bool>() )
+        {
+            std::cerr << "Error: no valid next actions!" << std::endl;
+            throw std::runtime_error( "no valid next actions." );
+        }
+        const auto localQValuesNextState = forwardLocalNet.argmax( 1, /*keepdim=*/true ); // [B,1]
+
+        auto forwardTargetNet = _qNetworkTarget.forward( nextStatesTensor );
+        (void)applyActionMask( nextStatesTensor, forwardTargetNet );
+        const auto targetQValuesNextState =
+            forwardTargetNet.gather( 1, localQValuesNextState ).squeeze( 1 );
+
+        auto notDone = ( ( ~doneTensor ) & ( ~termMaskLocal ) ).to( torch::kFloat32 );
+        QTargets = rewardsTensor + GAMMA * targetQValuesNextState * notDone;
     }
-    const auto localQValuesNextState = forwardLocalNet.detach().argmax( 1 ).view( { -1, 1 } );
-
-    // Target evaluation for those actions (mask values, ignore returned mask)
-    auto forwardTargetNet = _qNetworkTarget.forward( nextStatesTensor );
-    (void)applyActionMask( nextStatesTensor, forwardTargetNet );
-    const auto targetQValuesNextState =
-        forwardTargetNet.detach().gather( 1, localQValuesNextState ).squeeze( 1 );
-
-    auto notDone = ( ( ~doneTensor ) & ( ~termMaskLocal ) ).to( torch::kFloat32 );
-    QTargets = rewardsTensor + GAMMA * targetQValuesNextState * notDone;
 
     if ( torch::isnan( QTargets ).any().item<bool>() )
     {
         std::cerr << "Error: QTargets contains NaN values!" << std::endl;
         throw std::runtime_error( "NaN detected in QTargets." );
     }
-    // TD loss
+
+    // --- TD loss ---
     auto td_errors = torch::smooth_l1_loss( QExpected, QTargets.detach(), torch::Reduction::None );
     auto weights = torch::tensor( batch.weights, statesTensor.options().dtype( torch::kFloat32 ) )
                        .to( device );
-    weights = weights / weights.max().clamp_min(1e-8f);
+    weights = weights / weights.max().clamp_min( 1e-8f ); // keep your choice (max); mean is also
+                                                          // fine
     auto weightedTdLoss = ( td_errors * weights ).mean();
-    // Margin loss for demonstration samples
+
+    // --- Margin loss (demonstration data) ---
     std::vector<int64_t> demo_mask_int( batch.isDemo.begin(), batch.isDemo.end() );
-    auto all_q = _qNetworkLocal.forward( statesTensor );
-    if (!torch::isfinite(all_q).all().item<bool>()) {
-        throw std::runtime_error("Non-finite all_q in learn() (pre-mask)");
+    if ( !torch::isfinite( all_q ).all().item<bool>() )
+    {
+        throw std::runtime_error( "Non-finite all_q in learn() (pre-mask)" );
     }
-    auto termMask = applyActionMask( statesTensor, all_q );
+
+    auto all_q_masked = all_q.clone();
+    auto termMask = applyActionMask( statesTensor, all_q_masked );
+
     auto demo_mask = torch::tensor( demo_mask_int, torch::TensorOptions().dtype( torch::kInt64 ) )
                          .to( device )
                          .to( torch::kFloat32 );
     auto valid_demo = ( demo_mask * ( 1.0f - termMask.to( torch::kFloat32 ) ) ); // [B] in {0,1}
-    auto flat_actions = actionsTensor.squeeze( -1 );
-    auto one_hot =
-        torch::nn::functional::one_hot( flat_actions, static_cast<int64_t>( _numActions ) )
-            .to( device )
-            .to( torch::kFloat32 );
-    auto non_selected = ( 1.0f - one_hot );
-    auto shifted = all_q + non_selected * _margin;
-    auto max_other = std::get<0>( shifted.max( 1 ) );
-    auto q_demo = all_q.gather( 1, flat_actions.unsqueeze( 1 ) ).squeeze( 1 );
-    auto raw_margin = torch::relu( max_other - q_demo );
+    auto flat_actions = actionsTensor.squeeze( -1 );                             // [B]
+
+    auto q_demo = all_q_masked.gather( 1, flat_actions.unsqueeze( 1 ) ).squeeze( 1 ); // [B]
+
+    auto shifted = all_q_masked + _margin; // [B,A]
+    (void)shifted.scatter_( 1,
+                            flat_actions.unsqueeze( 1 ),
+                            all_q_masked.gather( 1, flat_actions.unsqueeze( 1 ) ) ); // restore
+                                                                                     // selected col
+
+    auto max_other = std::get<0>( shifted.max( 1 ) );    // [B]
+    auto raw_margin = torch::relu( max_other - q_demo ); // [B]
     auto marginLoss = ( raw_margin * valid_demo ).sum() / valid_demo.sum().clamp_min( 1.0f );
-    // Total loss
+
+    // --- Total loss ---
     const auto loss = weightedTdLoss + _lambdaSup * marginLoss;
     _lossVerbosity = ( _lossVerbosity + 1 ) % 100;
     if ( _lossVerbosity == 0 )
@@ -334,14 +349,15 @@ void Agent::learn()
         DQN_LOG( Stringf( "Loss : %.10f\n", loss.item<double>() ).ascii() );
     }
 
-    // Backpropagation
-    _optimizer.zero_grad();
+    // --- Backpropagation ---
+    _optimizer.zero_grad( true );
     loss.backward();
     torch::nn::utils::clip_grad_norm_( _qNetworkLocal.parameters(), 1.0 );
     if ( !handleInvalidGradients() )
         _optimizer.step();
     softUpdate( _qNetworkLocal, _qNetworkTarget );
 
+    // --- PER priority update ---
     auto abs_td =
         ( QTargets.detach() - QExpected.detach() ).abs().to( torch::kCPU ).contiguous(); // [B]
     auto acc = abs_td.accessor<float, 1>();
@@ -359,6 +375,7 @@ void Agent::learn()
 
 void Agent::softUpdate( const QNetwork &localModel, QNetwork &targetModel )
 {
+    torch::NoGradGuard _;
     const auto localParams = localModel.getParameters();
     const auto targetParams = targetModel.getParameters();
     for ( size_t i = 0; i < localParams.size(); ++i )
