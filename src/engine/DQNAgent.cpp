@@ -193,7 +193,6 @@ torch::Tensor Agent::applyActionMask( const torch::Tensor &tensorState,
     // Apply mask
     if ( QValues.dim() == 1 )
         QValues.masked_fill_( ~legal2D.view( { -1 } ), -1e9f );
-
     else
         QValues.masked_fill_( ~legal2D, -1e9f );
 
@@ -267,7 +266,7 @@ std::unique_ptr<Action> Agent::actRandomly( const State &state )
 
     // pick a random phase
     const unsigned actionPhase =
-        RandomGlobals::instance().randInt( RELU_PHASE_ACTIVE, RELU_PHASE_INACTIVE );
+        RandomGlobals::instance().randInt( DQN_RELU_ACTIVE, DQN_RELU_INACTIVE );
 
     const unsigned actionIndex = _actionSpace.getActionIndex( actionConstraint, actionPhase );
     auto [constraint, phase] = _actionSpace.decodeActionIndex( actionIndex );
