@@ -111,9 +111,12 @@ struct ActionEntry
         _alternativeActions = List<Action>();
 
         auto const actionPhase = action.getActionPhase();
-        ASSERT( actionPhase == RELU_PHASE_ACTIVE || actionPhase == RELU_PHASE_INACTIVE );
+        if (actionPhase !=DQN_RELU_ACTIVE && actionPhase !=DQN_RELU_INACTIVE){
+        std ::cout <<"action phase not fixed ! action phase : " << actionPhase << std::endl;
+        }
+        ASSERT( actionPhase == DQN_RELU_ACTIVE || actionPhase == DQN_RELU_INACTIVE );
         const unsigned alternativeActionPhase =
-            actionPhase == RELU_PHASE_ACTIVE ? RELU_PHASE_INACTIVE : RELU_PHASE_ACTIVE;
+            actionPhase == DQN_RELU_ACTIVE ? DQN_RELU_INACTIVE : DQN_RELU_ACTIVE;
         const auto alternateAction = Action( DQN_NUM_PHASES,
                                              action.getNumPlConstraints(),
                                              action.getActionPlConstraintIndex(),

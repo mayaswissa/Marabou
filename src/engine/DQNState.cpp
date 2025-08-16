@@ -36,7 +36,6 @@ torch::Tensor State::toTensor() const
         torch::tensor( _stateData, torch::dtype( torch::kFloat32 ) )
             .view( { static_cast<long>( _numConstraints ), static_cast<long>( TOTAL_FEATURES ) } );
 
-    // Replace +-inf with large finite values
     constexpr float INF_CAP = 1e9f;
     stateTensor.masked_fill_( stateTensor == std::numeric_limits<float>::infinity(), INF_CAP );
     stateTensor.masked_fill_( stateTensor == -std::numeric_limits<float>::infinity(), -INF_CAP );
