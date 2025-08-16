@@ -163,9 +163,9 @@ public:
     torch::Tensor getRewards();
     torch::Tensor getNextStates();
     torch::Tensor getDones();
-    float getDemoFactor() const;
-    float getEpsilonDemo() const;
-    float getEpsilonAgent() const;
+    long getDemoFactor() const;
+    long getEpsilonDemo() const;
+    long getEpsilonAgent() const;
     long getEpsilon() const;
 
 

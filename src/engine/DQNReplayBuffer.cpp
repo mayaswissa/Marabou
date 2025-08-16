@@ -121,45 +121,33 @@ void ReplayBuffer::applyNextAction( const State &stateAfterAction,
     if ( _actionsStack.empty() )
         return;
 
+    ActionEntry *actionEntry;
+
     while ( numInconsistent > 0 )
     {
         //  no alternative splits for this action - pop the entry and move activeActions to
         //  revisitExperiences buffer.
-        while ( !_actionsStack.empty() && _actionsStack.back()->_alternativeActions.empty() )
+        while ( _actionsStack.back()->_alternativeActions.empty() )
         {
-            auto *entry = _actionsStack.back();
-            // Finalize exactly the subtree that just finished at this entry.
-            if ( !entry->_activeActions.empty() )
-                moveActionToRevisitBuffer( stateAfterAction, numSplits, entry );
-
-            // Entry has no opposite left; remove it and go up.
-            delete entry;
+            actionEntry = _actionsStack.back();
+            while ( !actionEntry->_activeActions.empty() )
+                moveActionToRevisitBuffer( stateAfterAction, numSplits, actionEntry );
+            delete _actionsStack.back();
             _actionsStack.popBack();
+
+            if ( _actionsStack.empty() )
+                return;
         }
-        if ( _actionsStack.empty() )
-            return;
+        // alternative action exists - push it to activeSplits with current numSplits:
+        actionEntry = _actionsStack.back();
+        // while ( !actionEntry->_activeActions.empty() ) // todo check ?
+        //     moveActionToRevisitBuffer( stateAfterAction, numSplits, actionEntry );
 
-        auto *actionEntry = _actionsStack.back();
-        // Finalize the subtree that just finished.
-        ASSERT( !actionEntry->_activeActions.empty() );
-        const auto &finishedActiveAction  = actionEntry->_activeActions.back();
-        const State   preState  = finishedActiveAction._stateBeforeAction;
-        const unsigned preSplits = finishedActiveAction._splitsBeforeActiveAction;
-
-        const auto before = actionEntry->_activeActions.size();
-        moveActionToRevisitBuffer(stateAfterAction, numSplits, actionEntry);
-        ASSERT(actionEntry->_activeActions.size() + 1 == before);
-
-
-        // Schedule the alternative action from the same branching.
-        if ( !actionEntry->_alternativeActions.empty() )
-        {
-            const auto it = actionEntry->_alternativeActions.begin();
-            actionEntry->_activeActions.append( ActiveAction( *it, preState, preSplits ) );
-            actionEntry->_alternativeActions.erase( it );
-            --numInconsistent;
-            return;
-        }
+        auto action = actionEntry->_alternativeActions.begin();
+        actionEntry->_activeActions.append(
+            ActiveAction( *action, actionEntry->_stateBeforeAction, numSplits ) );
+        actionEntry->_alternativeActions.erase( action );
+        numInconsistent--;
     }
 }
 
@@ -283,17 +271,17 @@ torch::Tensor ReplayBuffer::getDones()
     return _dones;
 }
 
-float ReplayBuffer::getDemoFactor() const
+long ReplayBuffer::getDemoFactor() const
 {
     return _demoFactor;
 }
 
-float ReplayBuffer::getEpsilonDemo() const
+long ReplayBuffer::getEpsilonDemo() const
 {
     return _epsDemo;
 }
 
-float ReplayBuffer::getEpsilonAgent() const
+long ReplayBuffer::getEpsilonAgent() const
 {
     return _epsAgent;
 }
