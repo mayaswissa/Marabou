@@ -158,7 +158,7 @@ torch::Tensor Agent::applyActionMask( const torch::Tensor &tensorState,
         notFixed =
             tensorState.select( 1, (int64_t)DQN_RELU_NOT_FIXED_VALUE ).unsqueeze( 0 ); // [1,C]
     else
-    {
+    {                                                                          // [B,C,F]
         notFixed = tensorState.select( 2, (int64_t)DQN_RELU_NOT_FIXED_VALUE ); // [B,C]
         B = notFixed.size( 0 );
     }
@@ -314,8 +314,8 @@ void Agent::learn()
     _optimizer.zero_grad( true );
     loss.backward();
     torch::nn::utils::clip_grad_norm_( _qNetworkLocal.parameters(), 1.0 );
-    // if ( !handleInvalidGradients() )
-    //     _optimizer.step();
+    if ( !handleInvalidGradients() )
+        _optimizer.step();
     softUpdate( _qNetworkLocal, _qNetworkTarget );
 
     // --- PER priority update ---
