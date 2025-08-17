@@ -1,23 +1,26 @@
 #include "DQNState.h"
+
+#include <cmath>
 #include <limits>
-#include <cmath>    // std::isfinite, std::isinf, std::isnan
-#include <algorithm>
 
 namespace {
-inline float capFinite(double x) {
-    // Cap infinities once at write-time; avoid NaNs leaking in.
+inline float capFinite( double x )
+{
     constexpr float INF_CAP = 1e9f;
-    if (std::isinf(x))  return x > 0 ?  INF_CAP : -INF_CAP;
-    if (std::isnan(x))  return 0.0f; // or throw, if you prefer strictness
-    // normal path
-    if (x >  INF_CAP)   return  INF_CAP;
-    if (x < -INF_CAP)   return -INF_CAP;
-    return static_cast<float>(x);
+    if ( std::isinf( x ) )
+        return x > 0 ? INF_CAP : -INF_CAP;
+    if ( std::isnan( x ) )
+        return 0.0f;
+    if ( x > INF_CAP )
+        return INF_CAP;
+    if ( x < -INF_CAP )
+        return -INF_CAP;
+    return static_cast<float>( x );
 }
-}
+} // namespace
 
 State::State( const unsigned numConstraints )
-    : _stateData()                    // now float
+    : _stateData() // now float
     , _numConstraints( numConstraints )
     , _numPhases( DQN_NUM_PHASES )
 {
@@ -40,19 +43,19 @@ State &State::operator=( const State &other )
     if ( this == &other )
         return *this;
 
-    _stateData      = other._stateData;
+    _stateData = other._stateData;
     _numConstraints = other._numConstraints;
-    _numPhases      = other._numPhases;
+    _numPhases = other._numPhases;
     return *this;
 }
 
 torch::Tensor State::toTensor() const
 {
-    auto stateTensor = torch::from_blob(
-        const_cast<float*>(_stateData.data()),
-        { static_cast<long>( _numConstraints ), static_cast<long>( TOTAL_FEATURES ) },
-        torch::TensorOptions().dtype(torch::kFloat32)
-    ).clone();
+    auto stateTensor = torch::from_blob( const_cast<float *>( _stateData.data() ),
+                                         { static_cast<long>( _numConstraints ),
+                                           static_cast<long>( TOTAL_FEATURES ) },
+                                         torch::TensorOptions().dtype( torch::kFloat32 ) )
+                           .clone();
     return stateTensor;
 }
 
@@ -61,7 +64,7 @@ void State::updateConstraintPhase( const unsigned constraintIndex, const unsigne
     if ( constraintIndex >= _numConstraints || newPhase >= DQN_NUM_PHASES || _stateData.empty() )
         return;
 
-    const size_t rowStart = static_cast<size_t>(constraintIndex) * TOTAL_FEATURES;
+    const size_t rowStart = static_cast<size_t>( constraintIndex ) * TOTAL_FEATURES;
     for ( unsigned k = 0; k < DQN_NUM_PHASES; ++k )
         _stateData[rowStart + DQN_RELU_NOT_FIXED_VALUE + k] = 0.0f;
     _stateData[rowStart + DQN_RELU_NOT_FIXED_VALUE + newPhase] = 1.0f;
@@ -73,9 +76,9 @@ void State::updateBounds( const unsigned constraintIndex,
 {
     if ( constraintIndex >= _numConstraints )
         return;
-    const size_t base = static_cast<size_t>(constraintIndex) * TOTAL_FEATURES;
-    _stateData[base + DQN_RELU_LOWER_BOUND] = capFinite(lowerBound);
-    _stateData[base + DQN_RELU_UPPER_BOUND] = capFinite(upperBound);
+    const size_t base = static_cast<size_t>( constraintIndex ) * TOTAL_FEATURES;
+    _stateData[base + DQN_RELU_LOWER_BOUND] = capFinite( lowerBound );
+    _stateData[base + DQN_RELU_UPPER_BOUND] = capFinite( upperBound );
 }
 
 void State::updateSoIScoreForAgent( const unsigned constraintIndex,
@@ -84,34 +87,36 @@ void State::updateSoIScoreForAgent( const unsigned constraintIndex,
 {
     if ( constraintIndex >= _numConstraints )
         return;
-    const size_t base = static_cast<size_t>(constraintIndex) * TOTAL_FEATURES;
-    _stateData[base + SOI_ACTIVE_SCORE]   = capFinite(SoiActiveScore);
-    _stateData[base + SOI_INACTIVE_SCORE] = capFinite(SoiInactiveScore);
+    const size_t base = static_cast<size_t>( constraintIndex ) * TOTAL_FEATURES;
+    _stateData[base + SOI_ACTIVE_SCORE] = capFinite( SoiActiveScore );
+    _stateData[base + SOI_INACTIVE_SCORE] = capFinite( SoiInactiveScore );
 }
 
 void State::updatePolarity( const unsigned constraintIndex, const double polarityScore )
 {
     if ( constraintIndex >= _numConstraints )
         return;
-    _stateData[static_cast<size_t>(constraintIndex) * TOTAL_FEATURES + POLARITY_SCORE] =
-        capFinite(polarityScore);
+    _stateData[static_cast<size_t>( constraintIndex ) * TOTAL_FEATURES + POLARITY_SCORE] =
+        capFinite( polarityScore );
 }
 
 void State::updateBaBsrScore( const unsigned constraintIndex, const double BaBsrScore )
 {
     if ( constraintIndex >= _numConstraints )
         return;
-    _stateData[static_cast<size_t>(constraintIndex) * TOTAL_FEATURES + BaBsr_SCORE] =
-        capFinite(BaBsrScore);
+    _stateData[static_cast<size_t>( constraintIndex ) * TOTAL_FEATURES + BaBsr_SCORE] =
+        capFinite( BaBsrScore );
 }
 
 void State::updateGlobalFeatures( unsigned unstableCount, unsigned treeDepth, unsigned splitsSoFar )
 {
     for ( unsigned i = 0; i < _numConstraints; ++i )
     {
-        const size_t base = static_cast<size_t>(i) * TOTAL_FEATURES;
-        _stateData[base + NUM_LOCAL_FEATURES + GF_UNSTABLE_COUNT] = static_cast<float>(unstableCount);
-        _stateData[base + NUM_LOCAL_FEATURES + GF_TREE_DEPTH]      = static_cast<float>(treeDepth);
-        _stateData[base + NUM_LOCAL_FEATURES + GF_SPLITS_SO_FAR]   = static_cast<float>(splitsSoFar);
+        const size_t base = static_cast<size_t>( i ) * TOTAL_FEATURES;
+        _stateData[base + NUM_LOCAL_FEATURES + GF_UNSTABLE_COUNT] =
+            static_cast<float>( unstableCount );
+        _stateData[base + NUM_LOCAL_FEATURES + GF_TREE_DEPTH] = static_cast<float>( treeDepth );
+        _stateData[base + NUM_LOCAL_FEATURES + GF_SPLITS_SO_FAR] =
+            static_cast<float>( splitsSoFar );
     }
 }

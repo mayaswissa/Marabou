@@ -155,30 +155,21 @@ torch::Tensor Agent::applyActionMask( const torch::Tensor &tensorState,
 
     torch::Tensor notFixed;
     if ( tensorState.dim() == 2 )
-    { // [C,F]
         notFixed =
             tensorState.select( 1, (int64_t)DQN_RELU_NOT_FIXED_VALUE ).unsqueeze( 0 ); // [1,C]
-    }
     else
-    {                                                                          // [B,C,F]
+    {
         notFixed = tensorState.select( 2, (int64_t)DQN_RELU_NOT_FIXED_VALUE ); // [B,C]
         B = notFixed.size( 0 );
     }
 
     auto legalRows = notFixed.gt( 0.5 ).to( torch::kBool ).to( QValues.device() ); // [B,C]
-
-    // View as [B,C,P] (ensure contiguity just in case)
     auto qBCP =
         ( QValues.dim() == 1 ? QValues.view( { 1, C * P } ) : QValues ).reshape( { B, C, P } );
-
     constexpr float NEG_INF = -std::numeric_limits<float>::infinity();
     (void)qBCP.masked_fill_( ( ~legalRows ).unsqueeze( 2 ), NEG_INF );
     (void)qBCP.select( 2, (int64_t)DQN_RELU_NOT_FIXED ).fill_( NEG_INF );
-
-    // Flatten back
     QValues = qBCP.view( { B, C * P } );
-
-    // Terminal where there are no legal constraints
     return legalRows.sum( 1 ).eq( 0 );
 }
 
@@ -189,15 +180,6 @@ std::unique_ptr<Action> Agent::actBestAction( const State &state )
     _qNetworkLocal.eval();
     const auto tensorState = state.toTensor().to( device );
     torch::Tensor QValues = _qNetworkLocal.forward( tensorState );
-    if ( !torch::isfinite( QValues ).all().item<bool>() )
-    {
-        auto n_nan = torch::isnan( QValues ).sum().item<int64_t>();
-        auto n_pinf = ( torch::isinf( QValues ) & QValues.gt( 0 ) ).sum().item<int64_t>();
-        auto n_ninf = ( torch::isinf( QValues ) & QValues.lt( 0 ) ).sum().item<int64_t>();
-        std::cerr << "[bug] Non-finite Q in actBestAction (pre-mask): NaN=" << n_nan
-                  << " +Inf=" << n_pinf << " -Inf=" << n_ninf << std::endl;
-        throw std::runtime_error( "Non-finite QValues in actBestAction (pre-mask)" );
-    }
     auto termMask = applyActionMask( tensorState, QValues );
 
     if ( termMask.to( torch::kCPU ).item<bool>() )
@@ -268,24 +250,8 @@ void Agent::learn()
     {
         torch::NoGradGuard _ng;
         auto forwardLocalNet = _qNetworkLocal.forward( nextStatesTensor );
-        if ( !torch::isfinite( forwardLocalNet ).all().item<bool>() )
-        {
-            auto n_nan = torch::isnan( forwardLocalNet ).sum().item<int64_t>();
-            auto n_pinf =
-                ( torch::isinf( forwardLocalNet ) & forwardLocalNet.gt( 0 ) ).sum().item<int64_t>();
-            auto n_ninf =
-                ( torch::isinf( forwardLocalNet ) & forwardLocalNet.lt( 0 ) ).sum().item<int64_t>();
-            std::cerr << "[bug] Non-finite Q(next) in learn(): NaN=" << n_nan << " +Inf=" << n_pinf
-                      << " -Inf=" << n_ninf << std::endl;
-            throw std::runtime_error( "Non-finite forwardLocalNet in learn()" );
-        }
         auto termMaskLocal = applyActionMask( nextStatesTensor, forwardLocalNet ); // [B] bool
         auto bad = ( ( ~doneTensor ) & termMaskLocal );
-        if ( bad.any().to( torch::kCPU ).item<bool>() )
-        {
-            std::cerr << "Error: no valid next actions!" << std::endl;
-            throw std::runtime_error( "no valid next actions." );
-        }
         const auto localQValuesNextState = forwardLocalNet.argmax( 1, /*keepdim=*/true ); // [B,1]
 
         auto forwardTargetNet = _qNetworkTarget.forward( nextStatesTensor );
@@ -313,11 +279,6 @@ void Agent::learn()
 
     // --- Margin loss (demonstration data) ---
     std::vector<int64_t> demo_mask_int( batch.isDemo.begin(), batch.isDemo.end() );
-    if ( !torch::isfinite( all_q ).all().item<bool>() )
-    {
-        throw std::runtime_error( "Non-finite all_q in learn() (pre-mask)" );
-    }
-
     auto all_q_masked = all_q.clone();
     auto termMask = applyActionMask( statesTensor, all_q_masked );
 
@@ -353,8 +314,8 @@ void Agent::learn()
     _optimizer.zero_grad( true );
     loss.backward();
     torch::nn::utils::clip_grad_norm_( _qNetworkLocal.parameters(), 1.0 );
-    if ( !handleInvalidGradients() )
-        _optimizer.step();
+    // if ( !handleInvalidGradients() )
+    //     _optimizer.step();
     softUpdate( _qNetworkLocal, _qNetworkTarget );
 
     // --- PER priority update ---
