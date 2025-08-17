@@ -272,7 +272,6 @@ public:
     enum GuidedHeuristic {
         POLARITY = 0,
         BABS_R = 1,
-        PSEUDO_IMPACT = 2
     };
     static GuidedHeuristic DQN_FORCED_HEURISTIC;
 

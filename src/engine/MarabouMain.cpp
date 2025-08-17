@@ -319,14 +319,8 @@ void trainAgentOnExamples( Options *options,
         for ( auto iter = 0; iter < numRepeats; iter++ )
         {
             options->setString( Options::PROPERTY_FILE_PATH, ex.first );
-            int splits = 0;
-            // pseudo-impact
-            splits = 0;
-            GlobalConfiguration::DQN_FORCED_HEURISTIC =
-                GlobalConfiguration::GuidedHeuristic::PSEUDO_IMPACT;
-            agent = Marabou().trainDQNAgent( epsilon, ex.second, std::move( agent ), &splits );
-            *numSplits += splits;
             // polarity
+            int splits = 0;
             GlobalConfiguration::DQN_FORCED_HEURISTIC =
                 GlobalConfiguration::GuidedHeuristic::POLARITY;
             agent = Marabou().trainDQNAgent( epsilon, ex.second, std::move( agent ), &splits );
@@ -370,8 +364,7 @@ void trainAgentOnExamples( Options *options,
                       << std::flush;
     }
 
-    if ( agent != nullptr &&
-         *numSplits > static_cast<int>( Options::get()->getInt( Options::DQN_BATCH_SIZE ) * 20 ) )
+    if ( agent != nullptr )
     {
         const auto path = options->getString( Options::DQN_AGENT_NETWORKS_PATH );
         const std::string filePath = std::string( path.ascii() ) + "/agent";
