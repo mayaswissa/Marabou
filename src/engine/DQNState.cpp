@@ -4,18 +4,13 @@
 #include <limits>
 
 namespace {
-inline float capFinite( double x )
+inline float squashFeature( double x, double s = 10.0 )
 {
-    constexpr float INF_CAP = 1e9f;
-    if ( std::isinf( x ) )
-        return x > 0 ? INF_CAP : -INF_CAP;
     if ( std::isnan( x ) )
         return 0.0f;
-    if ( x > INF_CAP )
-        return INF_CAP;
-    if ( x < -INF_CAP )
-        return -INF_CAP;
-    return static_cast<float>( x );
+    if ( std::isinf( x ) )
+        return std::signbit( x ) ? -1.0f : 1.0f;
+    return (float)std::tanh( x / s );
 }
 } // namespace
 
@@ -77,8 +72,8 @@ void State::updateBounds( const unsigned constraintIndex,
     if ( constraintIndex >= _numConstraints )
         return;
     const size_t base = static_cast<size_t>( constraintIndex ) * TOTAL_FEATURES;
-    _stateData[base + DQN_RELU_LOWER_BOUND] = capFinite( lowerBound );
-    _stateData[base + DQN_RELU_UPPER_BOUND] = capFinite( upperBound );
+    _stateData[base + DQN_RELU_LOWER_BOUND] = squashFeature( lowerBound, 30 );
+    _stateData[base + DQN_RELU_UPPER_BOUND] = squashFeature( upperBound, 30 );
 }
 
 void State::updatePolarity( const unsigned constraintIndex, const double polarityScore )
@@ -86,7 +81,7 @@ void State::updatePolarity( const unsigned constraintIndex, const double polarit
     if ( constraintIndex >= _numConstraints )
         return;
     _stateData[static_cast<size_t>( constraintIndex ) * TOTAL_FEATURES + POLARITY_SCORE] =
-        capFinite( polarityScore );
+        squashFeature( polarityScore );
 }
 
 void State::updateBaBsrScore( const unsigned constraintIndex, const double BaBsrScore )
@@ -94,7 +89,7 @@ void State::updateBaBsrScore( const unsigned constraintIndex, const double BaBsr
     if ( constraintIndex >= _numConstraints )
         return;
     _stateData[static_cast<size_t>( constraintIndex ) * TOTAL_FEATURES + BaBsr_SCORE] =
-        capFinite( BaBsrScore );
+        squashFeature( BaBsrScore );
 }
 
 void State::updateGlobalFeatures( unsigned unstableCount, unsigned treeDepth, unsigned splitsSoFar )

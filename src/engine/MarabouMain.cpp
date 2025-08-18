@@ -347,12 +347,11 @@ void trainAgentOnExamples( Options *options,
     {
         auto &ex = examples[epoch % examples.size()];
         options->setString( Options::PROPERTY_FILE_PATH, ex.first );
-        for ( unsigned iter = 0; iter <= 2; iter++ )
-        {
-            int splits = 0;
-            agent = Marabou().trainDQNAgent( epsilon, ex.second, std::move( agent ), &splits );
-            *numSplits += splits;
-        }
+
+        int splits = 0;
+        agent = Marabou().trainDQNAgent( epsilon, ex.second, std::move( agent ), &splits );
+        *numSplits += splits;
+
         epsilon = std::max( GlobalConfiguration::DQN_EPSILON_END,
                             epsilon * GlobalConfiguration::DQN_EPSILON_DECAY );
 

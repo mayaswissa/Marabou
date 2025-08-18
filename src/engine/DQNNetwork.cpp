@@ -39,6 +39,7 @@ void QNetwork::initWeights()
 torch::Tensor QNetwork::forward( const torch::Tensor &state )
 {
     auto x = state.to( torch::kFloat32 );
+    x = torch::nan_to_num( x, 0.0, 0.0, 0.0 );
     if ( x.dim() == 2 )
         x = x.unsqueeze( 0 );
     auto B = x.size( 0 );
