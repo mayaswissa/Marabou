@@ -23,7 +23,7 @@ Agent::Agent( const unsigned numPlConstraints,
     , _optimizer( _qNetworkLocal.parameters(),
                   torch::optim::AdamOptions( Options::get()->getFloat( Options::DQN_LR ) )
                       .weight_decay( Options::get()->getFloat( Options::DQN_WEIGHT_DECAY ) ) )
-    , _scheduler( _optimizer, 4, 0.95 )
+    , _scheduler( std::make_unique<torch::optim::StepLR>(_optimizer, /*step_size=*/1500, /*gamma=*/0.5) )
     , _replayedBuffer( ReplayBuffer( _numPlConstraints,
                                      Options::get()->getInt( Options::DQN_BUFFER_SIZE ),
                                      Options::get()->getInt( Options::DQN_BATCH_SIZE ) ) )
@@ -328,16 +328,15 @@ void Agent::learn()
     if ( !handleInvalidGradients() )
         _optimizer.step();
     softUpdate( _qNetworkLocal, _qNetworkTarget );
-
+    _scheduler->step();
     // --- PER priority update ---
     auto abs_td =
         ( QTargets.detach() - QExpected.detach() ).abs().to( torch::kCPU ).contiguous(); // [B]
     auto acc = abs_td.accessor<float, 1>();
+    constexpr float eps_p = 1e-3f;
     for ( size_t i = 0; i < batch.indices.size(); ++i )
     {
-        float base = batch.isDemo[i] ? static_cast<float>( _replayedBuffer.getEpsilonDemo() )
-                                     : static_cast<float>( _replayedBuffer.getEpsilonAgent() );
-        _replayedBuffer.updatePriority( batch.indices[i], acc[i] + base );
+        _replayedBuffer.updatePriority( batch.indices[i], acc[i] + eps_p );
     }
 
     if ( GlobalConfiguration::DON_TRAINING_PHASE == 2 )
@@ -375,5 +374,5 @@ int Agent::getReplayBufferSize() const
 
 void Agent::schedulersStep()
 {
-    _scheduler.step();
+    _scheduler->step();
 }

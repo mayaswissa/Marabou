@@ -47,7 +47,7 @@ private:
     const std::string _trainedAgentFilePath;
     QNetwork _qNetworkLocal, _qNetworkTarget;
     torch::optim::Adam _optimizer;
-    torch::optim::StepLR _scheduler;
+    std::unique_ptr<torch::optim::LRScheduler> _scheduler;
     ReplayBuffer _replayedBuffer;
     unsigned _lossVerbosity;
     float _lambdaSup;
