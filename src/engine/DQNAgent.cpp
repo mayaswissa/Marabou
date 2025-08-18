@@ -4,7 +4,6 @@
 #include "RandomGlobals.h"
 
 #include <limits>
-#include <random>
 #include <utility>
 
 Agent::Agent( const unsigned numPlConstraints,
@@ -252,6 +251,11 @@ void Agent::learn()
         auto forwardLocalNet = _qNetworkLocal.forward( nextStatesTensor );
         auto termMaskLocal = applyActionMask( nextStatesTensor, forwardLocalNet ); // [B] bool
         auto bad = ( ( ~doneTensor ) & termMaskLocal );
+        if ( bad.any().to( torch::kCPU ).item<bool>() )
+        {
+            std::cerr << "Error: no valid next actions!" << std::endl;
+            throw std::runtime_error( "no valid next actions." );
+        }
         const auto localQValuesNextState = forwardLocalNet.argmax( 1, /*keepdim=*/true ); // [B,1]
 
         auto forwardTargetNet = _qNetworkTarget.forward( nextStatesTensor );
@@ -273,12 +277,16 @@ void Agent::learn()
     auto td_errors = torch::smooth_l1_loss( QExpected, QTargets.detach(), torch::Reduction::None );
     auto weights = torch::tensor( batch.weights, statesTensor.options().dtype( torch::kFloat32 ) )
                        .to( device );
-    weights = weights / weights.max().clamp_min( 1e-8f ); // keep your choice (max); mean is also
-                                                          // fine
+    weights = weights / weights.mean().clamp_min( 1e-8f );
     auto weightedTdLoss = ( td_errors * weights ).mean();
 
     // --- Margin loss (demonstration data) ---
     std::vector<int64_t> demo_mask_int( batch.isDemo.begin(), batch.isDemo.end() );
+    if ( !torch::isfinite( all_q ).all().item<bool>() )
+    {
+        throw std::runtime_error( "Non-finite all_q in learn() (pre-mask)" );
+    }
+
     auto all_q_masked = all_q.clone();
     auto termMask = applyActionMask( statesTensor, all_q_masked );
 
@@ -317,16 +325,14 @@ void Agent::learn()
     if ( !handleInvalidGradients() )
         _optimizer.step();
     softUpdate( _qNetworkLocal, _qNetworkTarget );
-
     // --- PER priority update ---
     auto abs_td =
         ( QTargets.detach() - QExpected.detach() ).abs().to( torch::kCPU ).contiguous(); // [B]
     auto acc = abs_td.accessor<float, 1>();
+    constexpr float eps_p = 1e-3f;
     for ( size_t i = 0; i < batch.indices.size(); ++i )
     {
-        float base = batch.isDemo[i] ? static_cast<float>( _replayedBuffer.getEpsilonDemo() )
-                                     : static_cast<float>( _replayedBuffer.getEpsilonAgent() );
-        _replayedBuffer.updatePriority( batch.indices[i], acc[i] + base );
+        _replayedBuffer.updatePriority( batch.indices[i], acc[i] + eps_p );
     }
 
     if ( GlobalConfiguration::DON_TRAINING_PHASE == 2 )

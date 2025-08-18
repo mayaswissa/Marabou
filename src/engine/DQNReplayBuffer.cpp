@@ -174,8 +174,7 @@ void ReplayBuffer::addExperienceToRevisitBuffer( const State &state,
     _dones.index_put_( { static_cast<long>( _writePosition ) }, done ? 1 : 0 );
 
     _isDemo[_writePosition] = isDemo;
-    float p = isDemo ? _epsDemo : _epsAgent;
-
+    float p = std::max(_maxPriority, 1.0f);
     updatePriority( _writePosition, p );
     _maxPriority = std::max( _maxPriority, p );
     _writePosition = ( _writePosition + 1 ) % _bufferSize;
