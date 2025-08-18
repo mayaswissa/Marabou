@@ -72,8 +72,8 @@ void State::updateBounds( const unsigned constraintIndex,
     if ( constraintIndex >= _numConstraints )
         return;
     const size_t base = static_cast<size_t>( constraintIndex ) * TOTAL_FEATURES;
-    _stateData[base + DQN_RELU_LOWER_BOUND] = squashFeature( lowerBound );
-    _stateData[base + DQN_RELU_UPPER_BOUND] = squashFeature( upperBound );
+    _stateData[base + DQN_RELU_LOWER_BOUND] = squashFeature( lowerBound, 30 );
+    _stateData[base + DQN_RELU_UPPER_BOUND] = squashFeature( upperBound, 30 );
 }
 
 void State::updateSoIScoreForAgent( const unsigned constraintIndex,
