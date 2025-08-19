@@ -256,8 +256,10 @@ std::vector<std::pair<std::string, std::string>> collectExamples( std::string &r
         else if ( name.size() >= 4 && name.compare( name.size() - 4, 4, ".txt" ) == 0 )
             fullPath = root + "/" + name;
 
-        else if ( name.size() >= 4 && name.compare( name.size() - 7, 7, ".vnnlib" ) == 0 )
+        else if ( name.size() >= 7 && name.compare( name.size() - 7, 7, ".vnnlib" ) == 0 )
             fullPath = root + "/" + name;
+        else
+            continue;
         std::string id;
         extractID( fullPath, exampleType, id );
 
