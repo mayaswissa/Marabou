@@ -17,10 +17,8 @@ enum DQNFeatures : unsigned {
     DQN_RELU_INACTIVE_VALUE = 2,
     DQN_RELU_LOWER_BOUND = 3,
     DQN_RELU_UPPER_BOUND = 4,
-    SOI_ACTIVE_SCORE = 5,
-    SOI_INACTIVE_SCORE = 6,
-    POLARITY_SCORE = 7,
-    BaBsr_SCORE = 8,
+    POLARITY_SCORE = 5,
+    BaBsr_SCORE = 6,
 
     NUM_LOCAL_FEATURES
 };
@@ -42,9 +40,6 @@ public:
     State &operator=( const State &other );
     torch::Tensor toTensor() const;
     void updateConstraintPhase( unsigned constraintIndex, unsigned newPhase );
-    void updateSoIScoreForAgent( unsigned constraintIndex,
-                                 double SoiActiveScore,
-                                 double SoiInactiveScore );
     void updateBounds( unsigned constraintIndex, double upperBound, double lowerBound );
     void updatePolarity( unsigned constraintIndex, double polarityScore );
     void updateBaBsrScore( unsigned constraintIndex, double BaBsrScore );

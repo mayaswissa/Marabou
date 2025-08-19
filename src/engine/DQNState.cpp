@@ -76,17 +76,6 @@ void State::updateBounds( const unsigned constraintIndex,
     _stateData[base + DQN_RELU_UPPER_BOUND] = squashFeature( upperBound, 30 );
 }
 
-void State::updateSoIScoreForAgent( const unsigned constraintIndex,
-                                    const double SoiActiveScore,
-                                    const double SoiInactiveScore )
-{
-    if ( constraintIndex >= _numConstraints )
-        return;
-    const size_t base = static_cast<size_t>( constraintIndex ) * TOTAL_FEATURES;
-    _stateData[base + SOI_ACTIVE_SCORE] = squashFeature( SoiActiveScore );
-    _stateData[base + SOI_INACTIVE_SCORE] = squashFeature( SoiInactiveScore );
-}
-
 void State::updatePolarity( const unsigned constraintIndex, const double polarityScore )
 {
     if ( constraintIndex >= _numConstraints )

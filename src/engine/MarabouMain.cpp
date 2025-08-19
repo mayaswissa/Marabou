@@ -319,14 +319,8 @@ void trainAgentOnExamples( Options *options,
         for ( auto iter = 0; iter < numRepeats; iter++ )
         {
             options->setString( Options::PROPERTY_FILE_PATH, ex.first );
-            int splits = 0;
-            // pseudo-impact
-            splits = 0;
-            GlobalConfiguration::DQN_FORCED_HEURISTIC =
-                GlobalConfiguration::GuidedHeuristic::PSEUDO_IMPACT;
-            agent = Marabou().trainDQNAgent( epsilon, ex.second, std::move( agent ), &splits );
-            *numSplits += splits;
             // polarity
+            int splits = 0;
             GlobalConfiguration::DQN_FORCED_HEURISTIC =
                 GlobalConfiguration::GuidedHeuristic::POLARITY;
             agent = Marabou().trainDQNAgent( epsilon, ex.second, std::move( agent ), &splits );
