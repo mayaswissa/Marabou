@@ -284,6 +284,51 @@ randomSample( const std::vector<std::pair<std::string, std::string>> &all, int M
         sampled.push_back( all[idx] );
     return sampled;
 }
+
+static bool endsWith( const std::string &s, const std::string &suf )
+{
+    return s.size() >= suf.size() && std::equal( suf.rbegin(), suf.rend(), s.rbegin() );
+}
+
+static std::string pickRandomOnnxSibling( const std::string &currentOnnx )
+{
+    const std::string dir = parentDir( currentOnnx );
+    if ( dir.empty() || !isDir( dir ) )
+        return currentOnnx;
+
+    std::vector<std::string> onnxFiles;
+    for ( const auto &name : listDir( dir ) )
+    {
+        if ( endsWith( name, ".onnx" ) )
+            onnxFiles.emplace_back( dir + "/" + name );
+    }
+    if ( onnxFiles.empty() )
+        return currentOnnx;
+
+    const int idx =
+        RandomGlobals::instance().randInt( 0, static_cast<int>( onnxFiles.size() ) - 1 );
+    return onnxFiles[static_cast<size_t>( idx )];
+}
+
+static void randomizeInputNetworkPerEpoch( Options *options )
+{
+    // Guard on the flag
+    if ( !options->getBool( Options::DQN_RANDOMIZE_NETWORK_PER_EPOCH ) )
+        return;
+
+    // Current network path
+    const String in = options->getString( Options::INPUT_FILE_PATH );
+    const std::string currentOnnx = in.ascii();
+
+    // Pick a sibling .onnx at random
+    const std::string chosen = pickRandomOnnxSibling( currentOnnx );
+
+    // If different, set and log
+    if ( chosen != currentOnnx )
+        options->setString( Options::INPUT_FILE_PATH, chosen.c_str() );
+}
+
+
 void trainAgentOnExamples( Options *options,
                            const std::vector<std::pair<std::string, std::string>> &examples,
                            std::unique_ptr<Agent> &agent,
@@ -320,6 +365,7 @@ void trainAgentOnExamples( Options *options,
     {
         for ( auto iter = 0; iter < numRepeats; iter++ )
         {
+            randomizeInputNetworkPerEpoch( options );
             options->setString( Options::PROPERTY_FILE_PATH, ex.first );
             int splits = 0;
             // pseudo-impact
@@ -353,6 +399,7 @@ void trainAgentOnExamples( Options *options,
     GlobalConfiguration::DON_TRAINING_PHASE = 2;
     for ( unsigned epoch = 0; epoch < DQN_epochs; ++epoch )
     {
+        randomizeInputNetworkPerEpoch( options );
         auto &ex = examples[epoch % examples.size()];
         options->setString( Options::PROPERTY_FILE_PATH, ex.first );
         int splits = 0;

@@ -86,6 +86,8 @@ public:
         // logically-consecutive weighted sum layers into a single
         // weighted sum layer, to reduce the number of variables
         DO_NOT_MERGE_CONSECUTIVE_WEIGHTED_SUM_LAYERS,
+
+        DQN_RANDOMIZE_NETWORK_PER_EPOCH
     };
 
     enum IntOptions {

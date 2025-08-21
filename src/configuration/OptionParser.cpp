@@ -321,7 +321,12 @@ void OptionParser::initialize()
             &( *_boolOptions )[Options::DO_NOT_MERGE_CONSECUTIVE_WEIGHTED_SUM_LAYERS] )
             ->default_value(
                 ( *_boolOptions )[Options::DO_NOT_MERGE_CONSECUTIVE_WEIGHTED_SUM_LAYERS] ),
-        "Do no merge consecutive weighted-sum layers." )
+        "Do no merge consecutive weighted-sum layers." )(
+        "DQN-random-network",
+        boost::program_options::bool_switch(
+            &( *_boolOptions )[Options::DQN_RANDOMIZE_NETWORK_PER_EPOCH] )
+            ->default_value( ( *_boolOptions )[Options::DQN_RANDOMIZE_NETWORK_PER_EPOCH] ),
+        "Pick random networks to train agent on." )
 #ifdef ENABLE_GUROBI
         ( "lp-solver",
           boost::program_options::value<std::string>( &( ( *_stringOptions )[Options::LP_SOLVER] ) )
