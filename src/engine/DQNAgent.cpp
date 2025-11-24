@@ -260,8 +260,9 @@ void Agent::learn()
         const auto targetQValuesNextState =
             forwardTargetNet.gather( 1, localQValuesNextState ).squeeze( 1 );
 
-        auto notDone = ( ( ~doneTensor ) & ( ~termMaskLocal ) ).to( torch::kFloat32 );
-        QTargets = rewardsTensor + GAMMA * targetQValuesNextState * notDone;
+        auto notDone = ((~doneTensor) & (~termMaskLocal)).to(torch::kBool);
+        auto gatedTarget = torch::where( notDone, targetQValuesNextState, torch::zeros_like(targetQValuesNextState) );
+        QTargets = rewardsTensor + GAMMA * gatedTarget;
     }
 
     if ( torch::isnan( QTargets ).any().item<bool>() )

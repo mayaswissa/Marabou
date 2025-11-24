@@ -324,8 +324,11 @@ static void randomizeInputNetworkPerEpoch( Options *options )
     const std::string chosen = pickRandomOnnxSibling( currentOnnx );
 
     // If different, set and log
-    if ( chosen != currentOnnx )
+    if ( chosen != currentOnnx ){
+        DQN_LOG( Stringf( "Using randomized network for this epoch: %s", chosen.c_str() ).ascii() );
         options->setString( Options::INPUT_FILE_PATH, chosen.c_str() );
+
+    }
 }
 
 
