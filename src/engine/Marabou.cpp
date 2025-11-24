@@ -57,7 +57,6 @@ Marabou::~Marabou()
 
 void Marabou::run()
 {
-    std::cout << "start run time: " << TimeUtils::now().ascii() << std::endl;
     struct timespec start = TimeUtils::sampleMicro();
 
     prepareQuery();
@@ -71,8 +70,6 @@ void Marabou::run()
 
     if ( Options::get()->getBool( Options::EXPORT_ASSIGNMENT ) )
         exportAssignment();
-
-    std::cout << "end run time: " << TimeUtils::now().ascii() << std::endl;
 }
 
 std::unique_ptr<Agent> Marabou::trainDQNAgent( double epsilon,
@@ -266,30 +263,27 @@ std::unique_ptr<Agent> Marabou::trainQuery( double epsilon,
         std::string filePath = std::string( path.ascii() ) + "/" + exampleID;
         struct timespec start = TimeUtils::sampleMicro();
         unsigned trainTimeoutInSeconds = Options::get()->getInt( Options::TRAIN_DQN_TIMEOUT );
-        unsigned timeoutInSeconds = Options::get()->getInt( Options::TIMEOUT );
 
         agent =
             _engine->trainDQNAgent( epsilon, std::move( agent ), trainTimeoutInSeconds, numSplits );
-
 
         if ( _engine->getExitCode() == Engine::UNKNOWN )
         {
             struct timespec end = TimeUtils::sampleMicro();
             unsigned long long totalElapsed = TimeUtils::timePassed( start, end );
-            if ( timeoutInSeconds == 0 || totalElapsed < timeoutInSeconds * MICROSECONDS_IN_SECOND )
+            if ( trainTimeoutInSeconds == 0 || totalElapsed < trainTimeoutInSeconds * MICROSECONDS_IN_SECOND )
             {
                 _cegarSolver =
                     new CEGAR::IncrementalLinearization( _inputQuery, _engine.release() );
                 unsigned long long timeoutInMicroSeconds =
-                    ( timeoutInSeconds == 0
+                    ( trainTimeoutInSeconds == 0
                           ? 0
-                          : timeoutInSeconds * MICROSECONDS_IN_SECOND - totalElapsed );
+                          : trainTimeoutInSeconds * MICROSECONDS_IN_SECOND - totalElapsed );
                 _cegarSolver->setInitialTimeoutInMicroSeconds( timeoutInMicroSeconds );
                 _cegarSolver->solve();
                 _engine = std::unique_ptr<Engine>( _cegarSolver->releaseEngine() );
             }
         }
-
 
         if ( _engine->getExitCode() == Engine::SAT )
             _engine->extractSolution( _inputQuery );

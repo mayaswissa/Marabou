@@ -11,7 +11,7 @@
  **
  ** [[ Add lengthier description here ]]
 
- **/
+**/
 
 #include "ConfigurationError.h"
 #include "DnCMarabou.h"
@@ -134,62 +134,18 @@ void extractTrainedAgentID( std::string &trainedAgentPath, std::string &trainedA
 
 void extractRobustnessExampleID( std::string &examplePath, std::string &exampleID )
 {
-    size_t ex_pos = examplePath.find( "ex_" ) + 3;
-    size_t label_pos = examplePath.find( "_label_" ) + 7;
+    size_t ex_pos = examplePath.find( "ex_" );
+    size_t label_pos = examplePath.find( "_label_" );
+    if ( ex_pos == std::string::npos || label_pos == std::string::npos )
+    {
+        exampleID.clear();
+        return;
+    }
+    ex_pos += 3;
+    label_pos += 7;
     std::string ex_id = examplePath.substr( ex_pos, 4 );
     std::string label_id = examplePath.substr( label_pos, 1 );
     exampleID = ex_id + label_id;
-}
-
-void extractMetaroomID( std::string &examplePath, std::string &exampleID )
-{
-    examplePath = Options::get()->getString( Options::PROPERTY_FILE_PATH ).ascii();
-    size_t idx_start = examplePath.find( "spec_idx_" );
-    size_t eps_start = examplePath.find( "_eps_" );
-    size_t dot_pos = examplePath.find( ".vnnlib" );
-    if ( idx_start == std::string::npos || eps_start == std::string::npos ||
-         dot_pos == std::string::npos )
-    {
-        std::cerr << "Error: Unexpected file name format: " << examplePath << std::endl;
-        exit( 1 );
-    }
-    idx_start += 9;
-    size_t idx_end = eps_start;
-    std::string idx = examplePath.substr( idx_start, idx_end - idx_start );
-    size_t eps_val_start = eps_start + 5;
-    std::string eps = examplePath.substr( eps_val_start, dot_pos - eps_val_start );
-    eps.erase( std::remove( eps.begin(), eps.end(), '.' ), eps.end() );
-    exampleID = idx + eps;
-}
-
-void extractCoraID( std::string &examplePath, std::string &exampleID )
-{
-    examplePath = Options::get()->getString( Options::PROPERTY_FILE_PATH ).ascii();
-    size_t start = examplePath.find( "mnist-img" ) + strlen( "mnist-img" );
-    size_t end = examplePath.find( ".vnnlib", start );
-    std::string num = examplePath.substr( start, end - start );
-    while ( num.size() < 3 )
-        num = "0" + num;
-
-    exampleID = num;
-}
-
-void extractID( std::string &path, std::string &exampleType, std::string &outID )
-{
-    if ( exampleType == "metaroom" )
-        extractMetaroomID( path, outID );
-    else if ( exampleType == "cora" )
-        extractCoraID( path, outID );
-    else if ( exampleType == "MarabouRobustness" )
-        extractRobustnessExampleID( path, outID );
-    else
-    {
-        auto pos = path.find_last_of( '/' );
-        if ( pos == std::string::npos )
-            outID = "noID";
-        else
-            outID = path.substr( pos + 1 );
-    }
 }
 
 std::string parentDir( const std::string &path )
@@ -198,14 +154,6 @@ std::string parentDir( const std::string &path )
     if ( pos == std::string::npos )
         return "";
     return path.substr( 0, pos );
-}
-
-std::string computeRootDir( const std::string &examplePath, const std::string &exampleType )
-{
-    std::string root = parentDir( examplePath );
-    if ( exampleType == "MarabouRobustness" )
-        root = parentDir( root );
-    return root;
 }
 
 bool isDir( const std::string &path )
@@ -240,14 +188,54 @@ std::vector<std::string> listDir( const std::string &dirPath )
     return names;
 }
 
-std::vector<std::pair<std::string, std::string>> collectExamples( std::string &root,
-                                                                  std::string &exampleType )
+static bool isRobustnessRoot( const std::string &root )
+{
+    if ( root.empty() || !isDir( root ) )
+        return false;
+    std::vector<std::string> names = listDir( root );
+    for ( size_t i = 0; i < names.size(); ++i )
+    {
+        const std::string &name = names[i];
+        if ( name.find( "label" ) != std::string::npos )
+            return true;
+    }
+    return false;
+}
+
+void extractID( std::string &path, std::string &outID )
+{
+
+    if ( path.find( "ex_" ) != std::string::npos &&
+         path.find( "_label_" ) != std::string::npos )
+    {
+        extractRobustnessExampleID( path, outID );
+        return;
+    }
+    auto pos = path.find_last_of( '/' );
+    if ( pos == std::string::npos )
+        outID = "noID";
+    else
+        outID = path.substr( pos + 1 );
+}
+
+std::string computeRootDir( const std::string &examplePath )
+{
+    std::string root = parentDir( examplePath );
+    std::string parentRoot = parentDir( root );
+    if ( isRobustnessRoot( parentRoot ) )
+        root = parentRoot;
+
+    return root;
+}
+
+std::vector<std::pair<std::string, std::string>> collectExamples( std::string &root )
 {
     std::vector<std::pair<std::string, std::string>> examples;
+    bool isRobust = isRobustnessRoot( root );
     for ( auto &name : listDir( root ) )
     {
         std::string fullPath;
-        if ( exampleType == "MarabouRobustness" )
+        if ( isRobust )
         {
             if ( name.find( "label" ) == std::string::npos )
                 continue;
@@ -261,8 +249,7 @@ std::vector<std::pair<std::string, std::string>> collectExamples( std::string &r
         else
             continue;
         std::string id;
-        extractID( fullPath, exampleType, id );
-
+        extractID( fullPath, id );
         examples.emplace_back( fullPath, id );
     }
     return examples;
@@ -561,7 +548,14 @@ int marabouMain( int argc, char **argv )
             std::string exampleID;
             std::string examplePath =
                 Options::get()->getString( Options::PROPERTY_FILE_PATH ).ascii();
-            extractID( examplePath, exampleType, exampleID );
+            extractID( examplePath, exampleID );
+            bool isRobust = false;
+            {
+                std::string p1 = parentDir( examplePath );
+                std::string p2 = parentDir( p1 );
+                isRobust = isRobustnessRoot( p2 );
+            }
+
             std::string network;
             extractNetworkName( network );
             const std::string outDir = options->getString( Options::DQN_OUTPUT_FILE_PATH ).ascii();
@@ -577,13 +571,13 @@ int marabouMain( int argc, char **argv )
             if ( mode == 1 )
             {
                 // TRAIN MODE
-                auto root = computeRootDir( examplePath, exampleType );
+                auto root = computeRootDir( examplePath );
                 if ( root.empty() || !isDir( root ) )
                 {
                     std::cerr << "Error: cannot determine root from '" << examplePath << "'\n";
                     return 1;
                 }
-                auto allExamples = collectExamples( root, exampleType );
+                auto allExamples = collectExamples( root );
                 auto sampled = randomSample(
                     allExamples, options->getInt( Options::DQN_NUM_TRAINING_EXAMPLES ) );
 
@@ -620,7 +614,7 @@ int marabouMain( int argc, char **argv )
                     std::cerr << "Error: cannot determine root from '" << root << "'\n";
                     return 1;
                 }
-                if ( exampleType == "MarabouRobustness" )
+                if ( isRobust )
                     return runRobustnessProperties( options, examplePath, out, true );
                 int numSplits = 0;
                 Marabou().runTrainedAgentOnExample( &numSplits );
@@ -630,7 +624,7 @@ int marabouMain( int argc, char **argv )
                 auto spittingHeuristic = options->getString( Options::SPLITTING_STRATEGY );
                 out << "Strategy : " << std::string( spittingHeuristic.ascii() ) << "\n";
                 out.flush();
-                if ( exampleType == "MarabouRobustness" )
+                if ( isRobust )
                     return runRobustnessProperties( options, examplePath, out, false );
                 Marabou().run();
             }
