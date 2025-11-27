@@ -87,7 +87,6 @@ public:
         // weighted sum layer, to reduce the number of variables
         DO_NOT_MERGE_CONSECUTIVE_WEIGHTED_SUM_LAYERS,
 
-        DQN_RANDOMIZE_NETWORK_PER_EPOCH
     };
 
     enum IntOptions {
@@ -128,8 +127,6 @@ public:
         DQN_MODE,
 
         DQN_EPOCHS,
-
-        DQN_GUIDED_EPOCHS,
 
         DQN_GUIDED_STEPS,
 
@@ -203,7 +200,6 @@ public:
 
         DQN_OUTPUT_FILE_PATH,
 
-        BENCHMARK
     };
 
     /*

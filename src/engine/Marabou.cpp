@@ -72,16 +72,14 @@ void Marabou::run()
         exportAssignment();
 }
 
-std::unique_ptr<Agent> Marabou::trainDQNAgent( double epsilon,
-                                                  const std::string &exampleID,
-                                                  std::unique_ptr<Agent> agent,
-                                                  int *numSplits )
+std::unique_ptr<Agent>
+Marabou::trainDQNAgent( double epsilon, const std::string &exampleID, std::unique_ptr<Agent> agent )
 {
     struct timespec start = TimeUtils::sampleMicro();
 
     prepareQuery();
 
-    agent = trainQuery( epsilon, exampleID, std::move( agent ), numSplits );
+    agent = trainQuery( epsilon, exampleID, std::move( agent ) );
 
     struct timespec end = TimeUtils::sampleMicro();
 
@@ -91,13 +89,13 @@ std::unique_ptr<Agent> Marabou::trainDQNAgent( double epsilon,
     return agent;
 }
 
-void Marabou::runTrainedAgentOnExample( int *numSplits )
+void Marabou::runTrainedAgent()
 {
     struct timespec start = TimeUtils::sampleMicro();
 
     prepareQuery();
 
-    solveQueryWithAgent( numSplits );
+    solveQueryWithAgent();
 
     struct timespec end = TimeUtils::sampleMicro();
 
@@ -248,10 +246,8 @@ void Marabou::exportAssignment() const
     exportFile->close();
 }
 
-std::unique_ptr<Agent> Marabou::trainQuery( double epsilon,
-                                            const std::string &exampleID,
-                                            std::unique_ptr<Agent> agent,
-                                            int *numSplits )
+std::unique_ptr<Agent>
+Marabou::trainQuery( double epsilon, const std::string &exampleID, std::unique_ptr<Agent> agent )
 {
     enum {
         MICROSECONDS_IN_SECOND = 1000000
@@ -263,10 +259,7 @@ std::unique_ptr<Agent> Marabou::trainQuery( double epsilon,
         std::string filePath = std::string( path.ascii() ) + "/" + exampleID;
         struct timespec start = TimeUtils::sampleMicro();
         unsigned trainTimeoutInSeconds = Options::get()->getInt( Options::TRAIN_DQN_TIMEOUT );
-
-        agent =
-            _engine->trainDQNAgent( epsilon, std::move( agent ), trainTimeoutInSeconds, numSplits );
-
+        agent = _engine->trainDQNAgent( epsilon, std::move( agent ), trainTimeoutInSeconds );
         if ( _engine->getExitCode() == Engine::UNKNOWN )
         {
             struct timespec end = TimeUtils::sampleMicro();
@@ -291,7 +284,7 @@ std::unique_ptr<Agent> Marabou::trainQuery( double epsilon,
     return agent;
 }
 
-void Marabou::solveQueryWithAgent( int *numSplits )
+void Marabou::solveQueryWithAgent()
 {
     enum {
         MICROSECONDS_IN_SECOND = 1000000
@@ -303,7 +296,7 @@ void Marabou::solveQueryWithAgent( int *numSplits )
         std::string filePath = std::string( path.ascii() );
         struct timespec start = TimeUtils::sampleMicro();
         unsigned timeoutInSeconds = Options::get()->getInt( Options::TIMEOUT );
-        _engine->solve( timeoutInSeconds, filePath, numSplits );
+        _engine->solve( timeoutInSeconds, filePath );
 
         if ( _engine->getExitCode() == Engine::UNKNOWN )
         {

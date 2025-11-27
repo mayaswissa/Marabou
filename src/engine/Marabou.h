@@ -32,13 +32,11 @@ public:
       Entry point of this class
     */
     void run();
-    std::unique_ptr<Agent> trainDQNAgent( double epsilon,
-                                             const std::string &exampleID,
-                                             std::unique_ptr<Agent> agent,
-                                             int *numSplits );
+    std::unique_ptr<Agent>
+    trainDQNAgent( double epsilon, const std::string &exampleID, std::unique_ptr<Agent> agent );
     void prepareInputQuery();
 
-    void runTrainedAgentOnExample( int *numSplits );
+    void runTrainedAgent();
 
 private:
     InputQuery _inputQuery;
@@ -55,7 +53,7 @@ private:
     */
     void solveQuery();
 
-    void solveQueryWithAgent( int *numSplits = nullptr );
+    void solveQueryWithAgent();
 
     /*
       Display the results
@@ -66,10 +64,8 @@ private:
       Export assignment as per Options
      */
     void exportAssignment() const;
-    std::unique_ptr<Agent> trainQuery( double epsilon,
-                                       const std::string &exampleID,
-                                       std::unique_ptr<Agent> agent,
-                                       int *numSplits );
+    std::unique_ptr<Agent>
+    trainQuery( double epsilon, const std::string &exampleID, std::unique_ptr<Agent> agent );
 
     /*
       Import assignment for debugging as per Options

@@ -151,10 +151,6 @@ void OptionParser::initialize()
             &( *_stringOptions )[Options::DQN_AGENT_NETWORKS_PATH] )
             ->default_value( ( *_stringOptions )[Options::DQN_AGENT_NETWORKS_PATH] ),
         "Path to load/ save DQN agent's networks." )(
-        "benchmarks",
-        boost::program_options::value<std::string>( &( *_stringOptions )[Options::BENCHMARK] )
-            ->default_value( ( *_stringOptions )[Options::BENCHMARK] ),
-        "Benchmark of the current exampl." )(
         "DQN-mode",
         boost::program_options::value<int>( &( ( *_intOptions )[Options::DQN_MODE] ) )
             ->default_value( ( *_intOptions )[Options::DQN_MODE] ),
@@ -163,10 +159,6 @@ void OptionParser::initialize()
         boost::program_options::value<int>( &( *_intOptions )[Options::DQN_EPOCHS] )
             ->default_value( ( *_intOptions )[Options::DQN_EPOCHS] ),
         "number of epochs in DQN training." )(
-        "DQN-guided-epochs",
-        boost::program_options::value<int>( &( *_intOptions )[Options::DQN_GUIDED_EPOCHS] )
-            ->default_value( ( *_intOptions )[Options::DQN_GUIDED_EPOCHS] ),
-        "number of guided epochs in DQN training." )(
         "DQN-guided-steps",
         boost::program_options::value<int>( &( *_intOptions )[Options::DQN_GUIDED_STEPS] )
             ->default_value( ( *_intOptions )[Options::DQN_GUIDED_STEPS] ),
@@ -321,12 +313,7 @@ void OptionParser::initialize()
             &( *_boolOptions )[Options::DO_NOT_MERGE_CONSECUTIVE_WEIGHTED_SUM_LAYERS] )
             ->default_value(
                 ( *_boolOptions )[Options::DO_NOT_MERGE_CONSECUTIVE_WEIGHTED_SUM_LAYERS] ),
-        "Do no merge consecutive weighted-sum layers." )(
-        "DQN-random-network",
-        boost::program_options::bool_switch(
-            &( *_boolOptions )[Options::DQN_RANDOMIZE_NETWORK_PER_EPOCH] )
-            ->default_value( ( *_boolOptions )[Options::DQN_RANDOMIZE_NETWORK_PER_EPOCH] ),
-        "Pick random networks to train agent on." )
+        "Do no merge consecutive weighted-sum layers." )
 #ifdef ENABLE_GUROBI
         ( "lp-solver",
           boost::program_options::value<std::string>( &( ( *_stringOptions )[Options::LP_SOLVER] ) )

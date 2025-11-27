@@ -204,9 +204,7 @@ static bool isRobustnessRoot( const std::string &root )
 
 void extractID( std::string &path, std::string &outID )
 {
-
-    if ( path.find( "ex_" ) != std::string::npos &&
-         path.find( "_label_" ) != std::string::npos )
+    if ( path.find( "ex_" ) != std::string::npos && path.find( "_label_" ) != std::string::npos )
     {
         extractRobustnessExampleID( path, outID );
         return;
@@ -272,64 +270,15 @@ randomSample( const std::vector<std::pair<std::string, std::string>> &all, int M
     return sampled;
 }
 
-static bool endsWith( const std::string &s, const std::string &suf )
-{
-    return s.size() >= suf.size() && std::equal( suf.rbegin(), suf.rend(), s.rbegin() );
-}
-
-static std::string pickRandomOnnxSibling( const std::string &currentOnnx )
-{
-    const std::string dir = parentDir( currentOnnx );
-    if ( dir.empty() || !isDir( dir ) )
-        return currentOnnx;
-
-    std::vector<std::string> onnxFiles;
-    for ( const auto &name : listDir( dir ) )
-    {
-        if ( endsWith( name, ".onnx" ) )
-            onnxFiles.emplace_back( dir + "/" + name );
-    }
-    if ( onnxFiles.empty() )
-        return currentOnnx;
-
-    const int idx =
-        RandomGlobals::instance().randInt( 0, static_cast<int>( onnxFiles.size() ) - 1 );
-    return onnxFiles[static_cast<size_t>( idx )];
-}
-
-static void randomizeInputNetworkPerEpoch( Options *options )
-{
-    // Guard on the flag
-    if ( !options->getBool( Options::DQN_RANDOMIZE_NETWORK_PER_EPOCH ) )
-        return;
-
-    // Current network path
-    const String in = options->getString( Options::INPUT_FILE_PATH );
-    const std::string currentOnnx = in.ascii();
-
-    // Pick a sibling .onnx at random
-    const std::string chosen = pickRandomOnnxSibling( currentOnnx );
-
-    // If different, set and log
-    if ( chosen != currentOnnx ){
-        DQN_LOG( Stringf( "Using randomized network for this epoch: %s", chosen.c_str() ).ascii() );
-        options->setString( Options::INPUT_FILE_PATH, chosen.c_str() );
-
-    }
-}
-
 
 void trainAgentOnExamples( Options *options,
                            const std::vector<std::pair<std::string, std::string>> &examples,
-                           std::unique_ptr<Agent> &agent,
-                           int *numSplits,
-                           std::ofstream &outputTxtFile )
+                           std::unique_ptr<Agent> &agent )
 {
     unsigned DQN_epochs = options->getInt( Options::DQN_EPOCHS );
     unsigned learnGuidedSteps = options->getInt( Options::DQN_GUIDED_STEPS );
     double epsilon = GlobalConfiguration::DQN_EPSILON_START;
 
-    // pick N demo indices from [0..M)
     int N = options->getInt( Options::DQN_NUM_DEMO_EXAMPLES );
     N = std::min( N, (int)examples.size() );
     std::unordered_set<int> demoIndices;
@@ -343,9 +292,6 @@ void trainAgentOnExamples( Options *options,
         demos.push_back( examples[idx] );
 
     agent = nullptr;
-    if ( !outputTxtFile.is_open() )
-        return;
-    outputTxtFile << "\n    results of each episode : \n" << std::flush;
 
     // 1) COLLECT DEMONSTRATION TRAJECTORIES
     DQN_LOG( "=== COLLECTING DEMOS ===\n" );
@@ -355,26 +301,19 @@ void trainAgentOnExamples( Options *options,
     {
         for ( auto iter = 0; iter < numRepeats; iter++ )
         {
-            randomizeInputNetworkPerEpoch( options );
             options->setString( Options::PROPERTY_FILE_PATH, ex.first );
-            int splits = 0;
             // pseudo-impact
-            splits = 0;
             GlobalConfiguration::DQN_FORCED_HEURISTIC =
                 GlobalConfiguration::GuidedHeuristic::PSEUDO_IMPACT;
-            agent = Marabou().trainDQNAgent( epsilon, ex.second, std::move( agent ), &splits );
-            *numSplits += splits;
+            agent = Marabou().trainDQNAgent( epsilon, ex.second, std::move( agent ) );
             // polarity
             GlobalConfiguration::DQN_FORCED_HEURISTIC =
                 GlobalConfiguration::GuidedHeuristic::POLARITY;
-            agent = Marabou().trainDQNAgent( epsilon, ex.second, std::move( agent ), &splits );
-            *numSplits += splits;
+            agent = Marabou().trainDQNAgent( epsilon, ex.second, std::move( agent ) );
             // BaBsr
-            splits = 0;
             GlobalConfiguration::DQN_FORCED_HEURISTIC =
                 GlobalConfiguration::GuidedHeuristic::BABS_R;
-            agent = Marabou().trainDQNAgent( epsilon, ex.second, std::move( agent ), &splits );
-            *numSplits += splits;
+            agent = Marabou().trainDQNAgent( epsilon, ex.second, std::move( agent ) );
         }
     }
 
@@ -389,33 +328,18 @@ void trainAgentOnExamples( Options *options,
     GlobalConfiguration::DON_TRAINING_PHASE = 2;
     for ( unsigned epoch = 0; epoch < DQN_epochs; ++epoch )
     {
-        randomizeInputNetworkPerEpoch( options );
         auto &ex = examples[epoch % examples.size()];
         options->setString( Options::PROPERTY_FILE_PATH, ex.first );
-        int splits = 0;
-        agent = Marabou().trainDQNAgent( epsilon, ex.second, std::move( agent ), &splits );
-        *numSplits += splits;
+        agent = Marabou().trainDQNAgent( epsilon, ex.second, std::move( agent ) );
         epsilon = std::max( GlobalConfiguration::DQN_EPSILON_END,
                             epsilon * GlobalConfiguration::DQN_EPSILON_DECAY );
-
-        outputTxtFile << Stringf( "Completed RL epoch %u (property=%s), epsilon=%.4f\n",
-                                  epoch,
-                                  ex.second.c_str(),
-                                  epsilon )
-                             .ascii()
-                      << std::flush;
     }
-
     if ( agent != nullptr )
     {
         const auto path = options->getString( Options::DQN_AGENT_NETWORKS_PATH );
         const std::string filePath = std::string( path.ascii() ) + "/agent";
         agent->saveNetworks( filePath );
-        outputTxtFile << "agent network has been saved. Path: " << filePath;
-        outputTxtFile << std::flush;
     }
-
-    outputTxtFile << "\n";
 }
 
 
@@ -425,17 +349,12 @@ void setRandomSeed()
     RandomGlobals::instance().seed( 1 );
 }
 
-
-int runRobustnessProperties( Options *options,
-                             const std::string &examplePath,
-                             std::ofstream &out,
-                             bool agent )
+int runRobustnessProperties( Options *options, const std::string &examplePath, bool agent )
 {
     std::string root = parentDir( examplePath );
     if ( root.empty() || !isDir( root ) )
     {
         std::cerr << "Error: cannot determine root from '" << root << "'\n";
-        out.close();
         return 1;
     }
     auto examples = listDir( root );
@@ -451,25 +370,22 @@ int runRobustnessProperties( Options *options,
         std::string eps_id = fullCurrentExamplePath.substr( eps_pos, 2 );
         options->setString( Options::PROPERTY_FILE_PATH, fullCurrentExamplePath );
         struct timespec startTime = TimeUtils::sampleMicro();
-        out << "epsilon : " << eps_id << "\n";
-        out << std::flush;
         if ( agent )
         {
-            int numSplits = 0;
             DQN_LOG( Stringf( "Start running trained agent with example: %s  ",
                               currentExampleID.c_str() )
                          .ascii() );
-            Marabou().runTrainedAgentOnExample( &numSplits );
+            Marabou().runTrainedAgent();
         }
         else
             Marabou().run();
         struct timespec endTime = TimeUtils::sampleMicro();
-        unsigned long long totalTraining = TimeUtils::timePassed( startTime, endTime );
-        DQN_LOG( Stringf( "Done solving. Time : %llu milli. \n", totalTraining / 1000 ).ascii() );
+        unsigned long long totalTime = TimeUtils::timePassed( startTime, endTime );
+        DQN_LOG( Stringf( "Done solving. Time : %llu milli. \n", totalTime / 1000 ).ascii() );
     }
-    out.close();
     return 0;
 }
+
 int marabouMain( int argc, char **argv )
 {
     try
@@ -544,33 +460,16 @@ int marabouMain( int argc, char **argv )
 #endif
             auto const mode = options->getInt( Options::DQN_MODE );
             setRandomSeed();
-            std::string exampleType = options->getString( Options::BENCHMARK ).ascii();
             std::string exampleID;
             std::string examplePath =
                 Options::get()->getString( Options::PROPERTY_FILE_PATH ).ascii();
             extractID( examplePath, exampleID );
-            bool isRobust = false;
-            {
-                std::string p1 = parentDir( examplePath );
-                std::string p2 = parentDir( p1 );
-                isRobust = isRobustnessRoot( p2 );
-            }
-
-            std::string network;
-            extractNetworkName( network );
+            bool isRobust = isRobustnessRoot( parentDir( parentDir( examplePath ) ) );
             const std::string outDir = options->getString( Options::DQN_OUTPUT_FILE_PATH ).ascii();
             const std::string summaryFile = outDir + "/" + exampleID + ".txt";
             options->setString( Options::SUMMARY_FILE, summaryFile );
-            std::ofstream out( summaryFile, std::ios::app );
-            if ( !out )
+            if ( mode == 1 ) // TRAIN MODE
             {
-                std::cerr << "Failed to open " << summaryFile << std::endl;
-                return 1;
-            }
-            out << "Example: " << exampleID << "  Network: " << network << "\n";
-            if ( mode == 1 )
-            {
-                // TRAIN MODE
                 auto root = computeRootDir( examplePath );
                 if ( root.empty() || !isDir( root ) )
                 {
@@ -583,52 +482,29 @@ int marabouMain( int argc, char **argv )
 
                 options->setString( Options::SPLITTING_STRATEGY, "DQN-agent" );
                 std::unique_ptr<Agent> agent;
-                int numSplits = 0;
-
-                auto t0 = TimeUtils::sampleMicro();
-                trainAgentOnExamples( options, sampled, agent, &numSplits, out );
-                auto t1 = TimeUtils::sampleMicro();
-
-                auto elapsed = TimeUtils::timePassed( t0, t1 );
-                out << "  Done training. Time: " << elapsed << " Splits: " << numSplits << "\n";
+                trainAgentOnExamples( options, sampled, agent );
             }
-            else if ( mode == 2 )
+            else if ( mode == 2 ) // RUN MODE
             {
-                // RUN MODE
                 options->setString( Options::SPLITTING_STRATEGY, "DQN-agent" );
                 std::string agentPath =
                     options->getString( Options::DQN_AGENT_NETWORKS_PATH ).ascii();
-                if ( !std::ifstream( agentPath + "_local.pth" ) )
+                if ( !std::ifstream( agentPath + "_local.pth" ) ||
+                     !std::ifstream( agentPath + "_target.pth" ) )
                 {
-                    std::cout << "trained agent path does not exist.\n";
+                    std::cout << "trained agent network does not exist.\n";
                     return 0;
                 }
-                std::string trainedAgentPath;
-                std::string trainedAgentID;
-                extractTrainedAgentID( trainedAgentPath, trainedAgentID );
-                out << "Trained on agent : " << trainedAgentID << "\n";
-                out.flush();
-                std::string root = parentDir( examplePath );
-                if ( root.empty() || !isDir( root ) )
-                {
-                    std::cerr << "Error: cannot determine root from '" << root << "'\n";
-                    return 1;
-                }
                 if ( isRobust )
-                    return runRobustnessProperties( options, examplePath, out, true );
-                int numSplits = 0;
-                Marabou().runTrainedAgentOnExample( &numSplits );
+                    return runRobustnessProperties( options, examplePath, true );
+                Marabou().runTrainedAgent();
             }
-            else
+            else // NO DQN MODE
             {
-                auto spittingHeuristic = options->getString( Options::SPLITTING_STRATEGY );
-                out << "Strategy : " << std::string( spittingHeuristic.ascii() ) << "\n";
-                out.flush();
                 if ( isRobust )
-                    return runRobustnessProperties( options, examplePath, out, false );
+                    return runRobustnessProperties( options, examplePath, false );
                 Marabou().run();
             }
-            out.close();
             return 0;
         }
     }

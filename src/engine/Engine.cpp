@@ -265,7 +265,7 @@ Engine::indexToConstraint( const int index, List<PiecewiseLinearConstraint *> *c
     return *it;
 }
 
-bool Engine::solve( double timeoutInSeconds, const std::string &trainedAgentPath, int *numSplits )
+bool Engine::solve( double timeoutInSeconds, const std::string &trainedAgentPath )
 {
     SignalHandler::getInstance()->initialize();
     SignalHandler::getInstance()->registerClient( this );
@@ -402,8 +402,6 @@ bool Engine::solve( double timeoutInSeconds, const std::string &trainedAgentPath
                 }
                 else
                     _smtCore.performSplit();
-                if ( numSplits != nullptr )
-                    ( *numSplits )++;
                 splitJustPerformed = true;
                 continue;
             }
@@ -561,10 +559,8 @@ bool Engine::solve( double timeoutInSeconds, const std::string &trainedAgentPath
 }
 
 
-std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
-                                              std::unique_ptr<Agent> agent,
-                                              double timeoutInSeconds,
-                                              int *numSplits )
+std::unique_ptr<Agent>
+Engine::trainDQNAgent( const double epsilon, std::unique_ptr<Agent> agent, double timeoutInSeconds )
 {
     SignalHandler::getInstance()->initialize();
     SignalHandler::getInstance()->registerClient( this );
@@ -639,7 +635,6 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
 
             _exitCode = Engine::TIMEOUT;
             _statistics.timeout();
-            *numSplits = _numSplits;
             return std::move( _agent );
         }
 
@@ -779,7 +774,6 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                             _statistics.print();
                         }
                         _exitCode = Engine::SAT;
-                        *numSplits = _numSplits;
                         return std::move( _agent );
                     }
                     else if ( !hasBranchingCandidate() )
@@ -805,7 +799,6 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                                                    _numSplits,
                                                    GlobalConfiguration::DON_TRAINING_PHASE == 0 );
                         _agent->handleDone( *_currentDQNState, _numSplits );
-                        *numSplits = _numSplits;
                         return std::move( _agent );
                     }
                     else
@@ -844,7 +837,6 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                                            _numSplits,
                                            GlobalConfiguration::DON_TRAINING_PHASE == 0 );
                 _agent->handleDone( *_currentDQNState, _numSplits );
-                *numSplits = _numSplits;
                 return std::move( _agent );
             }
         }
@@ -878,7 +870,6 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                                            _numSplits,
                                            GlobalConfiguration::DON_TRAINING_PHASE == 0 );
                 _agent->handleDone( *_currentDQNState, _numSplits );
-                *numSplits = _numSplits;
                 return std::move( _agent );
             }
             else
@@ -910,7 +901,6 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                                        _numSplits,
                                        GlobalConfiguration::DON_TRAINING_PHASE == 0 );
             _agent->handleDone( *_currentDQNState, _numSplits );
-            *numSplits = _numSplits;
             return std::move( _agent );
         }
         catch ( ... )
@@ -920,7 +910,6 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
             mainLoopEnd = TimeUtils::sampleMicro();
             _statistics.incLongAttribute( Statistics::TIME_MAIN_LOOP_MICRO,
                                           TimeUtils::timePassed( mainLoopStart, mainLoopEnd ) );
-            *numSplits = _numSplits;
             return std::move( _agent );
         }
     }
@@ -935,7 +924,6 @@ std::unique_ptr<Agent> Engine::trainDQNAgent( const double epsilon,
                                GlobalConfiguration::DON_TRAINING_PHASE == 0 );
     _agent->handleDone( *_currentDQNState, _numSplits );
     _exitCode = Engine::MAX_ITERATIONS;
-    *numSplits = _numSplits;
     return std::move( _agent );
 }
 
@@ -3442,14 +3430,17 @@ PiecewiseLinearConstraint *Engine::pickSplitPLConstraint( DivideStrategy strateg
 {
     ENGINE_LOG( Stringf( "Picking a split PLConstraint..." ).ascii() );
 
-    if ( Options::get()->getBool( Options::START_PI ) && _smtCore.getStackDepth() <= 3 )
+    if ( Options::get()->getBool( Options::START_PI )  )
     {
-        strategy = DivideStrategy::PseudoImpact;
-        if ( Options::get()->getDivideStrategy() == DivideStrategy::DQN )
-            _stepType = FAKE;
+        if ( _smtCore.getStackDepth() <= 3 )
+        {
+            strategy = DivideStrategy::PseudoImpact;
+            if ( Options::get()->getDivideStrategy() == DivideStrategy::DQN )
+                _stepType = FAKE;
+        }
+        else
+            strategy = Options::get()->getDivideStrategy();
     }
-    else
-        strategy = Options::get()->getDivideStrategy();
 
     PiecewiseLinearConstraint *candidatePLConstraint = NULL;
     if ( strategy == DivideStrategy::PseudoImpact )
