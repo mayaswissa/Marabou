@@ -8,7 +8,6 @@ public:
 
     unsigned getActionIndex(unsigned constraintIndex, unsigned phaseIndex ) const;
 
-    // Decode an action index back to its parts
     std::pair<unsigned, unsigned> decodeActionIndex(unsigned actionIndex) const;
     unsigned getNumActions() const;
     unsigned getNumPhases() const;

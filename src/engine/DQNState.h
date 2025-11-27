@@ -48,7 +48,6 @@ public:
     void updateBounds( unsigned constraintIndex, double upperBound, double lowerBound );
     void updatePolarity( unsigned constraintIndex, double polarityScore );
     void updateBaBsrScore( unsigned constraintIndex, double BaBsrScore );
-    // Accessor
     const std::vector<float> &getRawData() const
     {
         return _stateData;

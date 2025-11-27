@@ -15,13 +15,11 @@ inline float squashFeature( const double x, double s = 10.0 )
 }
 
 State::State( const unsigned numConstraints )
-    : _stateData() // now float
+    : _stateData()
     , _numConstraints( numConstraints )
     , _numPhases( DQN_NUM_PHASES )
 {
     _stateData.assign( numConstraints * TOTAL_FEATURES, 0.0f );
-
-    // For each constraint, set the feature at index DQN_RELU_NOT_FIXED to 1.0
     for ( unsigned i = 0; i < numConstraints; ++i )
         _stateData[i * TOTAL_FEATURES + DQN_RELU_NOT_FIXED_VALUE] = 1.0f;
 }

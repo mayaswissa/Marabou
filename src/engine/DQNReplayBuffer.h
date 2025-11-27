@@ -179,17 +179,16 @@ private:
     List<ActionEntry *> _actionsStack;
     unsigned _fakeActionIndex;
     unsigned _size;            // valid entries in replayBuffer
-    unsigned _writePosition;   //  pointer for the next empty position in experiences buffer
+    unsigned _writePosition;   // pointer for the next empty position in experiences buffer
     torch::Tensor _states;     // [bufferSize, stateDim]
-    torch::Tensor _actions;    // [bufferSize, 1]
-    torch::Tensor _rewards;    // [bufferSize]
-    torch::Tensor _nextStates; // [bufferSize, stateDim]
-    torch::Tensor _dones;      // [bufferSize]
+    torch::Tensor _actions;
+    torch::Tensor _rewards;
+    torch::Tensor _nextStates;
+    torch::Tensor _dones;
     std::vector<float> _priorities;
     std::vector<float> _sumTree;
     std::vector<bool> _isDemo;
     float _maxPriority;
-    // annealing & weights
     float _demoFactor, _eps;
     float _beta, _betaInc;
     float _epsAgent = 1e-6f;

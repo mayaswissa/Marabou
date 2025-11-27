@@ -20,11 +20,8 @@ private:
     void initWeights();
     unsigned _numConstraints, _numLocalFeatures, _numGlobalFeatures;
     unsigned _inputDim, _outputDim;
-    // shared trunk
     torch::nn::Linear fc1{nullptr}, fc2{nullptr};
-    // advantage head
     torch::nn::Linear fcAdv1{nullptr}, fcAdv2{nullptr};
-    // value head
     torch::nn::Linear fcVal1{nullptr}, fcVal2{nullptr};
 };
 #endif
